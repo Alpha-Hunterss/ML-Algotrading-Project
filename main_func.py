@@ -1,5 +1,4 @@
 import wandb
-import pandas as pd
 from models import model_func
 from quant_cross_validation import split_time_series, quant_CV
 from ETL import ETL

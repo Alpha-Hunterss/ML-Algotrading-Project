@@ -44,7 +44,7 @@ general_config = {
   'base_columns': ['CLOSE']},
 
 
-  'fe_cndl_shift': {'columns': ['HIGH', 'LOW', 'CLOSE'],
+  'fe_cndl_shift': {'columns': ['OPEN', 'HIGH', 'LOW', 'CLOSE'],
   'shift_configs': [
     {'timeframe': 5, 'shift_sizes': [1]},
     {'timeframe': 15, 'shift_sizes': [1]},

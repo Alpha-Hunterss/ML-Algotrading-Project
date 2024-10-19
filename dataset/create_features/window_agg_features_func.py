@@ -9,7 +9,7 @@ from dataset.utils.logging_tools import default_logger
 from datetime import datetime, timedelta
 import datetime as datetime2
 from pathlib import Path
-from configs.history_data_crawlers_config import root_path, symbols_dict
+from dataset.configs.history_data_crawlers_config import root_path, symbols_dict
 import pandas as pd
 import numpy as np
 

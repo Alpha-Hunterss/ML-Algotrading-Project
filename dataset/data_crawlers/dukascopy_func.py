@@ -18,10 +18,10 @@ from pathlib import Path
 import os.path
 import time
 import polars as pl
-from configs.history_data_crawlers_config import start_date, stop_date
+from dataset.configs.history_data_crawlers_config import start_date, stop_date
 from datetime import datetime, timezone
-from utils.logging_tools import default_logger
-from configs.history_data_crawlers_config import (
+from dataset.utils.logging_tools import default_logger
+from dataset.configs.history_data_crawlers_config import (
     data_folder,
     symbols_dict,
 )

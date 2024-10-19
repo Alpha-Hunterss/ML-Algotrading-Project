@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import datetime
 # from utils.general_utils import reduce_mem_usage
-from configs.symbols_info import symbols_dict
+from configss.symbols_info import symbols_dict
 from pyarrow.parquet import ParquetFile
 from target_generation import calculate_classification_target_numpy_ver
 import time

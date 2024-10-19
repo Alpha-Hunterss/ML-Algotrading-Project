@@ -12,7 +12,7 @@ from experiment_tracker import QuantExpTracker
 from datetime import datetime
 import traceback
 import gc
-from configs.symbols_info import symbols_dict
+from configss.symbols_info import symbols_dict
 
 
 def main(

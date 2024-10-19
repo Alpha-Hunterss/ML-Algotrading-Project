@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from configs.symbols_info import symbols_dict
+from configss.symbols_info import symbols_dict
 
 def calculate_classification_target_backtest(
     array,

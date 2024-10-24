@@ -10,7 +10,8 @@ def shift_by_params(periods, time_frame, col_name=None):
     when col_name == none it returns shift indices
     """
     min_valid_index = periods * (time_frame // 5)
-    df_truncated = pl.col("index") >= min_valid_index
+    # df_truncated = pl.col("index") >= min_valid_index
+    df_truncated = pl.when(pl.col("index")>=min_valid_index).then(pl.col("index")).otherwise(0)
 
     idx = df_truncated - (
         ((pl.col("minutesPassed") % time_frame) / 5)

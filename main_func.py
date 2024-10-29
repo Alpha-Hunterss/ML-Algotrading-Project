@@ -1,3 +1,4 @@
+import os
 import wandb
 from models import model_func
 from quant_cross_validation import split_time_series, quant_CV
@@ -111,6 +112,11 @@ def main(
         # _______________________________Read Data & ETL_____________________________________________________
         target_col = f"trg_clf_{trade_mode}_{target_symbol}_M{trg_look_ahead}_TP{trg_take_profit}_SL{trg_stop_loss}"
 
+        # Check for dataset file existence
+        if not os.path.exists(dataset_path):
+            print(f"Dataset file not found at: {dataset_path}")
+            dataset_path = "/content/ML-Algotrading-Project/dataset/data/dataset/dataset.parquet"
+            C5M_data_path = "/content/ML-Algotrading-Project/dataset/data/stage_one_data/"
 
         df_all = ETL(
             path =dataset_path,

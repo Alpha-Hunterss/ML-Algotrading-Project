@@ -1,5 +1,5 @@
 import pandas as pd
-from clean_data import remove_weekends
+from dataset.utils.clean_data import remove_weekends
 
 
 def generate_true_time_df_pandas(df):

@@ -1,10 +1,10 @@
 from pathlib import Path
-from configs.history_data_crawlers_config import root_path, symbols_dict
+from dataset.configs.history_data_crawlers_config import root_path, symbols_dict
 import pandas as pd
 import numpy as np
-from logging_tools import default_logger
+from dataset.logging_tools import default_logger
 from pathlib import Path
-from configs.history_data_crawlers_config import root_path, symbols_dict
+from dataset.configs.history_data_crawlers_config import root_path, symbols_dict
 import pandas as pd
 import numpy as np
 

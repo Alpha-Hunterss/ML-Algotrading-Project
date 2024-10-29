@@ -1,11 +1,11 @@
 import polars as pl
 from pathlib import Path
-from configs.history_data_crawlers_config import symbols_dict
+from dataset.configs.history_data_crawlers_config import symbols_dict
 import os, glob
 from typing import Callable, Dict, List, Tuple, Union
-from configs.history_data_crawlers_config import root_path
+from dataset.configs.history_data_crawlers_config import root_path
 import re
-from logging_tools import default_logger
+from dataset.logging_tools import default_logger
 
 
 # ?? indicator ---------------------------------------------------

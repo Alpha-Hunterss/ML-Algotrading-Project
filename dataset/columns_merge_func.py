@@ -2,15 +2,15 @@ import polars as pl
 include_target = False
 import gc
 import pandas as pd
-from logging_tools import default_logger
+from dataset.logging_tools import default_logger
 import polars as pl
 from collections import defaultdict
-from extract_config_from_features import (
+from dataset.extract_config_from_features import (
     get_all_selected_features,
 )
-from configs.history_data_crawlers_config import root_path
+from dataset.configs.history_data_crawlers_config import root_path
 from pathlib import Path
-from utils.reduce_memory import reduce_mem_usage
+from dataset.utils.reduce_memory import reduce_mem_usage
 
 
 # Define the prefixes - !!! order maters.

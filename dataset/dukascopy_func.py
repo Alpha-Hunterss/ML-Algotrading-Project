@@ -19,7 +19,7 @@ import os.path
 import time
 import polars as pl
 from datetime import timezone
-from logging_tools import default_logger
+from dataset.logging_tools import default_logger
 from dataset.configs.history_data_crawlers_config import (
     start_date,
     stop_date,

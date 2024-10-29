@@ -5,7 +5,7 @@ import os, glob
 from typing import Callable, Dict, List, Tuple, Union
 from configs.history_data_crawlers_config import root_path
 import re
-from utils.logging_tools import default_logger
+from logging_tools import default_logger
 
 
 # ?? indicator ---------------------------------------------------
@@ -616,7 +616,6 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
 
 if __name__ == "__main__":
-    from utils.config_utils import read_feature_config
     from configs.feature_configs_general import generate_general_config
     config_general = generate_general_config()
     history_indicator_calculator(config_general)

@@ -1,6 +1,6 @@
 import polars as pl
 from pathlib import Path
-from utils.logging_tools import default_logger
+from logging_tools import default_logger
 from configs.history_data_crawlers_config import root_path
 
 #!!: add truncate first rows
@@ -111,7 +111,6 @@ def history_cndl_shift(feature_config, logger=default_logger):
 
 
 if __name__ == "__main__":
-    from utils.config_utils import read_feature_config
     from configs.feature_configs_general import generate_general_config
     config_general = generate_general_config()
     history_cndl_shift(config_general)

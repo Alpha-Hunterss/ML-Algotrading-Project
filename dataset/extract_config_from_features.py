@@ -4,8 +4,8 @@ import numpy as np
 from typing import Tuple, List, Callable
 import re
 # from configs.selected_symbols_config import selected_symbol
-from dataset.utils.logging_tools import default_logger
-from dataset.configs.history_data_crawlers_config import root_path, symbols_dict
+from logging_tools import default_logger
+from configs.history_data_crawlers_config import root_path, symbols_dict
 
 def get_all_selected_features(feature_info: str | set[str]) -> Tuple[set, pd.DataFrame]:
     match feature_info:

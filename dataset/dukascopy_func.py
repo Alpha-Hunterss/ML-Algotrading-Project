@@ -20,7 +20,7 @@ import time
 import polars as pl
 from configs.history_data_crawlers_config import start_date, stop_date
 from datetime import timezone
-from utils.logging_tools import default_logger
+from logging_tools import default_logger
 from configs.history_data_crawlers_config import (
     data_folder,
     symbols_dict,
@@ -200,7 +200,6 @@ async def crawl_OHLCV_data_dukascopy(
     return faild_dates_dict
 
 if __name__ == "__main__":
-    from utils.config_utils import read_feature_config
     from configs.feature_configs_general import generate_general_config
     config_general = generate_general_config()
     asyncio.run(crawl_OHLCV_data_dukascopy(config_general))

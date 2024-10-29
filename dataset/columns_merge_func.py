@@ -2,10 +2,10 @@ import polars as pl
 include_target = False
 import gc
 import pandas as pd
-from utils.logging_tools import default_logger
+from logging_tools import default_logger
 import polars as pl
 from collections import defaultdict
-from utils.feature_config_extractor.extract_config_from_features import (
+from extract_config_from_features import (
     get_all_selected_features,
 )
 from configs.history_data_crawlers_config import root_path
@@ -243,7 +243,6 @@ def history_columns_merge(feature_config, logger=default_logger,general_mode=Fal
 
 
 if __name__ == "__main__":
-    from utils.config_utils import read_feature_config
     from configs.feature_configs_general import generate_general_config
     config_general = generate_general_config()
     history_columns_merge(config_general,general_mode=True)

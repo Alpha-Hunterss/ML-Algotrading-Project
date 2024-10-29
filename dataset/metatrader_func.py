@@ -3,7 +3,7 @@ import pytz
 import MetaTrader5 as mt5
 from configs.history_data_crawlers_config import metatrader_number_of_days
 from utils.df_utils import ffill_df_to_true_time_steps
-from utils.logging_tools import default_logger
+from logging_tools import default_logger
 from dotenv import load_dotenv
 from pathlib import Path
 from configs.history_data_crawlers_config import (
@@ -136,7 +136,6 @@ def crawl_OHLCV_data_metatrader(
 
 
 if __name__ == "__main__":
-    from utils.config_utils import read_feature_config
     from configs.feature_configs_general import generate_general_config
     config_general = generate_general_config()
     crawl_OHLCV_data_metatrader(config_general)

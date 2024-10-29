@@ -2,7 +2,7 @@ from pathlib import Path
 from configs.history_data_crawlers_config import root_path, symbols_dict
 import pandas as pd
 import numpy as np
-from utils.logging_tools import default_logger
+from logging_tools import default_logger
 from pathlib import Path
 from configs.history_data_crawlers_config import root_path, symbols_dict
 import pandas as pd
@@ -103,7 +103,6 @@ def history_fe_WIN_features(feature_config, logger=default_logger):
 
 
 if __name__ == "__main__":
-    from utils.config_utils import read_feature_config
     from configs.feature_configs_general import generate_general_config
     config_general = generate_general_config()
     history_fe_WIN_features(config_general)

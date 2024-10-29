@@ -1,7 +1,7 @@
 import polars as pl
 import datetime
 from configs.stage_one_data_config import stage_one_data_path
-from utils.logging_tools import default_logger
+from logging_tools import default_logger
 from configs.history_data_crawlers_config import root_path
 from pathlib import Path
 

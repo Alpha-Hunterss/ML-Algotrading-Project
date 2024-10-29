@@ -1,6 +1,6 @@
 from typing import Dict
-from dataset.utils.feature_config_extractor.extract_config_from_features import extract_config_from_selected_feature
-from dataset.utils.logging_tools import default_logger
+from extract_config_from_features import extract_config_from_selected_feature
+from logging_tools import default_logger
 
 
 def read_feature_config(logger=default_logger) -> Dict:

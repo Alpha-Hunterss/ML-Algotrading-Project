@@ -3,7 +3,7 @@ import pandas as pd
 from utils.clean_data import remove_weekends
 from utils.datetime_utils import drop_first_day_pandas
 from utils.df_utils import ffill_df_to_true_time_steps
-from utils.logging_tools import default_logger
+from logging_tools import default_logger
 from configs.stage_one_data_config import stage_one_data_path
 from configs.history_data_crawlers_config import (
   data_folder
@@ -99,9 +99,7 @@ def history_data_stage_one(feature_config, logger=default_logger):
     logger.info("--> history_data_stage_one run successfully.")
 
 
-
 if __name__ == "__main__":
-    from utils.config_utils import read_feature_config
     from configs.feature_configs_general import generate_general_config
     config_general = generate_general_config()
     history_data_stage_one(config_general)

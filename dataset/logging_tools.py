@@ -2,7 +2,7 @@ import logging
 from colorlog import ColoredFormatter
 from pytz import timezone
 from datetime import datetime
-from dataset.configs.history_data_crawlers_config import root_path
+from configs.history_data_crawlers_config import root_path
 from pathlib import Path
 
 logs_path = f"{root_path}/logs/"

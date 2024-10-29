@@ -1,12 +1,12 @@
 import pandas as pd
 import pytz
 import MetaTrader5 as mt5
-from dataset.configs.history_data_crawlers_config import metatrader_number_of_days
-from dataset.utils.df_utils import ffill_df_to_true_time_steps
-from dataset.utils.logging_tools import default_logger
+from configs.history_data_crawlers_config import metatrader_number_of_days
+from utils.df_utils import ffill_df_to_true_time_steps
+from utils.logging_tools import default_logger
 from dotenv import load_dotenv
 from pathlib import Path
-from dataset.configs.history_data_crawlers_config import (
+from configs.history_data_crawlers_config import (
     data_folder,
     symbols_dict,
 )

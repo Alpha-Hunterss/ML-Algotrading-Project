@@ -1,7 +1,7 @@
 import polars as pl
 from pathlib import Path
-from dataset.utils.logging_tools import default_logger
-from dataset.configs.history_data_crawlers_config import root_path
+from utils.logging_tools import default_logger
+from configs.history_data_crawlers_config import root_path
 
 #!!: add truncate first rows
 def shift_by_params(periods, time_frame, col_name=None):

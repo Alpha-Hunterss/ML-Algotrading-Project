@@ -1,24 +1,16 @@
-
 import polars as pl
 include_target = False
 import gc
 import pandas as pd
-
-from dataset.utils.logging_tools import default_logger
-
-
-from dataset.utils.datetime_utils import create_n_month_intervals
-from datetime import datetime, timedelta
+from utils.logging_tools import default_logger
 import polars as pl
 from collections import defaultdict
-from dataset.utils.feature_config_extractor.extract_config_from_features import (
+from utils.feature_config_extractor.extract_config_from_features import (
     get_all_selected_features,
 )
-from dataset.configs.history_data_crawlers_config import root_path
-import glob
+from configs.history_data_crawlers_config import root_path
 from pathlib import Path
-from dataset.utils.reduce_memory import reduce_mem_usage
-from sklearn.feature_selection import VarianceThreshold
+from utils.reduce_memory import reduce_mem_usage
 
 
 # Define the prefixes - !!! order maters.

@@ -1,11 +1,10 @@
 import polars as pl
 import pandas as pd
-from dataset.configs.history_data_crawlers_config import root_path, symbols_dict
-from datetime import datetime, timedelta
-from dataset.utils.logging_tools import default_logger
+from configs.history_data_crawlers_config import root_path, symbols_dict
+from datetime import timedelta
+from utils.logging_tools import default_logger
 from pathlib import Path
 from feature_engine.datetime import DatetimeFeatures
-
 
 
 def add_candle_features(

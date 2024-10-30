@@ -19,8 +19,8 @@ from configss.symbols_info import symbols_dict
 def main(
     manual=False,
     man_params=None,
-    dataset_path="/kaggle/input/algotrading-project/dataset.parquet",
-    C5M_data_path = "/kaggle/input/algotrading-project/",
+    dataset_path="/kaggle/working/ML-Algotrading-Project/dataset/data/dataset/dataset.parquet",
+    C5M_data_path = "/kaggle/working/ML-Algotrading-Project/dataset/data/stage_one_data/",
 ):
     try:
         # _______________________________Get Inputs from Manual or W&B Config _______________________________

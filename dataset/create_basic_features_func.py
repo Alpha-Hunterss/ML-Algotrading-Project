@@ -243,7 +243,6 @@ def history_fe_time(feature_config, logger=default_logger):
         df["_time"] = df["_time"].dt.tz_localize(None)
         df.sort_values("_time", inplace=True)
         df.reset_index(drop=True, inplace=True)
-        df["_time"] = df["_time"] - timedelta(hours=7)
 
         dtf = DatetimeFeatures(
             features_to_extract=[
@@ -277,7 +276,9 @@ def history_fe_time(feature_config, logger=default_logger):
             "Sydney": (15, 0),
             "London": (3, 11),
         }
-        
+
+        fe_time["_time"] = fe_time["_time"] - timedelta(hours=6)
+
         for market_name in markets_trade_times:
             start_time = markets_trade_times[market_name][0]
             stop_time = markets_trade_times[market_name][1]
@@ -299,7 +300,7 @@ def history_fe_time(feature_config, logger=default_logger):
                     col_name,
                 ] = 1
 
-        fe_time["_time"] = fe_time["_time"] + timedelta(hours=7)
+        fe_time["_time"] = fe_time["_time"] + timedelta(hours=6)
         fe_time["symbol"] = symbol
         features_folder_path = f"{root_path}/data/features/{prefix}/"
         Path(features_folder_path).mkdir(parents=True, exist_ok=True)

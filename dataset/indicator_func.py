@@ -307,8 +307,8 @@ def add_ratio(
         col_a = f"fe_{fe_name}_M{timeframe}_CLOSE_W{w1}_cndl_M{timeframe}"
         col_b = f"fe_{fe_name}_M{timeframe}_CLOSE_W{w2}_cndl_M{timeframe}"
     elif "ATR" in fe_name:
-        col_a = f"fe_{fe_name}_M{timeframe}_W{w1}_cndl_M{timeframe}"
-        col_b = f"fe_{fe_name}_M{timeframe}_W{w2}_cndl_M{timeframe}"
+        col_a = f"fe_{fe_name}_W{w1}_M{timeframe}"
+        col_b = f"fe_{fe_name}_W{w2}_M{timeframe}"
     else:
         col_a = f"fe_{fe_name}_M{timeframe}_CLOSE_W{w1}_cndl_M{timeframe}_norm"
         col_b = f"fe_{fe_name}_M{timeframe}_CLOSE_W{w2}_cndl_M{timeframe}_norm"
@@ -359,59 +359,104 @@ def cal_ATR_func(
     normalize: bool = False,
 ) -> pl.DataFrame:
     """
-    this function calculates ATR indicator.
-    inputs:
-    df: dataframe containing the raw feature
-    w: window size
-    time_frame: time_frame for calculations
-    feature: raw feature on which the RSI is calculated
-    pip size: pip size of the pair
-    prefix: prefix of feature name
-    normalize: if True the function returns pipsize difference between EMA and last close price.
+   Calculates the Average True Range (ATR), a technical indicator that
+   measures market volatility by decomposing the entire range of an asset's
+   price for a period. ATR is particularly useful for volatility-based
+   position sizing and stop-loss placement.
 
-    """
+   The ATR captures volatility through the greatest of:
+   1. Current high - current low
+   2. |Current high - previous close|
+   3. |Current low - previous close|
+
+   Key aspects for machine learning:
+   1. Direct measure of market volatility
+   2. Independent of price direction
+   3. Adapts to changing market conditions
+   4. Self-normalizing through rolling average
+   5. Valuable for position sizing and risk management
+
+   Implementation details:
+   - Calculates true range considering overnight gaps
+   - Applies simple moving average for smoothing
+   - Offers normalization by close price option
+   - Returns values in pips for easier interpretation
+
+   Args:
+       df (pl.DataFrame): DataFrame with OHLC price data
+       w (int): Window size for ATR calculation (typical: 14)
+       time_frame (int): Time frame in minutes for the calculation
+       features (List[str]): List containing ['CLOSE', 'HIGH', 'LOW']
+       pip_size (float): Size of one pip for scaling
+       prefix (str, optional): Prefix for output column names.
+           Defaults to "fe_ATR"
+       normalize (bool, optional): If True, normalizes ATR by close price.
+           Defaults to False
+
+   Returns:
+       pl.DataFrame: DataFrame with added ATR column:
+           If normalize=True:
+               - {prefix}_W{w}_M{time_frame}_norm: ATR/close_price
+           If normalize=False:
+               - {prefix}_W{w}_M{time_frame}: ATR in pips
+
+   Notes:
+       - Requires previous period's data for true range calculation
+       - First w periods will contain incomplete ATR values
+       - High ATR indicates high volatility, low ATR indicates low volatility
+       - More reliable in trending markets than in ranging markets
+       - Not predictive of price direction, only volatility
+       - Commonly used window sizes: 14 (standard), 10 (more responsive)
+       - Functions best with complete OHLC data
+       - ATR tends to be larger for higher-priced assets (when not normalized)
+   """
     assert (
         len(features) == 3
     ), f"Only 3 feature should have been passed but {len(features)} received!"
     features = sorted(features)
+    input_features = [
+        f'M{time_frame}_CLOSE',
+        f'M{time_frame}_HIGH',
+        f'M{time_frame}_LOW'
+    ]
+    if features != input_features:
+        print('Input features are wrong')
+        return
+    # features[0] == 'CLOSE'
+    # features[1] == 'HIGH'
+    # features[2] == 'LOW'
 
     df = df.sort("_time")
 
+    df = df.with_columns([
+        pl.max_horizontal(
+            pl.col(features[1]) - pl.col(features[2]),
+            (pl.col(features[1]) - pl.col(features[0]).shift(1)).abs(),
+            (pl.col(features[2]) - pl.col(features[0]).shift(1)).abs()
+        ).alias("true_range")
+    ]).lazy()
+
+    df = df.with_columns([
+        pl.col("true_range")
+        .rolling_mean(window_size=w)
+        .alias("atr_raw")
+    ]).lazy()
+
     if normalize:
-        df = df.with_columns(
-            (
-                (
-                    (
-                        (pl.col(features[1]) - pl.col(features[2])).rolling_mean(
-                            window_size=w
-                        )
-                    )
-                    / pl.col(features[0])
-                )
-                / pip_size
-            ).alias(
-                f"{prefix}_{features[0].replace('CLOSE','')}W{w}_cndl_M{time_frame}_norm"
-            )
-        ).lazy()
+        column_name = f"{prefix}_W{w}_M{time_frame}_norm"
+        df = df.with_columns([
+            (pl.col("atr_raw") / (pl.col(features[0]) * pip_size)).alias(column_name)
+        ]).lazy()
     else:
-        df = df.with_columns(
-            (
-                (
-                    (pl.col(features[1]) - pl.col(features[2])).rolling_mean(
-                        window_size=w
-                    )
-                )
-                / pip_size
-            ).alias(
-                f"{prefix}_{features[0].replace('CLOSE','')}W{w}_cndl_M{time_frame}"
-            )
-        ).lazy()
+        column_name = f"{prefix}_W{w}_M{time_frame}"
+        df = df.with_columns([
+            (pl.col("atr_raw") / pip_size).alias(column_name)
+        ]).lazy()
 
-    df = df.collect()
+    df = df.drop(["true_range", "atr_raw"] + input_features)
 
-    df = df.drop(features)
+    return df.collect()
 
-    return df
 
 
 def cal_RSTD_func(

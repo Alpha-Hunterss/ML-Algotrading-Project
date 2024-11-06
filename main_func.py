@@ -47,7 +47,7 @@ def main(
             test_size = man_params["test_size"]
             train_test_gap = man_params["train_test_gap"]
             try:
-                early_stopping_rounds = man_params["paremeters"][
+                early_stopping_rounds = man_params["parameters"][
                     "early_stopping_rounds"
                 ]
             except:

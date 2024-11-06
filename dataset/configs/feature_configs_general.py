@@ -11,7 +11,7 @@ symbols = [
 ]
 
 general_config = {
-  'base_candle_timeframe': [15,30,60,120,180,240,480,860,1440],
+  'base_candle_timeframe': [15, 30, 60, 120, 180, 240, 360, 720, 1440],
   
   'fe_ATR': {'timeframe': [240, 60],
   'window_size': [30, 14, 7],
@@ -24,7 +24,7 @@ general_config = {
 
 
   'fe_WIN': {'timeframe': [5],
-  'window_size': [5,10, 48, 288, 480],
+  'window_size': [5, 10, 48, 288, 480],
   'base_columns': ['CLOSE']},
 
 
@@ -37,7 +37,7 @@ general_config = {
 
   'fe_SMA': {'base_columns': ['CLOSE'],
   'timeframe': [5],
-  'window_size': [240, 480,720]},
+  'window_size': [240, 360, 720]},
 
   'fe_RSI': {'timeframe': [5, 60, 240],
   'window_size': [30, 14, 7],
@@ -59,11 +59,11 @@ general_config = {
 
   'EMA': {'timeframe': [5], 'window_size': [
     (7, 60),
-    (60, 366),
+    (60, 336),
     (60, 1440),
     ]},
 
-  'RSI': {'timeframe': [5,60, 240],
+  'RSI': {'timeframe': [5, 60, 240],
     'window_size': [(7, 14), (7, 30)]},
 
   'RSTD': {'timeframe': [240],

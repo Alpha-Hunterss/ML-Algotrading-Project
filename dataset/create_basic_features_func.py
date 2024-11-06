@@ -269,7 +269,7 @@ def history_fe_time(feature_config, logger=default_logger):
         fe_time = dtf.transform(df.rename(columns={"_time": prefix})).rename(
             columns={prefix: "_time"}
         )
-    
+
         markets_trade_times = {
             "New_York": (8, 17),
             "Tokyo": (19, 4),

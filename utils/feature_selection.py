@@ -26,7 +26,7 @@ def drop_features_and_get_final_fe(df_imp: pd.DataFrame,
         rand_drop_rows_threshold 
         random_seed : random seed for the randomly droping process
     Output:
-        selected features list 
+        selected features list  
     """
     max_rand_di = df_imp[df_imp.feature_names.str.startswith('RANDOM')].mean_importance.max()
     df_imp = df_imp[df_imp.mean_importance>max_rand_di]

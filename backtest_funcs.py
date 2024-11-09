@@ -190,11 +190,16 @@ def do_backtest(
     df_raw_backtest : pd.DataFrame,
     bt_column_name:   str,
     swap_rate: float,
-): 
+):
+    
+    print("\nThe size of the dataframe before applying target df:", df_raw_backtest.shape)
+    print("\nThe size of the prediction df:", df_model_signal.shape)
 
     new_trg_df = df_model_signal.merge(df_raw_backtest, on="_time", how="inner")
     new_trg_df["net_profit"] = new_trg_df.pip_diff - spread
 
+    print("\nThe size of the dataframe after applying target df:", df_raw_backtest.shape)
+    print("\n\n")
 
     ##? calculate balance
     new_trg_df["balance"] = new_trg_df["net_profit"] * volume * 10 + new_trg_df["swap_days"] * volume * swap_rate

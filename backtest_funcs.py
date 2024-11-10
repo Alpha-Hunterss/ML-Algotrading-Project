@@ -198,7 +198,7 @@ def do_backtest(
     new_trg_df = df_model_signal.merge(df_raw_backtest, on="_time", how="inner")
     new_trg_df["net_profit"] = new_trg_df.pip_diff - spread
 
-    print("\nThe size of the dataframe after applying target df:", df_raw_backtest.shape)
+    print("\nThe size of the dataframe after applying target df:", new_trg_df.shape)
     print("\n\n")
 
     ##? calculate balance

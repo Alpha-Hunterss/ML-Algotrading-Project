@@ -92,37 +92,52 @@ def cal_cndl_shape_func(
                 ) * 1000 / (pip_size * pl.col(features[3]))
             )
             .alias(f"{prefix}_body_length_M{time_frame}_norm"),
-            pl.col(f"{features[1]}")
-            - pl.col(
-                f"{features[2]}"
+            (
+                pl.col(f"{features[1]}")
+                - pl.col(
+                    f"{features[2]}"
+                )
             )
             .alias(f"{prefix}_candle_length_M{time_frame}"),
         ]).lazy()
     else:
         df = df.with_columns([
-            pl.col(f"{features[1]}")
-            - pl.col(
-                f"{prefix}_higher_price_M{time_frame}"
+            (
+                pl.col(f"{features[1]}")
+                - pl.col(
+                    f"{prefix}_higher_price_M{time_frame}"
+                )
             )
             .alias(f"{prefix}_up_shadow_M{time_frame}"),
-            pl.col(f"{prefix}_lower_price_M{time_frame}")
-            - pl.col(f"{features[2]}").alias(f"{prefix}_down_shadow_M{time_frame}"),
-            pl.col(f"{prefix}_higher_price_M{time_frame}")
-            - pl.col(
-                f"{prefix}_lower_price_M{time_frame}"
-            ).alias(f"{prefix}_body_length_M{time_frame}"),
-            pl.col(f"{features[1]}")
-            - pl.col(f"{features[2]}").alias(f"{prefix}_candle_length_M{time_frame}"),
+            (
+                pl.col(f"{prefix}_lower_price_M{time_frame}")
+                - pl.col(f"{features[2]}")
+            )
+            .alias(f"{prefix}_down_shadow_M{time_frame}"),
+            (
+                pl.col(f"{prefix}_higher_price_M{time_frame}")
+                - pl.col(
+                    f"{prefix}_lower_price_M{time_frame}"
+                )
+            )
+            .alias(f"{prefix}_body_length_M{time_frame}"),
+            (
+                pl.col(f"{features[1]}")
+                - pl.col(f"{features[2]}")
+            )
+            .alias(f"{prefix}_candle_length_M{time_frame}"),
         ]).lazy()
 
     # Calculate tercile levels
     df = df.with_columns([
         (
             pl.col(f"{features[2]}") + pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
-        ).alias(f"{prefix}_lower_tercile_M{time_frame}"),
+        )
+        .alias(f"{prefix}_lower_tercile_M{time_frame}"),
         (
             pl.col(f"{features[1]}") - pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
-        ).alias(f"{prefix}_upper_tercile_M{time_frame}")
+        )
+        .alias(f"{prefix}_upper_tercile_M{time_frame}")
     ]).lazy()
 
     # Identify pin bars

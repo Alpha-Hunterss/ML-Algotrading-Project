@@ -398,6 +398,7 @@ def add_ratio_by_columns(
         .round(5)
         .alias(ratio_col_name)
     )
+
     return df
 
 

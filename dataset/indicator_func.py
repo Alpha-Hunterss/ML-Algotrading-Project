@@ -10,6 +10,117 @@ from dataset.logging_tools import default_logger
 
 # ?? indicator ---------------------------------------------------
 
+def cal_cndl_shape_func(
+    df: pl.DataFrame,
+    w: int, # only for compatibility
+    time_frame: int,
+    features: List[str],
+    pip_size: float,
+    prefix: str = "fe_cndl_shape",
+    normalize: bool = True,
+) -> pl.DataFrame:
+    """
+    Calculates candle shape features.
+
+    Args:
+        df: The input DataFrame.
+        w: Window size.
+        time_frame: Timeframe of the candle.
+        features: A list of features, including 'OPEN', 'HIGH', 'LOW', and 'CLOSE'.
+        pip_size: Pip size for normalization.
+        prefix: Prefix for the new feature columns.
+        normalize: Whether to normalize the features.
+
+    Returns:
+        The input DataFrame with added candle shape features.
+    """
+    assert (
+        len(features) == 4
+    ), f"Only 4 feature should have been passed but {len(features)} received!"
+    # features[0] == f'M{time_frame}_OPEN'
+    # features[1] == f'M{time_frame}_HIGH'
+    # features[2] == f'M{time_frame}_LOW'
+    # features[3] == f'M{time_frame}_CLOSE'
+
+    df = df.sort("_time")
+
+    # Determine higher and lower price
+    df = df.with_columns([
+        pl.when(
+            pl.col(f"{features[0]}") > pl.col(f"{features[3]}")
+        )
+        .then(pl.col(f"{features[0]}"))
+        .otherwise(pl.col(f"{features[3]}"))
+        .alias(f"{prefix}_higher_price_M{time_frame}"),
+        pl.when(
+            pl.col(f"{features[0]}") < pl.col(f"{features[3]}")
+        )
+        .then(pl.col(f"{features[0]}"))
+        .otherwise(pl.col(f"{features[3]}"))
+        .alias(f"{prefix}_lower_price_M{time_frame}")
+    ]).lazy()
+
+    # Calculate candle body, upper and lower shadows
+    df = df.with_columns([
+        pl.col(f"{features[1]}")
+        - pl.col(
+            f"{prefix}_higher_price_M{time_frame}"
+          )
+          .alias(f"{prefix}_up_shadow_M{time_frame}"),
+        pl.col(f"{prefix}_lower_price_M{time_frame}")
+        - pl.col(f"{features[2]}").alias(f"{prefix}_down_shadow_M{time_frame}"),
+        pl.col(f"{prefix}_higher_price_M{time_frame}")
+        - pl.col(
+            f"{prefix}_lower_price_M{time_frame}"
+          ).alias(f"{prefix}_body_length_M{time_frame}"),
+        pl.col(f"{features[1]}")
+        - pl.col(f"{features[2]}").alias(f"{prefix}_candle_length_M{time_frame}"),
+    ]).lazy()
+
+    # Calculate tercile levels
+    df = df.with_columns([
+        (
+            pl.col(f"{features[2]}") + pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
+        ).alias(f"{prefix}_lower_tercile_M{time_frame}"),
+        (
+            pl.col(f"{features[1]}") - pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
+        ).alias(f"{prefix}_upper_tercile_M{time_frame}")
+    ]).lazy()
+
+    # Identify pin bars
+    df = df.with_columns([
+        pl.when(
+            pl.col(f"{prefix}_lower_price_M{time_frame}") > pl.col(f"{prefix}_upper_tercile_M{time_frame}")
+        ).then(1)
+        .otherwise(0)
+        .alias(f"{prefix}_is_bullish_pin_bar_M{time_frame}"),
+        pl.when(
+            pl.col(f"{prefix}_higher_price_M{time_frame}") < pl.col(f"{prefix}_lower_tercile_M{time_frame}")
+        ).then(1)
+        .otherwise(0)
+        .alias(f"{prefix}_is_bearish_pin_bar_M{time_frame}")
+    ]).lazy()
+
+    if normalize:
+        df = df.with_columns([
+            (pl.col(col) * 1000) / (pip_size * pl.col(features[3])) 
+            for col in df.columns if not col.startswith(f"{prefix}_is")
+        ]).lazy()
+
+    # Drop unnecessary columns
+    cols_to_drop = features
+    cols_to_drop.extend([
+        f"{prefix}_higher_price_M{time_frame}",
+        f"{prefix}_lower_price_M{time_frame}",
+        f"{prefix}_lower_tercile_M{time_frame}",
+        f"{prefix}_upper_tercile_M{time_frame}",
+        f"{prefix}_candle_length_M{time_frame}"
+    ])
+    df = df.drop(cols_to_drop)
+
+    return df.collect()
+
+
 def cal_RSI_base_func(
     df: pl.DataFrame,
     w: int,
@@ -422,9 +533,9 @@ def cal_ATR_func(
     if features != input_features:
         print('Input features are wrong')
         return
-    # features[0] == 'CLOSE'
-    # features[1] == 'HIGH'
-    # features[2] == 'LOW'
+    # features[0] == f'M{time_frame}_CLOSE'
+    # features[1] == f'M{time_frame}_HIGH'
+    # features[2] == f'M{time_frame}_LOW'
 
     df = df.sort("_time")
 
@@ -535,7 +646,8 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_EMA": {"func": cal_EMA_base_func},
             "fe_SMA": {"func": cal_SMA_base_func},
             "fe_ATR": {"func": cal_ATR_func},
-            "fe_RSTD":{"func": cal_RSTD_func},
+            "fe_RSTD": {"func": cal_RSTD_func},
+            "fe_cndl_shape": {"func": cal_cndl_shape_func},
         }
 
         for symbol in list(feature_config.keys()):

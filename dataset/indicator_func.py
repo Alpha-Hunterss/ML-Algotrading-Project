@@ -148,9 +148,10 @@ def cal_cndl_shape_func(
         f"{prefix}_upper_tercile_M{time_frame}",
         f"{prefix}_candle_length_M{time_frame}"
     ])
+    df = df.collect()
     df = df.drop(cols_to_drop)
 
-    return df.collect()
+    return df
 
 
 def cal_RSI_base_func(

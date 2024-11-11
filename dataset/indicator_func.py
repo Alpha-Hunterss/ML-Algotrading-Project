@@ -37,26 +37,36 @@ def cal_cndl_shape_func(
     assert (
         len(features) == 4
     ), f"Only 4 feature should have been passed but {len(features)} received!"
-    # features[0] == f'M{time_frame}_OPEN'
+    features = sorted(features)
+    input_features = [
+        f'M{time_frame}_CLOSE',
+        f'M{time_frame}_HIGH',
+        f'M{time_frame}_LOW',
+        f'M{time_frame}_OPEN'
+    ]
+    if features != input_features:
+        print('Input features are wrong')
+        return
+    # features[0] == f'M{time_frame}_CLOSE'
     # features[1] == f'M{time_frame}_HIGH'
     # features[2] == f'M{time_frame}_LOW'
-    # features[3] == f'M{time_frame}_CLOSE'
+    # features[3] == f'M{time_frame}_OPEN'
 
     df = df.sort("_time")
 
     # Determine higher and lower price
     df = df.with_columns([
         pl.when(
-            pl.col(f"{features[0]}") > pl.col(f"{features[3]}")
+            pl.col(features[3]) > pl.col(features[0])
         )
-        .then(pl.col(f"{features[0]}"))
-        .otherwise(pl.col(f"{features[3]}"))
+        .then(pl.col(features[3]))
+        .otherwise(pl.col(features[0]))
         .alias(f"{prefix}_higher_price_M{time_frame}"),
         pl.when(
-            pl.col(f"{features[0]}") < pl.col(f"{features[3]}")
+            pl.col(features[3]) < pl.col(features[0])
         )
-        .then(pl.col(f"{features[0]}"))
-        .otherwise(pl.col(f"{features[3]}"))
+        .then(pl.col(features[3]))
+        .otherwise(pl.col(features[0]))
         .alias(f"{prefix}_lower_price_M{time_frame}")
     ]).lazy()
 
@@ -65,11 +75,11 @@ def cal_cndl_shape_func(
         df = df.with_columns([
             (
                 (
-                    pl.col(f"{features[1]}")
+                    pl.col(features[1])
                     - pl.col(
                         f"{prefix}_higher_price_M{time_frame}"
                     )
-                ) * 1000 / (pip_size * pl.col(features[3]))
+                ) * 1000 / (pip_size * pl.col(features[0]))
             )
             .alias(f"{prefix}_up_shadow_M{time_frame}_norm"),
             (
@@ -77,8 +87,8 @@ def cal_cndl_shape_func(
                     pl.col(
                         f"{prefix}_lower_price_M{time_frame}"
                     )
-                    - pl.col(f"{features[2]}")
-                ) * 1000 / (pip_size * pl.col(features[3]))
+                    - pl.col(features[2])
+                ) * 1000 / (pip_size * pl.col(features[0]))
             )
             .alias(f"{prefix}_down_shadow_M{time_frame}_norm"),
             (
@@ -89,21 +99,18 @@ def cal_cndl_shape_func(
                     - pl.col(
                         f"{prefix}_lower_price_M{time_frame}"
                     )
-                ) * 1000 / (pip_size * pl.col(features[3]))
+                ) * 1000 / (pip_size * pl.col(features[0]))
             )
             .alias(f"{prefix}_body_length_M{time_frame}_norm"),
             (
-                pl.col(f"{features[1]}")
-                - pl.col(
-                    f"{features[2]}"
-                )
+                pl.col(features[1]) - pl.col(features[2])
             )
             .alias(f"{prefix}_candle_length_M{time_frame}"),
         ]).lazy()
     else:
         df = df.with_columns([
             (
-                pl.col(f"{features[1]}")
+                pl.col(features[1])
                 - pl.col(
                     f"{prefix}_higher_price_M{time_frame}"
                 )
@@ -111,7 +118,7 @@ def cal_cndl_shape_func(
             .alias(f"{prefix}_up_shadow_M{time_frame}"),
             (
                 pl.col(f"{prefix}_lower_price_M{time_frame}")
-                - pl.col(f"{features[2]}")
+                - pl.col(features[2])
             )
             .alias(f"{prefix}_down_shadow_M{time_frame}"),
             (
@@ -122,8 +129,7 @@ def cal_cndl_shape_func(
             )
             .alias(f"{prefix}_body_length_M{time_frame}"),
             (
-                pl.col(f"{features[1]}")
-                - pl.col(f"{features[2]}")
+                pl.col(features[1]) - pl.col(features[2])
             )
             .alias(f"{prefix}_candle_length_M{time_frame}"),
         ]).lazy()
@@ -131,11 +137,11 @@ def cal_cndl_shape_func(
     # Calculate tercile levels
     df = df.with_columns([
         (
-            pl.col(f"{features[2]}") + pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
+            pl.col(features[2]) + pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
         )
         .alias(f"{prefix}_lower_tercile_M{time_frame}"),
         (
-            pl.col(f"{features[1]}") - pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
+            pl.col(features[1]) - pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
         )
         .alias(f"{prefix}_upper_tercile_M{time_frame}")
     ]).lazy()

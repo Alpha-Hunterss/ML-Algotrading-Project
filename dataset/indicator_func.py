@@ -71,7 +71,7 @@ def cal_cndl_shape_func(
                     )
                 ) * 1000 / (pip_size * pl.col(features[3]))
             )
-            .alias(f"{prefix}_up_shadow_M{time_frame}"),
+            .alias(f"{prefix}_up_shadow_M{time_frame}_norm"),
             (
                 (
                     pl.col(
@@ -80,7 +80,7 @@ def cal_cndl_shape_func(
                     - pl.col(f"{features[2]}")
                 ) * 1000 / (pip_size * pl.col(features[3]))
             )
-            .alias(f"{prefix}_down_shadow_M{time_frame}"),
+            .alias(f"{prefix}_down_shadow_M{time_frame}_norm"),
             (
                 (
                     pl.col(
@@ -91,7 +91,7 @@ def cal_cndl_shape_func(
                     )
                 ) * 1000 / (pip_size * pl.col(features[3]))
             )
-            .alias(f"{prefix}_body_length_M{time_frame}"),
+            .alias(f"{prefix}_body_length_M{time_frame}_norm"),
             pl.col(f"{features[1]}")
             - pl.col(
                 f"{features[2]}"
@@ -797,7 +797,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             file_name = features_folder_path + f"/{ratio_prefix}_{symbol}.parquet"
             df.write_parquet(file_name)
             logger.info(f"--> {ratio_prefix}_{symbol} saved.")
-            
+
         logger.info("--> history_indicator_calculator run successfully.")
     except Exception as e:
         logger.exception("--> history_indicator_calculator error.")

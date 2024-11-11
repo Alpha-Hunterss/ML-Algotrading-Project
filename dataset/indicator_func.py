@@ -797,7 +797,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             file_name = features_folder_path + f"/{ratio_prefix}_{symbol}.parquet"
             df.write_parquet(file_name)
             logger.info(f"--> {ratio_prefix}_{symbol} saved.")
-            
+
         logger.info("--> history_indicator_calculator run successfully.")
     except Exception as e:
         logger.exception("--> history_indicator_calculator error.")

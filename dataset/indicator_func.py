@@ -61,21 +61,59 @@ def cal_cndl_shape_func(
     ]).lazy()
 
     # Calculate candle body, upper and lower shadows
-    df = df.with_columns([
-        pl.col(f"{features[1]}")
-        - pl.col(
-            f"{prefix}_higher_price_M{time_frame}"
-          )
-          .alias(f"{prefix}_up_shadow_M{time_frame}"),
-        pl.col(f"{prefix}_lower_price_M{time_frame}")
-        - pl.col(f"{features[2]}").alias(f"{prefix}_down_shadow_M{time_frame}"),
-        pl.col(f"{prefix}_higher_price_M{time_frame}")
-        - pl.col(
-            f"{prefix}_lower_price_M{time_frame}"
-          ).alias(f"{prefix}_body_length_M{time_frame}"),
-        pl.col(f"{features[1]}")
-        - pl.col(f"{features[2]}").alias(f"{prefix}_candle_length_M{time_frame}"),
-    ]).lazy()
+    if normalize:
+        df = df.with_columns([
+            (
+                (
+                    pl.col(f"{features[1]}")
+                    - pl.col(
+                        f"{prefix}_higher_price_M{time_frame}"
+                    )
+                ) * 1000 / (pip_size * pl.col(features[3]))
+            )
+            .alias(f"{prefix}_up_shadow_M{time_frame}"),
+            (
+                (
+                    pl.col(
+                        f"{prefix}_lower_price_M{time_frame}"
+                    )
+                    - pl.col(f"{features[2]}")
+                ) * 1000 / (pip_size * pl.col(features[3]))
+            )
+            .alias(f"{prefix}_down_shadow_M{time_frame}"),
+            (
+                (
+                    pl.col(
+                        f"{prefix}_higher_price_M{time_frame}"
+                    )
+                    - pl.col(
+                        f"{prefix}_lower_price_M{time_frame}"
+                    )
+                ) * 1000 / (pip_size * pl.col(features[3]))
+            )
+            .alias(f"{prefix}_body_length_M{time_frame}"),
+            pl.col(f"{features[1]}")
+            - pl.col(
+                f"{features[2]}"
+            )
+            .alias(f"{prefix}_candle_length_M{time_frame}"),
+        ]).lazy()
+    else:
+        df = df.with_columns([
+            pl.col(f"{features[1]}")
+            - pl.col(
+                f"{prefix}_higher_price_M{time_frame}"
+            )
+            .alias(f"{prefix}_up_shadow_M{time_frame}"),
+            pl.col(f"{prefix}_lower_price_M{time_frame}")
+            - pl.col(f"{features[2]}").alias(f"{prefix}_down_shadow_M{time_frame}"),
+            pl.col(f"{prefix}_higher_price_M{time_frame}")
+            - pl.col(
+                f"{prefix}_lower_price_M{time_frame}"
+            ).alias(f"{prefix}_body_length_M{time_frame}"),
+            pl.col(f"{features[1]}")
+            - pl.col(f"{features[2]}").alias(f"{prefix}_candle_length_M{time_frame}"),
+        ]).lazy()
 
     # Calculate tercile levels
     df = df.with_columns([
@@ -100,12 +138,6 @@ def cal_cndl_shape_func(
         .otherwise(0)
         .alias(f"{prefix}_is_bearish_pin_bar_M{time_frame}")
     ]).lazy()
-
-    if normalize:
-        df = df.with_columns([
-            (pl.col(col) * 1000) / (pip_size * pl.col(features[3])) 
-            for col in df.columns if not col.startswith(f"{prefix}_is")
-        ]).lazy()
 
     # Drop unnecessary columns
     cols_to_drop = features
@@ -398,6 +430,7 @@ def add_ratio_by_columns(
         .round(5)
         .alias(ratio_col_name)
     )
+
     return df
 
 

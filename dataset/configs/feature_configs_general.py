@@ -12,7 +12,11 @@ symbols = [
 
 general_config = {
   'base_candle_timeframe': [15, 30, 60, 120, 180, 240, 360, 720, 1440],
-  
+
+  'fe_cndl_shape': {'timeframe': [5, 15, 60],
+  'window_size': [-1],
+  'base_columns': ['OPEN', 'HIGH', 'LOW', 'CLOSE']},
+
   'fe_ATR': {'timeframe': [240, 60],
   'window_size': [30, 14, 7],
   'base_columns': ['HIGH', 'CLOSE', 'LOW']},

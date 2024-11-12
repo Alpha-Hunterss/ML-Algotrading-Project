@@ -10,13 +10,13 @@ from dataset.logging_tools import default_logger
 
 # ?? indicator ---------------------------------------------------
 
-def cal_cndl_shape_func(
+def cal_cndl_shape_n_cntxt_func(
     df: pl.DataFrame,
-    w: int, # only for compatibility
+    w: int,
     time_frame: int,
     features: List[str],
     pip_size: float,
-    prefix: str = "fe_cndl_shape",
+    prefix: str = "fe_cndl_shape_n_cntxt",
     normalize: bool = True,
 ) -> pl.DataFrame:
     """
@@ -54,7 +54,7 @@ def cal_cndl_shape_func(
 
     df = df.sort("_time")
 
-    # Determine higher and lower price
+    # Determine higher and lower price (among OPEN & CLOSE)
     df = df.with_columns([
         pl.when(
             pl.col(features[3]) > pl.col(features[0])
@@ -70,9 +70,26 @@ def cal_cndl_shape_func(
         .alias(f"{prefix}_lower_price_M{time_frame}")
     ]).lazy()
 
-    # Calculate candle body, upper and lower shadows
+    # Calculate candle return, body, upper and lower shadows
     if normalize:
+
+        context_features = [
+            f"{prefix}_return_M{time_frame}_norm",
+            f"{prefix}_up_shadow_M{time_frame}_norm",
+            f"{prefix}_down_shadow_M{time_frame}_norm",
+            f"{prefix}_body_length_M{time_frame}_norm"
+        ]
+
         df = df.with_columns([
+            (
+                (
+                    pl.col(features[0]) - pl.col(features[0]).shift(1)
+                )
+                * 1000 / (
+                    pip_size * pl.col(features[0]).shift(1)
+                )
+            )
+            .alias(context_features[0]),
             (
                 (
                     pl.col(features[1])
@@ -81,7 +98,7 @@ def cal_cndl_shape_func(
                     )
                 ) * 1000 / (pip_size * pl.col(features[0]))
             )
-            .alias(f"{prefix}_up_shadow_M{time_frame}_norm"),
+            .alias(context_features[1]),
             (
                 (
                     pl.col(
@@ -90,7 +107,7 @@ def cal_cndl_shape_func(
                     - pl.col(features[2])
                 ) * 1000 / (pip_size * pl.col(features[0]))
             )
-            .alias(f"{prefix}_down_shadow_M{time_frame}_norm"),
+            .alias(context_features[2]),
             (
                 (
                     pl.col(
@@ -101,33 +118,45 @@ def cal_cndl_shape_func(
                     )
                 ) * 1000 / (pip_size * pl.col(features[0]))
             )
-            .alias(f"{prefix}_body_length_M{time_frame}_norm"),
+            .alias(context_features[3]),
             (
                 pl.col(features[1]) - pl.col(features[2])
             )
             .alias(f"{prefix}_candle_length_M{time_frame}"),
         ]).lazy()
+
     else:
+        context_features = [
+            f"{prefix}_return_M{time_frame}",
+            f"{prefix}_up_shadow_M{time_frame}",
+            f"{prefix}_down_shadow_M{time_frame}",
+            f"{prefix}_body_length_M{time_frame}"
+        ]
+
         df = df.with_columns([
+            (
+                pl.col(features[0]) - pl.col(features[0]).shift(1)
+            )
+            .alias(context_features[0]),
             (
                 pl.col(features[1])
                 - pl.col(
                     f"{prefix}_higher_price_M{time_frame}"
                 )
             )
-            .alias(f"{prefix}_up_shadow_M{time_frame}"),
+            .alias(context_features[1]),
             (
                 pl.col(f"{prefix}_lower_price_M{time_frame}")
                 - pl.col(features[2])
             )
-            .alias(f"{prefix}_down_shadow_M{time_frame}"),
+            .alias(context_features[2]),
             (
                 pl.col(f"{prefix}_higher_price_M{time_frame}")
                 - pl.col(
                     f"{prefix}_lower_price_M{time_frame}"
                 )
             )
-            .alias(f"{prefix}_body_length_M{time_frame}"),
+            .alias(context_features[3]),
             (
                 pl.col(features[1]) - pl.col(features[2])
             )
@@ -159,6 +188,13 @@ def cal_cndl_shape_func(
         .otherwise(0)
         .alias(f"{prefix}_is_bearish_pin_bar_M{time_frame}")
     ]).lazy()
+
+    # Create lagged features for historical context
+    for feature in context_features:
+        for lag in range(1, w):  # w-1 previous candles
+            df = df.with_columns([
+                pl.col(feature).shift(lag).alias(f"{feature}_lag_{lag}")
+            ]).lazy()
 
     # Drop unnecessary columns
     cols_to_drop = features
@@ -702,7 +738,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_SMA": {"func": cal_SMA_base_func},
             "fe_ATR": {"func": cal_ATR_func},
             "fe_RSTD": {"func": cal_RSTD_func},
-            "fe_cndl_shape": {"func": cal_cndl_shape_func},
+            "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
         }
 
         for symbol in list(feature_config.keys()):
@@ -774,7 +810,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
                 df = df.drop_nulls()
                 df = df.with_columns(pl.lit(symbol).alias("symbol"))
-                
+
                 file_name = features_folder_path + f"/{fe_prefix}_{symbol}.parquet"
                 df.write_parquet(file_name)
 
@@ -782,7 +818,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
                 ## add ratio: -------------------------------------------------------------------
                 ratio_prefix = "fe_ratio"
-                
+
                 if ratio_prefix not in list(feature_config[symbol].keys()):
                     continue
                 if fe_prefix.replace("fe_", "") in list(

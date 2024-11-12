@@ -816,7 +816,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
                 logger.info(f"--> {fe_prefix}_{symbol} done.")
 
-                ## add ratio: -------------------------------------------------------------------
+                ## add ratio: ------------------------------------------------------------------
                 ratio_prefix = "fe_ratio"
 
                 if ratio_prefix not in list(feature_config[symbol].keys()):

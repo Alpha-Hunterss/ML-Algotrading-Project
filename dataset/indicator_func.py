@@ -803,7 +803,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                             fe_prefix="fe_ratio",
                         )
                     )
-                    
+
             # ? merge ratio for one symbol:
             if len(symbol_ratio_dfs) == 0:
                 print(f"!!! no ratio feature for {symbol}.")

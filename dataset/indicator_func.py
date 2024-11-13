@@ -543,7 +543,6 @@ def add_all_ratio_by_config(
     base_cols = set(df.columns) - set(["_time"])
     for timeframe in ratio_config["timeframe"]:
         for w_set in ratio_config["window_size"]:
-            print(f"The timeframe {timeframe} of window size {w_set} is being processed ...")
             df = add_ratio(
                 df, symbol, fe_name, timeframe, w_set[0], w_set[1], fe_prefix
             )
@@ -856,7 +855,6 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
             df = df.with_columns(pl.lit(symbol).alias("symbol"))
             file_name = features_folder_path + f"/{ratio_prefix}_{symbol}.parquet"
-            print(f"The final ratio dataframe's shape: {df.shape}")
             df.write_parquet(file_name)
             logger.info(f"--> {ratio_prefix}_{symbol} saved.")
 

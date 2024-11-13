@@ -824,17 +824,13 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                     continue
 
                 fe_prefix_replaced = fe_prefix.replace("fe_", "")
+                features_folder_path = f"{root_path}/data/features/{ratio_prefix}/"
+                Path(features_folder_path).mkdir(parents=True, exist_ok=True)
 
                 if fe_prefix_replaced in list(
                     feature_config[symbol][ratio_prefix].keys()
                 ):
-                    print(f"The feature {fe_prefix_replaced} ratio is being processed ...")
-
-                    ratio_config = feature_config[symbol][ratio_prefix][
-                        fe_prefix_replaced
-                    ]
-                    features_folder_path = f"{root_path}/data/features/{ratio_prefix}/"
-                    Path(features_folder_path).mkdir(parents=True, exist_ok=True)
+                    ratio_config = feature_config[symbol][ratio_prefix][fe_prefix_replaced]
 
                     symbol_ratio_dfs.append(
                         add_all_ratio_by_config(

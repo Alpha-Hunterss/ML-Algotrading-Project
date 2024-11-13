@@ -543,6 +543,7 @@ def add_all_ratio_by_config(
     base_cols = set(df.columns) - set(["_time"])
     for timeframe in ratio_config["timeframe"]:
         for w_set in ratio_config["window_size"]:
+            print(f"The timeframe {timeframe} of window size {w_set} is being processed ...")
             df = add_ratio(
                 df, symbol, fe_name, timeframe, w_set[0], w_set[1], fe_prefix
             )
@@ -746,7 +747,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             symbol_ratio_dfs = []
 
 
-            for fe_prefix in modes:
+            for fe_prefix, func in modes.items():
                 if fe_prefix not in list(feature_config[symbol].keys()):
                     continue
                 logger.info("-" * 50)
@@ -779,7 +780,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 add_candle_base_indicators_polars(
                     df_base=df,
                     prefix=fe_prefix,
-                    base_func=modes[fe_prefix]["func"],
+                    base_func=func["func"],
                     opts=opts,
                 )
 
@@ -821,11 +822,16 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
                 if ratio_prefix not in list(feature_config[symbol].keys()):
                     continue
-                if fe_prefix.replace("fe_", "") in list(
+
+                fe_prefix_replaced = fe_prefix.replace("fe_", "")
+
+                if fe_prefix_replaced in list(
                     feature_config[symbol][ratio_prefix].keys()
                 ):
+                    print(f"The feature {fe_prefix_replaced} ratio is being processed ...")
+
                     ratio_config = feature_config[symbol][ratio_prefix][
-                        fe_prefix.replace("fe_", "")
+                        fe_prefix_replaced
                     ]
                     features_folder_path = f"{root_path}/data/features/{ratio_prefix}/"
                     Path(features_folder_path).mkdir(parents=True, exist_ok=True)
@@ -834,7 +840,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                         add_all_ratio_by_config(
                             df,
                             symbol,
-                            fe_name=fe_prefix.replace("fe_", ""),
+                            fe_name=fe_prefix_replaced,
                             ratio_config=ratio_config,
                             fe_prefix="fe_ratio",
                         )
@@ -844,7 +850,8 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             if len(symbol_ratio_dfs) == 0:
                 print(f"!!! no ratio feature for {symbol}.")
                 continue
-            elif len(symbol_ratio_dfs) == 1:
+            
+            if len(symbol_ratio_dfs) == 1:
                 df = symbol_ratio_dfs[0]
             else:
                 df = symbol_ratio_dfs[0]
@@ -853,6 +860,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
             df = df.with_columns(pl.lit(symbol).alias("symbol"))
             file_name = features_folder_path + f"/{ratio_prefix}_{symbol}.parquet"
+            print(f"The final ratio dataframe's shape: {df.shape()}")
             df.write_parquet(file_name)
             logger.info(f"--> {ratio_prefix}_{symbol} saved.")
 
@@ -867,4 +875,4 @@ if __name__ == "__main__":
     from configs.feature_configs_general import generate_general_config
     config_general = generate_general_config()
     history_indicator_calculator(config_general)
-    print(f"--> history_indicator_calculator DONE.")
+    print("--> history_indicator_calculator DONE.")

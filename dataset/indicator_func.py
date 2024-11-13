@@ -850,7 +850,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             if len(symbol_ratio_dfs) == 0:
                 print(f"!!! no ratio feature for {symbol}.")
                 continue
-            
+
             if len(symbol_ratio_dfs) == 1:
                 df = symbol_ratio_dfs[0]
             else:
@@ -860,7 +860,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
             df = df.with_columns(pl.lit(symbol).alias("symbol"))
             file_name = features_folder_path + f"/{ratio_prefix}_{symbol}.parquet"
-            print(f"The final ratio dataframe's shape: {df.shape()}")
+            print(f"The final ratio dataframe's shape: {df.shape}")
             df.write_parquet(file_name)
             logger.info(f"--> {ratio_prefix}_{symbol} saved.")
 

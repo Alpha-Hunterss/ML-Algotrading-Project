@@ -54,24 +54,25 @@ def cal_cndl_shape_n_cntxt_func(
 
     df = df.sort("_time")
 
-    # Add higher and lower price (among OPEN & CLOSE) and candle length calculations
-    all_calcs = [
-        pl.when(pl.col(features[3]) > pl.col(features[0]))
+    # Determine higher and lower price (among OPEN & CLOSE)
+    df = df.with_columns([
+        pl.when(
+            pl.col(features[3]) > pl.col(features[0])
+        )
         .then(pl.col(features[3]))
         .otherwise(pl.col(features[0]))
         .alias(f"{prefix}_higher_price_M{time_frame}"),
-
-        pl.when(pl.col(features[3]) < pl.col(features[0]))
+        pl.when(
+            pl.col(features[3]) < pl.col(features[0])
+        )
         .then(pl.col(features[3]))
         .otherwise(pl.col(features[0]))
-        .alias(f"{prefix}_lower_price_M{time_frame}"),
+        .alias(f"{prefix}_lower_price_M{time_frame}")
+    ]).lazy()
 
-        (pl.col(features[1]) - pl.col(features[2]))
-        .alias(f"{prefix}_candle_length_M{time_frame}")
-    ]
-
-    # Add candle return, body, upper and lower shadows calculations
+    # Calculate candle return, body, upper and lower shadows
     if normalize:
+
         context_features = [
             f"{prefix}_return_M{time_frame}_norm",
             f"{prefix}_up_shadow_M{time_frame}_norm",
@@ -79,25 +80,51 @@ def cal_cndl_shape_n_cntxt_func(
             f"{prefix}_body_length_M{time_frame}_norm"
         ]
 
-        # Add normalized calculations
-        all_calcs.extend([
-            ((pl.col(features[0]) - pl.col(features[0]).shift(1)) * 1000 / 
-             (pip_size * pl.col(features[0]).shift(1)))
+        df = df.with_columns([
+            (
+                (
+                    pl.col(features[0]) - pl.col(features[0]).shift(1)
+                )
+                * 1000 / (
+                    pip_size * pl.col(features[0]).shift(1)
+                )
+            )
             .alias(context_features[0]),
-
-            ((pl.col(features[1]) - pl.col(f"{prefix}_higher_price_M{time_frame}")) * 
-             1000 / (pip_size * pl.col(features[0])))
+            (
+                (
+                    pl.col(features[1])
+                    - pl.col(
+                        f"{prefix}_higher_price_M{time_frame}"
+                    )
+                ) * 1000 / (pip_size * pl.col(features[0]))
+            )
             .alias(context_features[1]),
-
-            ((pl.col(f"{prefix}_lower_price_M{time_frame}") - pl.col(features[2])) * 
-             1000 / (pip_size * pl.col(features[0])))
+            (
+                (
+                    pl.col(
+                        f"{prefix}_lower_price_M{time_frame}"
+                    )
+                    - pl.col(features[2])
+                ) * 1000 / (pip_size * pl.col(features[0]))
+            )
             .alias(context_features[2]),
+            (
+                (
+                    pl.col(
+                        f"{prefix}_higher_price_M{time_frame}"
+                    )
+                    - pl.col(
+                        f"{prefix}_lower_price_M{time_frame}"
+                    )
+                ) * 1000 / (pip_size * pl.col(features[0]))
+            )
+            .alias(context_features[3]),
+            (
+                pl.col(features[1]) - pl.col(features[2])
+            )
+            .alias(f"{prefix}_candle_length_M{time_frame}"),
+        ]).lazy()
 
-            ((pl.col(f"{prefix}_higher_price_M{time_frame}") - 
-              pl.col(f"{prefix}_lower_price_M{time_frame}")) * 
-             1000 / (pip_size * pl.col(features[0])))
-            .alias(context_features[3])
-        ])
     else:
         context_features = [
             f"{prefix}_return_M{time_frame}",
@@ -106,73 +133,84 @@ def cal_cndl_shape_n_cntxt_func(
             f"{prefix}_body_length_M{time_frame}"
         ]
 
-        # Add non-normalized calculations
-        all_calcs.extend([
-            (pl.col(features[0]) - pl.col(features[0]).shift(1))
+        df = df.with_columns([
+            (
+                pl.col(features[0]) - pl.col(features[0]).shift(1)
+            )
             .alias(context_features[0]),
-
-            (pl.col(features[1]) - pl.col(f"{prefix}_higher_price_M{time_frame}"))
+            (
+                pl.col(features[1])
+                - pl.col(
+                    f"{prefix}_higher_price_M{time_frame}"
+                )
+            )
             .alias(context_features[1]),
-
-            (pl.col(f"{prefix}_lower_price_M{time_frame}") - pl.col(features[2]))
+            (
+                pl.col(f"{prefix}_lower_price_M{time_frame}")
+                - pl.col(features[2])
+            )
             .alias(context_features[2]),
+            (
+                pl.col(f"{prefix}_higher_price_M{time_frame}")
+                - pl.col(
+                    f"{prefix}_lower_price_M{time_frame}"
+                )
+            )
+            .alias(context_features[3]),
+            (
+                pl.col(features[1]) - pl.col(features[2])
+            )
+            .alias(f"{prefix}_candle_length_M{time_frame}"),
+        ]).lazy()
 
-            (pl.col(f"{prefix}_higher_price_M{time_frame}") - 
-             pl.col(f"{prefix}_lower_price_M{time_frame}"))
-            .alias(context_features[3])
-        ])
-
-    # Add tercile levels calculations
-    all_calcs.extend([
-        (pl.col(features[2]) + pl.col(f"{prefix}_candle_length_M{time_frame}") / 3)
+    # Calculate tercile levels
+    df = df.with_columns([
+        (
+            pl.col(features[2]) + pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
+        )
         .alias(f"{prefix}_lower_tercile_M{time_frame}"),
-
-        (pl.col(features[1]) - pl.col(f"{prefix}_candle_length_M{time_frame}") / 3)
+        (
+            pl.col(features[1]) - pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
+        )
         .alias(f"{prefix}_upper_tercile_M{time_frame}")
-    ])
+    ]).lazy()
 
-    # Add pin bar calculations
-    all_calcs.extend([
-        pl.when(pl.col(f"{prefix}_lower_price_M{time_frame}") > 
-                pl.col(f"{prefix}_upper_tercile_M{time_frame}"))
-        .then(1)
+    # Identify pin bars
+    df = df.with_columns([
+        pl.when(
+            pl.col(f"{prefix}_lower_price_M{time_frame}") > pl.col(f"{prefix}_upper_tercile_M{time_frame}")
+        ).then(1)
         .otherwise(0)
         .alias(f"{prefix}_is_bullish_pin_bar_M{time_frame}"),
-
-        pl.when(pl.col(f"{prefix}_higher_price_M{time_frame}") < 
-                pl.col(f"{prefix}_lower_tercile_M{time_frame}"))
-        .then(1)
+        pl.when(
+            pl.col(f"{prefix}_higher_price_M{time_frame}") < pl.col(f"{prefix}_lower_tercile_M{time_frame}")
+        ).then(1)
         .otherwise(0)
         .alias(f"{prefix}_is_bearish_pin_bar_M{time_frame}")
-    ])
+    ]).lazy()
 
-    # Set a standard alpha exponent for exponential mean calculations
     alpha = 2.0 / (w + 1)
 
+    # Create lagged features for historical context
+    # and rolling statistics for each context feature
     for feature in context_features:
-        # Add statistical calculations
-        all_calcs.extend([
+        # Calculate rolling mean
+        df = df.with_columns([
             pl.col(feature)
             .rolling_mean(window_size=w)
             .alias(f"{feature}_rolling_mean"),
-
             pl.col(feature)
             .rolling_median(window_size=w)
             .alias(f"{feature}_rolling_median"),
-
             pl.col(feature)
             .ewm_mean(alpha=alpha)
             .alias(f"{feature}_ema")
-        ])
+        ]).lazy()
 
-        # Add lag calculations
-        all_calcs.extend([
-            pl.col(feature).shift(lag).alias(f"{feature}_lag_{lag}")
-            for lag in range(1, w)
-        ])
-
-    # Apply all calculations
-    df = df.with_columns(all_calcs).lazy()
+        for lag in range(1, w):  # w-1 previous candles
+            df = df.with_columns([
+                pl.col(feature).shift(lag).alias(f"{feature}_lag_{lag}")
+            ]).lazy()
 
     # Drop unnecessary columns
     cols_to_drop = features
@@ -183,8 +221,10 @@ def cal_cndl_shape_n_cntxt_func(
         f"{prefix}_upper_tercile_M{time_frame}",
         f"{prefix}_candle_length_M{time_frame}"
     ])
+    df = df.collect()
+    df = df.drop(cols_to_drop)
 
-    return df.collect().drop(cols_to_drop)
+    return df
 
 
 def cal_RSI_base_func(
@@ -219,73 +259,74 @@ def cal_RSI_base_func(
     feature = features[0]
 
     df = df.sort("_time")
-
-    # Calculate diff
     if percentage_feature:
-        diff_expr = pl.col(feature)
+        # percentage features like price-percentage are diff features by nature
+        df = df.with_columns((pl.col(feature)).alias(f"{feature}_diff")).lazy()
     else:
-        diff_expr = pl.col(feature).diff()
+        df = df.with_columns((pl.col(feature).diff()).alias(f"{feature}_diff")).lazy()
 
-    all_calcs = [
-        # Add diff calculation
-        diff_expr.alias(f"{feature}_diff"),
+    df = df.with_columns(
+        ((pl.col(f"{feature}_diff") >= 0) * (pl.col(f"{feature}_diff"))).alias(
+            f"{feature}_GAIN"
+        )
+    ).lazy()
+    df = df.with_columns(
+        ((pl.col(f"{feature}_diff") < 0) * -1 * (pl.col(f"{feature}_diff"))).alias(
+            f"{feature}_LOSS"
+        )
+    ).lazy()
 
-        # Add gain calculation
-        ((pl.col(f"{feature}_diff") >= 0) * (pl.col(f"{feature}_diff")))
-        .alias(f"{feature}_GAIN"),
+    df = df.with_columns(
+        (
+            pl.col(f"{feature}_GAIN").ewm_mean(
+                alpha=1.0 / w, min_periods=w, ignore_nulls=True
+            )
+        ).alias(f"{feature}_Avg_GAIN_{w}")
+    ).lazy()
+    df = df.with_columns(
+        (
+            pl.col(f"{feature}_LOSS").ewm_mean(
+                alpha=1.0 / w, min_periods=w, ignore_nulls=True
+            )
+        ).alias(f"{feature}_Avg_LOSS_{w}")
+    ).lazy()
 
-        # Add loss calculation
-        ((pl.col(f"{feature}_diff") < 0) * -1 * (pl.col(f"{feature}_diff")))
-        .alias(f"{feature}_LOSS"),
-    ]
+    # METHOD I
+    df = df.with_columns(
+        (
+            (pl.col(f"{feature}_Avg_GAIN_{w}")) / ((pl.col(f"{feature}_Avg_LOSS_{w}")))
+        ).alias(f"{feature}_RS_{w}")
+    ).lazy()
+    df = df.with_columns(
+        (100 - (100 / (1 + pl.col(f"{feature}_RS_{w}")))).alias(
+            f"{prefix}_{feature}_W{w}_cndl_M{time_frame}"
+        )
+    ).lazy()
 
-    # Add average gain/loss calculations
-    all_calcs.extend([
-        pl.col(f"{feature}_GAIN")
-        .ewm_mean(alpha=1.0 / w, min_periods=w, ignore_nulls=True)
-        .alias(f"{feature}_Avg_GAIN_{w}"),
-
-        pl.col(f"{feature}_LOSS")
-        .ewm_mean(alpha=1.0 / w, min_periods=w, ignore_nulls=True)
-        .alias(f"{feature}_Avg_LOSS_{w}"),
-    ])
-
-    # Add RS and RSI calculations
-    all_calcs.extend([
-        # Calculate RS
-        (pl.col(f"{feature}_Avg_GAIN_{w}") / pl.col(f"{feature}_Avg_LOSS_{w}"))
-        .alias(f"{feature}_RS_{w}"),
-
-        # Calculate RSI
-        (100 - (100 / (1 + pl.col(f"{feature}_RS_{w}"))))
-        .alias(f"{prefix}_{feature}_W{w}_cndl_M{time_frame}")
-    ])
-
-    # Add 30/70 threshold calculations if requested
     if add_30_70:
-        all_calcs.extend([
-            (pl.col(f"{prefix}_{feature}_W{w}_cndl_M{time_frame}") >= 70)
-            .alias(f"{prefix}_{feature}_W{w}_gte_70_cndl_M{time_frame}"),
+        df = df.with_columns(
+            ((pl.col(f"{prefix}_{feature}_W{w}_cndl_M{time_frame}")) >= 70).alias(
+                f"{prefix}_{feature}_W{w}_gte_70_cndl_M{time_frame}"
+            )
+        ).lazy()
+        df = df.with_columns(
+            ((pl.col(f"{prefix}_{feature}_W{w}_cndl_M{time_frame}")) <= 30).alias(
+                f"{prefix}_{feature}_W{w}_lte_30_cndl_M{time_frame}"
+            )
+        ).lazy()
 
-            (pl.col(f"{prefix}_{feature}_W{w}_cndl_M{time_frame}") <= 30)
-            .alias(f"{prefix}_{feature}_W{w}_lte_30_cndl_M{time_frame}")
-        ])
-
-    # Apply all calculations in one go
-    df = df.with_columns(all_calcs).lazy()
-
-    # Drop intermediate columns
-    cols_to_drop = [
-        f"{feature}",
-        f"{feature}_diff",
-        f"{feature}_GAIN",
-        f"{feature}_LOSS",
-        f"{feature}_Avg_GAIN_{w}",
-        f"{feature}_Avg_LOSS_{w}",
-        f"{feature}_RS_{w}",
-    ]
-
-    return df.collect().drop(cols_to_drop)
+    df = df.drop(
+        [
+            f"{feature}",
+            f"{feature}_diff",
+            f"{feature}_GAIN",
+            f"{feature}_LOSS",
+            f"{feature}_Avg_GAIN_{w}",
+            f"{feature}_Avg_LOSS_{w}",
+            f"{feature}_RS_{w}",
+        ],
+    )
+    return df.collect()
 
 
 def cal_EMA_base_func(
@@ -462,9 +503,9 @@ def add_ratio_by_columns(
         .otherwise((pl.col(col_name_a) / pl.col(col_name_b)))
         .round(5)
         .alias(ratio_col_name)
-    ).lazy()
+    )
 
-    return df.collect()
+    return df
 
 
 def add_ratio(
@@ -605,30 +646,34 @@ def cal_ATR_func(
 
     df = df.sort("_time")
 
-    # Consolidate all transformations into a single with_columns call
-    all_calcs = [
+    df = df.with_columns([
         pl.max_horizontal(
             pl.col(features[1]) - pl.col(features[2]),
             (pl.col(features[1]) - pl.col(features[0]).shift(1)).abs(),
             (pl.col(features[2]) - pl.col(features[0]).shift(1)).abs()
-        ).rolling_mean(window_size=w).alias("atr_raw")
-    ]
+        ).alias("true_range")
+    ]).lazy()
+
+    df = df.with_columns([
+        pl.col("true_range")
+        .rolling_mean(window_size=w)
+        .alias("atr_raw")
+    ]).lazy()
 
     if normalize:
         column_name = f"{prefix}_W{w}_M{time_frame}_norm"
-        all_calcs.append(
+        df = df.with_columns([
             (pl.col("atr_raw") / (pl.col(features[0]) * pip_size)).alias(column_name)
-        )
+        ]).lazy()
     else:
         column_name = f"{prefix}_W{w}_M{time_frame}"
-        all_calcs.append(
+        df = df.with_columns([
             (pl.col("atr_raw") / pip_size).alias(column_name)
-        )
+        ]).lazy()
 
-    # Apply all transformations at once
-    df = df.with_columns(all_calcs).lazy()
+    df = df.drop(["true_range", "atr_raw"] + input_features)
 
-    return df.collect().drop(["atr_raw"] + input_features)
+    return df.collect()
 
 
 
@@ -685,7 +730,6 @@ def cal_RSTD_func(
                 / pip_size
             ).alias(f"{prefix}_{feature}_W{w}_cndl_M{time_frame}")
         ).lazy()
-
     df = df.collect()
     df = df.drop([f"{feature}"])
 

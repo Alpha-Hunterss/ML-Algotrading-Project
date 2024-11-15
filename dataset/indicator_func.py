@@ -72,7 +72,7 @@ def cal_cndl_shape_n_cntxt_func(
         pl.col(
             features[0]
         )
-        .floor().cast(pl.Utf8).str.lengths()
+        .floor().cast(pl.Utf8).str.len()
         .alias(
             f"{prefix}_close_digits_M{time_frame}"
         )
@@ -355,7 +355,7 @@ def cal_RSI_base_func(
             f"{feature}_LOSS",
             f"{feature}_Avg_GAIN_{w}",
             f"{feature}_Avg_LOSS_{w}",
-            f"{feature}_RS_{w}",
+            f"{feature}_RS_{w}"
         ],
     )
     return df.collect()

@@ -276,7 +276,8 @@ def cal_RSI_base_func(
     time_frame: time_frame for calculations
     feature: raw feature on which the RSI is calculated
     prefix: prefix of feature name
-    percentage_feature: true for percentage features like price-percentage are diff features by nature
+    percentage_feature: true for percentage features like price-percentage 
+        are diff features by nature
     add_30_70: add whether the RSI is above 70 or below 30 !
 
     To understand the code see the RSI formula

@@ -69,10 +69,13 @@ def cal_cndl_shape_n_cntxt_func(
         .then(pl.col(features[3]))
         .otherwise(pl.col(features[0]))
         .alias(f"{prefix}_lower_price_M{time_frame}"),
-        pl.col(
-            features[0]
+        (
+            pl.col(
+                features[0]
+            )
+            .log10().floor() + 1
         )
-        .floor().cast(pl.Utf8).str.len()
+        .cast(pl.Int64)
         .alias(
             f"{prefix}_close_digits_M{time_frame}"
         )

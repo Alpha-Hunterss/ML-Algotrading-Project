@@ -355,7 +355,7 @@ def cal_RSI_base_func(
             f"{feature}_LOSS",
             f"{feature}_Avg_GAIN_{w}",
             f"{feature}_Avg_LOSS_{w}",
-            f"{feature}_RS_{w}",
+            f"{feature}_RS_{w}"
         ],
     )
     return df.collect()

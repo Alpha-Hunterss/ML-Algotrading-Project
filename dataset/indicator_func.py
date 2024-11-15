@@ -55,6 +55,7 @@ def cal_cndl_shape_n_cntxt_func(
     df = df.sort("_time")
 
     # Determine higher and lower price (among OPEN & CLOSE)
+    # and calculate number of digits in close price (excluding decimal places)
     df = df.with_columns([
         pl.when(
             pl.col(features[3]) > pl.col(features[0])
@@ -67,7 +68,14 @@ def cal_cndl_shape_n_cntxt_func(
         )
         .then(pl.col(features[3]))
         .otherwise(pl.col(features[0]))
-        .alias(f"{prefix}_lower_price_M{time_frame}")
+        .alias(f"{prefix}_lower_price_M{time_frame}"),
+        pl.col(
+            features[0]
+        )
+        .floor().cast(pl.Utf8).str.lengths()
+        .alias(
+            f"{prefix}_close_digits_M{time_frame}"
+        )
     ]).lazy()
 
     # Calculate candle return, body, upper and lower shadows
@@ -212,6 +220,28 @@ def cal_cndl_shape_n_cntxt_func(
                 pl.col(feature).shift(lag).alias(f"{feature}_lag_{lag}")
             ]).lazy()
 
+    # Calculate rounded price distances for different decimal places
+    for i in range(1, 4):  # For n-1, n-2, n-3
+        df = df.with_columns([
+            # Calculate decimal places dynamically based on number of digits
+            (
+                pl.ceil(
+                    pl.col(features[0]) /
+                    (10 ** (pl.col(f"{prefix}_close_digits_M{time_frame}") - i))
+                ) *
+                (10 ** (pl.col(f"{prefix}_close_digits_M{time_frame}") - i)) -
+                pl.col(features[0])
+            ).alias(f"{prefix}_dist_up_round_{i}_M{time_frame}"),
+            (
+                pl.col(features[0]) -
+                pl.floor(
+                    pl.col(features[0]) /
+                    (10 ** (pl.col(f"{prefix}_close_digits_M{time_frame}") - i))
+                ) *
+                (10 ** (pl.col(f"{prefix}_close_digits_M{time_frame}") - i))
+            ).alias(f"{prefix}_dist_down_round_{i}_M{time_frame}")
+        ]).lazy()
+
     # Drop unnecessary columns
     cols_to_drop = features
     cols_to_drop.extend([
@@ -219,7 +249,8 @@ def cal_cndl_shape_n_cntxt_func(
         f"{prefix}_lower_price_M{time_frame}",
         f"{prefix}_lower_tercile_M{time_frame}",
         f"{prefix}_upper_tercile_M{time_frame}",
-        f"{prefix}_candle_length_M{time_frame}"
+        f"{prefix}_candle_length_M{time_frame}",
+        f"{prefix}_close_digits_M{time_frame}"
     ])
     df = df.collect()
     df = df.drop(cols_to_drop)

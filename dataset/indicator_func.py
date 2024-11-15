@@ -707,7 +707,6 @@ def cal_ATR_func(
     return df.collect()
 
 
-
 def cal_RSTD_func(
     df: pl.DataFrame,
     w: int,

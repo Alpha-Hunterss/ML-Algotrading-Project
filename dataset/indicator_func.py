@@ -231,14 +231,14 @@ def cal_cndl_shape_n_cntxt_func(
                 (
                     pl.col(features[0]) /
                     (
-                        10 ** (
+                        10.0 ** (
                             pl.col(f"{prefix}_close_digits_M{time_frame}") - i
                         )
                     ) + (0.5 + 1e-9)
                 )
                 .round()
                 * (
-                    10 ** (
+                    10.0 ** (
                         pl.col(f"{prefix}_close_digits_M{time_frame}") - i
                     )
                 ) - pl.col(features[0])
@@ -249,14 +249,14 @@ def cal_cndl_shape_n_cntxt_func(
                 (
                     pl.col(features[0]) /
                     (
-                        10 ** (
+                        10.0 ** (
                             pl.col(f"{prefix}_close_digits_M{time_frame}") - i
                         )
                     ) - (0.5 + 1e-9)
                 )
                 .round()
                 * (
-                    10 ** (
+                    10.0 ** (
                         pl.col(f"{prefix}_close_digits_M{time_frame}") - i
                     )
                 )

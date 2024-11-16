@@ -228,21 +228,40 @@ def cal_cndl_shape_n_cntxt_func(
         df = df.with_columns([
             # Calculate decimal places dynamically based on number of digits
             (
-                pl.ceil(
-                    pl.col(features[0]) /
-                    (10 ** (pl.col(f"{prefix}_close_digits_M{time_frame}") - i))
-                ) *
-                (10 ** (pl.col(f"{prefix}_close_digits_M{time_frame}") - i)) -
-                pl.col(features[0])
-            ).alias(f"{prefix}_dist_up_round_{i}_M{time_frame}"),
+                (
+                    pl.col(features[0]) / 
+                    (
+                        10 ** (
+                            pl.col(f"{prefix}_close_digits_M{time_frame}") - i
+                        )
+                    ) + 0.5
+                )
+                .round()
+                * (
+                    10 ** (
+                        pl.col(f"{prefix}_close_digits_M{time_frame}") - i
+                    )
+                ) - pl.col(features[0])
+            )
+            .alias(f"{prefix}_dist_up_round_{i}_M{time_frame}"),
             (
                 pl.col(features[0]) -
-                pl.floor(
+                (
                     pl.col(features[0]) /
-                    (10 ** (pl.col(f"{prefix}_close_digits_M{time_frame}") - i))
-                ) *
-                (10 ** (pl.col(f"{prefix}_close_digits_M{time_frame}") - i))
-            ).alias(f"{prefix}_dist_down_round_{i}_M{time_frame}")
+                    (
+                        10 ** (
+                            pl.col(f"{prefix}_close_digits_M{time_frame}") - i
+                        )
+                    ) - 0.5
+                )
+                .round()
+                * (
+                    10 ** (
+                        pl.col(f"{prefix}_close_digits_M{time_frame}") - i
+                    )
+                )
+            )
+            .alias(f"{prefix}_dist_down_round_{i}_M{time_frame}")
         ]).lazy()
 
     # Drop unnecessary columns

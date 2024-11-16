@@ -70,10 +70,10 @@ def cal_cndl_shape_n_cntxt_func(
         .otherwise(pl.col(features[0]))
         .alias(f"{prefix}_lower_price_M{time_frame}"),
         (
-            pl.col(
-                features[0]
+            (
+                pl.col(features[0]).log10() + 0.5 + 1e-9
             )
-            .log10().floor() + 1
+            .round()
         )
         .cast(pl.Int64)
         .alias(
@@ -229,12 +229,12 @@ def cal_cndl_shape_n_cntxt_func(
             # Calculate decimal places dynamically based on number of digits
             (
                 (
-                    pl.col(features[0]) / 
+                    pl.col(features[0]) /
                     (
                         10 ** (
                             pl.col(f"{prefix}_close_digits_M{time_frame}") - i
                         )
-                    ) + 0.5
+                    ) + (0.5 + 1e-9)
                 )
                 .round()
                 * (
@@ -252,7 +252,7 @@ def cal_cndl_shape_n_cntxt_func(
                         10 ** (
                             pl.col(f"{prefix}_close_digits_M{time_frame}") - i
                         )
-                    ) - 0.5
+                    ) - (0.5 + 1e-9)
                 )
                 .round()
                 * (

@@ -201,12 +201,13 @@ def cal_cndl_shape_n_cntxt_func(
     ]).lazy()
 
     alpha = 2.0 / (w + 1)
+    calcs = []
 
     # Create lagged features for historical context
     # and rolling statistics for each context feature
     for feature in context_features:
         # Calculate rolling mean
-        df = df.with_columns([
+        calcs.extend([
             pl.col(feature)
             .rolling_mean(window_size=w)
             .alias(f"{feature}_rolling_mean"),
@@ -216,16 +217,16 @@ def cal_cndl_shape_n_cntxt_func(
             pl.col(feature)
             .ewm_mean(alpha=alpha)
             .alias(f"{feature}_ema")
-        ]).lazy()
+        ])
 
         for lag in range(1, w):  # w-1 previous candles
-            df = df.with_columns([
+            calcs.extend([
                 pl.col(feature).shift(lag).alias(f"{feature}_lag_{lag}")
-            ]).lazy()
+            ])
 
     # Calculate rounded price distances for different decimal places
     for i in range(1, 4):  # For n-1, n-2, n-3
-        df = df.with_columns([
+        calcs.extend([
             # Calculate decimal places dynamically based on number of digits
             (
                 (
@@ -262,7 +263,9 @@ def cal_cndl_shape_n_cntxt_func(
                 )
             )
             .alias(f"{prefix}_dist_down_round_{i}_M{time_frame}")
-        ]).lazy()
+        ])
+
+    df = df.with_columns(calcs).lazy()
 
     # Drop unnecessary columns
     cols_to_drop = features

@@ -146,7 +146,7 @@ def quant_CV(
                 -1, 1
             )
 
-            y_real = df.loc[folds[i][set_name]][["target"]]    
+            y_real = df.loc[folds[i][set_name]][["target"]]
 
             if set_name in ["valid_dates", "test_dates"]:
                 pred_name = {

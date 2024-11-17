@@ -143,7 +143,7 @@ def cal_backtest_on_raw_cndl(
     take_profit: int,
     stop_loss: int,
     trade_mode: str
-    )-> pd.DataFrame:
+)-> pd.DataFrame:
     """
     This function is basicaly a pre-backtest fucntion that calculates Backtest on all raw data (all times) based on strategy. 
     This function assumes we trade on each and every time step and calculates the backtest result for each time.

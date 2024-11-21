@@ -10,6 +10,279 @@ from dataset.logging_tools import default_logger
 
 # ?? indicator ---------------------------------------------------
 
+def cal_cndl_shape_n_cntxt_func(
+    df: pl.DataFrame,
+    w: int,
+    time_frame: int,
+    features: List[str],
+    pip_size: float,
+    prefix: str = "fe_cndl_shape_n_cntxt",
+    normalize: bool = True,
+) -> pl.DataFrame:
+    """
+    Calculates candle shape features.
+
+    Args:
+        df: The input DataFrame.
+        w: Window size.
+        time_frame: Timeframe of the candle.
+        features: A list of features, including 'OPEN', 'HIGH', 'LOW', and 'CLOSE'.
+        pip_size: Pip size for normalization.
+        prefix: Prefix for the new feature columns.
+        normalize: Whether to normalize the features.
+
+    Returns:
+        The input DataFrame with added candle shape features.
+    """
+    assert (
+        len(features) == 4
+    ), f"Only 4 feature should have been passed but {len(features)} received!"
+    features = sorted(features)
+    input_features = [
+        f'M{time_frame}_CLOSE',
+        f'M{time_frame}_HIGH',
+        f'M{time_frame}_LOW',
+        f'M{time_frame}_OPEN'
+    ]
+    if features != input_features:
+        print('Input features are wrong')
+        return
+    # features[0] == f'M{time_frame}_CLOSE'
+    # features[1] == f'M{time_frame}_HIGH'
+    # features[2] == f'M{time_frame}_LOW'
+    # features[3] == f'M{time_frame}_OPEN'
+
+    df = df.sort("_time")
+
+    # Determine higher and lower price (among OPEN & CLOSE)
+    # and calculate number of digits in close price (excluding decimal places)
+    df = df.with_columns([
+        pl.when(
+            pl.col(features[3]) > pl.col(features[0])
+        )
+        .then(pl.col(features[3]))
+        .otherwise(pl.col(features[0]))
+        .alias(f"{prefix}_higher_price_M{time_frame}"),
+        pl.when(
+            pl.col(features[3]) < pl.col(features[0])
+        )
+        .then(pl.col(features[3]))
+        .otherwise(pl.col(features[0]))
+        .alias(f"{prefix}_lower_price_M{time_frame}"),
+        (
+            (
+                pl.col(features[0]).log10() + 0.5 + 1e-9
+            )
+            .round()
+        )
+        .cast(pl.Int64)
+        .alias(
+            f"{prefix}_close_digits_M{time_frame}"
+        )
+    ]).lazy()
+
+    # Calculate candle return, body, upper and lower shadows
+    if normalize:
+
+        context_features = [
+            f"{prefix}_return_M{time_frame}_norm",
+            f"{prefix}_up_shadow_M{time_frame}_norm",
+            f"{prefix}_down_shadow_M{time_frame}_norm",
+            f"{prefix}_body_length_M{time_frame}_norm"
+        ]
+
+        df = df.with_columns([
+            (
+                (
+                    pl.col(features[0]) - pl.col(features[0]).shift(1)
+                )
+                * 1000 / (
+                    pip_size * pl.col(features[0]).shift(1)
+                )
+            )
+            .alias(context_features[0]),
+            (
+                (
+                    pl.col(features[1])
+                    - pl.col(
+                        f"{prefix}_higher_price_M{time_frame}"
+                    )
+                ) * 1000 / (pip_size * pl.col(features[0]))
+            )
+            .alias(context_features[1]),
+            (
+                (
+                    pl.col(
+                        f"{prefix}_lower_price_M{time_frame}"
+                    )
+                    - pl.col(features[2])
+                ) * 1000 / (pip_size * pl.col(features[0]))
+            )
+            .alias(context_features[2]),
+            (
+                (
+                    pl.col(
+                        f"{prefix}_higher_price_M{time_frame}"
+                    )
+                    - pl.col(
+                        f"{prefix}_lower_price_M{time_frame}"
+                    )
+                ) * 1000 / (pip_size * pl.col(features[0]))
+            )
+            .alias(context_features[3]),
+            (
+                pl.col(features[1]) - pl.col(features[2])
+            )
+            .alias(f"{prefix}_candle_length_M{time_frame}"),
+        ]).lazy()
+
+    else:
+        context_features = [
+            f"{prefix}_return_M{time_frame}",
+            f"{prefix}_up_shadow_M{time_frame}",
+            f"{prefix}_down_shadow_M{time_frame}",
+            f"{prefix}_body_length_M{time_frame}"
+        ]
+
+        df = df.with_columns([
+            (
+                pl.col(features[0]) - pl.col(features[0]).shift(1)
+            )
+            .alias(context_features[0]),
+            (
+                pl.col(features[1])
+                - pl.col(
+                    f"{prefix}_higher_price_M{time_frame}"
+                )
+            )
+            .alias(context_features[1]),
+            (
+                pl.col(f"{prefix}_lower_price_M{time_frame}")
+                - pl.col(features[2])
+            )
+            .alias(context_features[2]),
+            (
+                pl.col(f"{prefix}_higher_price_M{time_frame}")
+                - pl.col(
+                    f"{prefix}_lower_price_M{time_frame}"
+                )
+            )
+            .alias(context_features[3]),
+            (
+                pl.col(features[1]) - pl.col(features[2])
+            )
+            .alias(f"{prefix}_candle_length_M{time_frame}"),
+        ]).lazy()
+
+    # Calculate tercile levels
+    df = df.with_columns([
+        (
+            pl.col(features[2]) + pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
+        )
+        .alias(f"{prefix}_lower_tercile_M{time_frame}"),
+        (
+            pl.col(features[1]) - pl.col(f"{prefix}_candle_length_M{time_frame}") / 3
+        )
+        .alias(f"{prefix}_upper_tercile_M{time_frame}")
+    ]).lazy()
+
+    # Identify pin bars
+    df = df.with_columns([
+        pl.when(
+            pl.col(f"{prefix}_lower_price_M{time_frame}") > pl.col(f"{prefix}_upper_tercile_M{time_frame}")
+        ).then(1)
+        .otherwise(0)
+        .alias(f"{prefix}_is_bullish_pin_bar_M{time_frame}"),
+        pl.when(
+            pl.col(f"{prefix}_higher_price_M{time_frame}") < pl.col(f"{prefix}_lower_tercile_M{time_frame}")
+        ).then(1)
+        .otherwise(0)
+        .alias(f"{prefix}_is_bearish_pin_bar_M{time_frame}")
+    ]).lazy()
+
+    alpha = 2.0 / (w + 1)
+    calcs = []
+
+    # Create lagged features for historical context
+    # and rolling statistics for each context feature
+    for feature in context_features:
+        # Calculate rolling mean
+        calcs.extend([
+            pl.col(feature)
+            .rolling_mean(window_size=w)
+            .alias(f"{feature}_rolling_mean"),
+            pl.col(feature)
+            .rolling_median(window_size=w)
+            .alias(f"{feature}_rolling_median"),
+            pl.col(feature)
+            .ewm_mean(alpha=alpha)
+            .alias(f"{feature}_ema")
+        ])
+
+        for lag in range(1, w):  # w-1 previous candles
+            calcs.extend([
+                pl.col(feature).shift(lag).alias(f"{feature}_lag_{lag}")
+            ])
+
+    # Calculate rounded price distances for different decimal places
+    for i in range(1, 4):  # For n-1, n-2, n-3
+        calcs.extend([
+            # Calculate decimal places dynamically based on number of digits
+            (
+                (
+                    pl.col(features[0]) /
+                    (
+                        10.0 ** (
+                            pl.col(f"{prefix}_close_digits_M{time_frame}") - i
+                        )
+                    ) + (0.5 + 1e-9)
+                )
+                .round()
+                * (
+                    10.0 ** (
+                        pl.col(f"{prefix}_close_digits_M{time_frame}") - i
+                    )
+                ) - pl.col(features[0])
+            )
+            .alias(f"{prefix}_dist_up_round_{i}_M{time_frame}"),
+            (
+                pl.col(features[0]) -
+                (
+                    pl.col(features[0]) /
+                    (
+                        10.0 ** (
+                            pl.col(f"{prefix}_close_digits_M{time_frame}") - i
+                        )
+                    ) - (0.5 + 1e-9)
+                )
+                .round()
+                * (
+                    10.0 ** (
+                        pl.col(f"{prefix}_close_digits_M{time_frame}") - i
+                    )
+                )
+            )
+            .alias(f"{prefix}_dist_down_round_{i}_M{time_frame}")
+        ])
+
+    df = df.with_columns(calcs).lazy()
+
+    # Drop unnecessary columns
+    cols_to_drop = features
+    cols_to_drop.extend([
+        f"{prefix}_higher_price_M{time_frame}",
+        f"{prefix}_lower_price_M{time_frame}",
+        f"{prefix}_lower_tercile_M{time_frame}",
+        f"{prefix}_upper_tercile_M{time_frame}",
+        f"{prefix}_candle_length_M{time_frame}",
+        f"{prefix}_close_digits_M{time_frame}"
+    ])
+    df = df.collect()
+    df = df.drop(cols_to_drop)
+
+    return df
+
+
 def cal_RSI_base_func(
     df: pl.DataFrame,
     w: int,
@@ -28,7 +301,8 @@ def cal_RSI_base_func(
     time_frame: time_frame for calculations
     feature: raw feature on which the RSI is calculated
     prefix: prefix of feature name
-    percentage_feature: true for percentage features like price-percentage are diff features by nature
+    percentage_feature: true for percentage features like price-percentage 
+        are diff features by nature
     add_30_70: add whether the RSI is above 70 or below 30 !
 
     To understand the code see the RSI formula
@@ -106,7 +380,7 @@ def cal_RSI_base_func(
             f"{feature}_LOSS",
             f"{feature}_Avg_GAIN_{w}",
             f"{feature}_Avg_LOSS_{w}",
-            f"{feature}_RS_{w}",
+            f"{feature}_RS_{w}"
         ],
     )
     return df.collect()
@@ -287,6 +561,7 @@ def add_ratio_by_columns(
         .round(5)
         .alias(ratio_col_name)
     )
+
     return df
 
 
@@ -422,9 +697,9 @@ def cal_ATR_func(
     if features != input_features:
         print('Input features are wrong')
         return
-    # features[0] == 'CLOSE'
-    # features[1] == 'HIGH'
-    # features[2] == 'LOW'
+    # features[0] == f'M{time_frame}_CLOSE'
+    # features[1] == f'M{time_frame}_HIGH'
+    # features[2] == f'M{time_frame}_LOW'
 
     df = df.sort("_time")
 
@@ -456,7 +731,6 @@ def cal_ATR_func(
     df = df.drop(["true_range", "atr_raw"] + input_features)
 
     return df.collect()
-
 
 
 def cal_RSTD_func(
@@ -535,7 +809,8 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_EMA": {"func": cal_EMA_base_func},
             "fe_SMA": {"func": cal_SMA_base_func},
             "fe_ATR": {"func": cal_ATR_func},
-            "fe_RSTD":{"func": cal_RSTD_func},
+            "fe_RSTD": {"func": cal_RSTD_func},
+            "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
         }
 
         for symbol in list(feature_config.keys()):
@@ -543,7 +818,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             symbol_ratio_dfs = []
 
 
-            for fe_prefix in modes:
+            for fe_prefix, func in modes.items():
                 if fe_prefix not in list(feature_config[symbol].keys()):
                     continue
                 logger.info("-" * 50)
@@ -576,7 +851,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 add_candle_base_indicators_polars(
                     df_base=df,
                     prefix=fe_prefix,
-                    base_func=modes[fe_prefix]["func"],
+                    base_func=func["func"],
                     opts=opts,
                 )
 
@@ -607,41 +882,43 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
                 df = df.drop_nulls()
                 df = df.with_columns(pl.lit(symbol).alias("symbol"))
-                
+
                 file_name = features_folder_path + f"/{fe_prefix}_{symbol}.parquet"
                 df.write_parquet(file_name)
 
                 logger.info(f"--> {fe_prefix}_{symbol} done.")
 
-                ## add ratio: -------------------------------------------------------------------
+                ## add ratio: ------------------------------------------------------------------
                 ratio_prefix = "fe_ratio"
-                
+
                 if ratio_prefix not in list(feature_config[symbol].keys()):
                     continue
-                if fe_prefix.replace("fe_", "") in list(
+
+                fe_prefix_replaced = fe_prefix.replace("fe_", "")
+                features_folder_path = f"{root_path}/data/features/{ratio_prefix}/"
+                Path(features_folder_path).mkdir(parents=True, exist_ok=True)
+
+                if fe_prefix_replaced in list(
                     feature_config[symbol][ratio_prefix].keys()
                 ):
-                    ratio_config = feature_config[symbol][ratio_prefix][
-                        fe_prefix.replace("fe_", "")
-                    ]
-                    features_folder_path = f"{root_path}/data/features/{ratio_prefix}/"
-                    Path(features_folder_path).mkdir(parents=True, exist_ok=True)
+                    ratio_config = feature_config[symbol][ratio_prefix][fe_prefix_replaced]
 
                     symbol_ratio_dfs.append(
                         add_all_ratio_by_config(
                             df,
                             symbol,
-                            fe_name=fe_prefix.replace("fe_", ""),
+                            fe_name=fe_prefix_replaced,
                             ratio_config=ratio_config,
                             fe_prefix="fe_ratio",
                         )
                     )
-                    
+
             # ? merge ratio for one symbol:
             if len(symbol_ratio_dfs) == 0:
                 print(f"!!! no ratio feature for {symbol}.")
                 continue
-            elif len(symbol_ratio_dfs) == 1:
+
+            if len(symbol_ratio_dfs) == 1:
                 df = symbol_ratio_dfs[0]
             else:
                 df = symbol_ratio_dfs[0]
@@ -652,7 +929,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             file_name = features_folder_path + f"/{ratio_prefix}_{symbol}.parquet"
             df.write_parquet(file_name)
             logger.info(f"--> {ratio_prefix}_{symbol} saved.")
-            
+
         logger.info("--> history_indicator_calculator run successfully.")
     except Exception as e:
         logger.exception("--> history_indicator_calculator error.")
@@ -664,4 +941,4 @@ if __name__ == "__main__":
     from configs.feature_configs_general import generate_general_config
     config_general = generate_general_config()
     history_indicator_calculator(config_general)
-    print(f"--> history_indicator_calculator DONE.")
+    print("--> history_indicator_calculator DONE.")

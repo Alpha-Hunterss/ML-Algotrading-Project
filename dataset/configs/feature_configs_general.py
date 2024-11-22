@@ -16,7 +16,7 @@ general_config = {
 
     'fe_leg': {
         'timeframe': [5],
-        'window_size': [600, 650, 700],
+        'window_size': [650],
         'base_columns': ['CLOSE']
     },
 

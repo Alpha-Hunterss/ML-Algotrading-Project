@@ -1108,6 +1108,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_SMA": {"func": cal_SMA_base_func},
             "fe_ATR": {"func": cal_ATR_func},
             "fe_RSTD": {"func": cal_RSTD_func},
+            "fe_leg": {"func": cal_leg_base_func},
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
         }
 

@@ -490,7 +490,7 @@ def cal_leg_base_func(
                         pivot_status = 1
                         leg_counter += 1
                     else:
-                        print(f"There has come a duplicate high in the {i}th index at {df._time[i]}")
+                        print(f"There has come a duplicate high in the {i}th index at {df['_time'][i]}")
                 elif leg_counter > 1:
                     if pivot_status == -1:
                         current_high = close
@@ -509,7 +509,7 @@ def cal_leg_base_func(
                         pivot_status = -1
                         leg_counter += 1
                     else:
-                        print(f"There has come a duplicate low in the {i}th index at {df._time[i]}")
+                        print(f"There has come a duplicate low in the {i}th index at {df['_time'][i]}")
                 elif leg_counter > 1:
                     if pivot_status == 1:
                         current_low = close
@@ -577,9 +577,9 @@ def cal_leg_base_func(
 
     # Create leg columns in DataFrame
     df = df.with_columns([
-        pl.Series(name=f"{prefix}_pvt_points_th_{th}{suffix}", values=pivot_points),
-        pl.Series(name=f"{prefix}_high_dist_th_{th}{suffix}", values=high_pivot_distances),
-        pl.Series(name=f"{prefix}_low_dist_th_{th}{suffix}", values=low_pivot_distances)
+        pl.Series(name=f"{prefix}_pvt_points_th_{th}{suffix}",values=pivot_points),
+        pl.Series(name=f"{prefix}_high_dist_th_{th}{suffix}",values=high_pivot_distances),
+        pl.Series(name=f"{prefix}_low_dist_th_{th}{suffix}",values=low_pivot_distances)
     ]).lazy()
 
     return df.collect()

@@ -14,6 +14,13 @@ general_config = {
     'base_candle_timeframe': [15, 30, 60, 120, 180, 240, 360, 720, 1440],
 
 
+    'fe_leg': {
+        'timeframe': [5],
+        'window_size': [600, 650, 700],
+        'base_columns': ['CLOSE']
+    },
+
+
     'fe_cndl_shape_n_cntxt': {
         'timeframe': [5, 15, 60],
         'window_size': [12],

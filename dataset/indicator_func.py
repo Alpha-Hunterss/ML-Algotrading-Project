@@ -286,13 +286,13 @@ def cal_cndl_shape_n_cntxt_func(
 
 def cal_leg_base_func(
     df: pl.DataFrame,
-    th: int,
+    w: int,
     time_frame: int,  # only for compatibility
     features: List[str],
     pip_size: float,
     prefix: str = "fe_leg",
     percentage_feature: bool = True,
-    percentage: float = 0.0009,
+    percentage: float = 0.0009,  # This is compatible with EURUSD, change for other pairs
 ) -> pl.DataFrame:
     """
     This function calculates the distance of the current candle's close price from 
@@ -308,6 +308,9 @@ def cal_leg_base_func(
 
     # Convert to numpy for easier calculations
     close_prices = df[features[0]].to_numpy()
+
+    # Not a window size, but a return's threshold
+    th = w
 
     # Initialize arrays for pivot points
     pivot_points = np.zeros(len(df))
@@ -1108,6 +1111,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_SMA": {"func": cal_SMA_base_func},
             "fe_ATR": {"func": cal_ATR_func},
             "fe_RSTD": {"func": cal_RSTD_func},
+            "fe_leg": {"func": cal_leg_base_func},
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
         }
 

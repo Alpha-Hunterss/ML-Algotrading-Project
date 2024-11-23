@@ -204,10 +204,9 @@ def cal_cndl_shape_n_cntxt_func(
     alpha = 2.0 / (w + 1)
     calcs = []
 
-    # Create lagged features for historical context
-    # and rolling statistics for each context feature
+    # Create rolling statistics for each context feature
     for feature in context_features:
-        # Calculate rolling mean
+        # Calculate rolling stats
         calcs.extend([
             pl.col(feature)
             .rolling_mean(window_size=w)
@@ -216,14 +215,18 @@ def cal_cndl_shape_n_cntxt_func(
             .rolling_median(window_size=w)
             .alias(f"{feature}_rolling_median"),
             pl.col(feature)
+            .rolling_std(window_size=w)
+            .alias(f"{feature}_rolling_std"),
+            (pl.col(feature).rolling_max(window_size=w) -
+             pl.col(feature).rolling_min(window_size=w))
+            .alias(f"{feature}_rolling_range"),
+            (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) - 
+             pl.col(feature).rolling_quantile(quantile=0.25, window_size=w))
+            .alias(f"{feature}_rolling_iqr"),
+            pl.col(feature)
             .ewm_mean(alpha=alpha)
             .alias(f"{feature}_ema")
         ])
-
-        for lag in range(1, w):  # w-1 previous candles
-            calcs.extend([
-                pl.col(feature).shift(lag).alias(f"{feature}_lag_{lag}")
-            ])
 
     # Calculate rounded price distances for different decimal places
     for i in range(1, 4):  # For n-1, n-2, n-3
@@ -1177,11 +1180,12 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 )
 
                 df = df.with_row_index()
-                df = (
-                    df.filter(pl.col("index") >= drop_rows)
-                    .fill_null(strategy="forward")
-                    .drop(*["index"])
-                )
+                if fe_prefix != 'fe_leg':
+                    df = (
+                        df.filter(pl.col("index") >= drop_rows)
+                        .fill_null(strategy="forward")
+                        .drop(*["index"])
+                    )
 
                 df = df.drop_nulls()
                 df = df.with_columns(pl.lit(symbol).alias("symbol"))

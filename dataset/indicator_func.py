@@ -355,6 +355,7 @@ def cal_leg_base_func(
                             pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
                         pivot_points[last_pivot_idx] = -1 # Mark as low pivot (the beginning of the current leg)
                         pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
+                        leg_ended = False
                         trend = 'up'
                         downs = 0
                     else:
@@ -403,6 +404,7 @@ def cal_leg_base_func(
                             pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
                         pivot_points[last_pivot_idx] = 1 # Mark as high pivot (the beginning of the current leg)
                         pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
+                        leg_ended = False
                         trend = 'down'
                         ups = 0
                     else:

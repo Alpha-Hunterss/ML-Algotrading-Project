@@ -322,6 +322,7 @@ def cal_leg_base_func(
 
     # First pass: identify potential pivot points
     trend = None
+    leg_ended = False
     last_pivot_idx = 0
     movement_pivot_idx = 0
     last_pivot_idx_high = 0
@@ -348,8 +349,9 @@ def cal_leg_base_func(
                     indicator += 5 # 15
                     if trend != 'up':
                         indicator += 1 # 16
-                        pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
-                        pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
                         pivot_points[last_pivot_idx] = -1 # Mark as low pivot (the beginning of the current leg)
                         pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
                         trend = 'up'
@@ -360,6 +362,7 @@ def cal_leg_base_func(
                             indicator += 1 # 18
                             pivot_points[last_pivot_idx] = -1 # Mark as low pivot (the beginning of the current leg)
                             pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
+                            leg_ended = False
                             ups = 0
 
                     movement_pivot_idx = i
@@ -369,8 +372,10 @@ def cal_leg_base_func(
                     indicator += 1 # 11
                     if trend == 'down':
                         indicator += 1 # 12
-                        pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
-                        pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                            leg_ended = True
                         trend = 'up'
                         downs = 0
                     elif trend == 'up':
@@ -381,8 +386,10 @@ def cal_leg_base_func(
                     last_pivot_idx = i
                     if ups == 2:
                         indicator += 1 # 14
-                        pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
-                        pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                            leg_ended = True
 
             elif close_prices[i] < close_prices[last_pivot_idx]: # Downward movements
 
@@ -390,8 +397,9 @@ def cal_leg_base_func(
                     indicator += 5 # 15
                     if trend != 'down':
                         indicator += 1 # 16
-                        pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
-                        pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
                         pivot_points[last_pivot_idx] = 1 # Mark as high pivot (the beginning of the current leg)
                         pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
                         trend = 'down'
@@ -402,6 +410,7 @@ def cal_leg_base_func(
                             indicator += 1 # 18
                             pivot_points[last_pivot_idx] = 1 # Mark as high pivot (the beginning of the current leg)
                             pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
+                            leg_ended = False
                             downs = 0
 
                     movement_pivot_idx = i
@@ -411,8 +420,10 @@ def cal_leg_base_func(
                     indicator += 1 # 11
                     if trend == 'up':
                         indicator += 1 # 12
-                        pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
-                        pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                            leg_ended = True
                         trend = 'down'
                         ups = 0
                     elif trend == 'down':
@@ -423,8 +434,10 @@ def cal_leg_base_func(
                     last_pivot_idx = i
                     if downs == 2:
                         indicator += 1 # 14
-                        pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
-                        pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                            leg_ended = True
 
             pivot_indicators[i] = indicator
             indicator = 0
@@ -464,6 +477,7 @@ def cal_leg_base_func(
                         indicator -= 5 # -25, -26, -27, -28, -29
                         pivot_points[movement_pivot_idx] = -1 # Mark as low pivot (the beginning of the current leg)
                         pivot_prices[movement_pivot_idx] = close_prices[movement_pivot_idx]
+                        leg_ended = False
                         ups = 0
 
                     movement_pivot_idx = i
@@ -476,8 +490,10 @@ def cal_leg_base_func(
                     last_pivot_idx = i
                     if ups == 2:
                         indicator -= 5 # -35, -36, -37, -38, -39
-                        pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
-                        pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                            leg_ended = True
 
             elif trend == 'down': # Downward movements
                 if mean_return_norm < -th:
@@ -486,6 +502,7 @@ def cal_leg_base_func(
                         indicator -= 5 # -25, -26, -27, -28, -29
                         pivot_points[movement_pivot_idx] = 1 # Mark as high pivot (the beginning of the current leg)
                         pivot_prices[movement_pivot_idx] = close_prices[movement_pivot_idx]
+                        leg_ended = False
                         downs = 0
 
                     movement_pivot_idx = i
@@ -498,8 +515,10 @@ def cal_leg_base_func(
                     last_pivot_idx = i
                     if downs == 2:
                         indicator -= 5 # -35, -36, -37, -38, -39
-                        pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
-                        pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                            leg_ended = True
 
         pivot_indicators[i] = indicator
         indicator = 0

@@ -562,6 +562,7 @@ def cal_leg_base_func(
                         pivot_status = 1
                         leg_counter += 1
                     else:
+                        current_high = close
                         leg_counter = 1
                 else:
                     current_high = close
@@ -581,6 +582,7 @@ def cal_leg_base_func(
                         pivot_status = -1
                         leg_counter += 1
                     else:
+                        current_low = close
                         leg_counter = 1
                 else:
                     current_low = close

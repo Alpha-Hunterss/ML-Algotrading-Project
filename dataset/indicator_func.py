@@ -514,7 +514,7 @@ def cal_leg_base_func(
                         pivot_status = 1
                         leg_counter += 1
                     else:
-                        raise Exception(f"There has come a duplicate high in the {i}th index")
+                        print(f"There has come a duplicate high in the {i}th index at {df['_time'][i]} with th = {th}")
                 elif leg_counter > 1:
                     if pivot_status == -1:
                         current_high = close
@@ -533,7 +533,7 @@ def cal_leg_base_func(
                         pivot_status = -1
                         leg_counter += 1
                     else:
-                        raise Exception(f"There has come a duplicate low in the {i}th index")
+                        print(f"There has come a duplicate low in the {i}th index at {df['_time'][i]} with th = {th}")
                 elif leg_counter > 1:
                     if pivot_status == 1:
                         current_low = close

@@ -529,6 +529,7 @@ def cal_leg_base_func(
         pivot_indicators[i] = indicator
         indicator = 0
 
+    pivot_statuses = np.zeros(len(df))
     current_high = float('-inf')
     current_low = float('inf')
     leg_counter = 0
@@ -589,6 +590,8 @@ def cal_leg_base_func(
                     pivot_status = -1
                     leg_counter += 1
 
+            pivot_statuses[i] = pivot_status
+
     else:
         high_pivot_distances = np.full(len(df), 50/pip_size)
         low_pivot_distances = np.full(len(df), 50/pip_size)
@@ -643,7 +646,9 @@ def cal_leg_base_func(
                     leg_counter += 1
 
     # Create leg columns in DataFrame
+    # pivot_statuses
     df = df.with_columns([
+        pl.Series(name=f"{prefix}_pvt_pivot_stts_th_{th}{suffix}",values=pivot_statuses),
         pl.Series(name=f"{prefix}_pvt_leg_endeds_th_{th}{suffix}",values=leg_endeds),
         pl.Series(name=f"{prefix}_pvt_indicators_th_{th}{suffix}",values=pivot_indicators),
         pl.Series(name=f"{prefix}_pvt_points_th_{th}{suffix}",values=pivot_points),

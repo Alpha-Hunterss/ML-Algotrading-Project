@@ -533,7 +533,10 @@ def cal_leg_base_func(
     current_highs = np.zeros(len(df))
     current_lows = np.zeros(len(df))
     current_high = float('-inf')
+    reserved_high = float('-inf')
     current_low = float('inf')
+    reserved_low = float('inf')
+    reserved_status = False
     leg_counter = 0
     pivot_status = 0
 
@@ -557,6 +560,8 @@ def cal_leg_base_func(
                         current_high = close
                         pivot_status = 1
                         leg_counter += 1
+                        if reserved_status:
+                            current_low = reserved_low
                     else:
                         print(f"There has come a duplicate high in the {i}th index at {df['_time'][i]} with th = {th}")
                 elif leg_counter > 1:
@@ -565,7 +570,8 @@ def cal_leg_base_func(
                         pivot_status = 1
                         leg_counter += 1
                     else:
-                        # current_high = close
+                        reserved_high = close
+                        reserved_status = True
                         leg_counter = 1
                 else:
                     current_high = close
@@ -577,6 +583,8 @@ def cal_leg_base_func(
                         current_low = close
                         pivot_status = -1
                         leg_counter += 1
+                        if reserved_status:
+                            current_high = reserved_high
                     else:
                         print(f"There has come a duplicate low in the {i}th index at {df['_time'][i]} with th = {th}")
                 elif leg_counter > 1:
@@ -585,7 +593,8 @@ def cal_leg_base_func(
                         pivot_status = -1
                         leg_counter += 1
                     else:
-                        # current_low = close
+                        reserved_low = close
+                        reserved_status = True
                         leg_counter = 1
                 else:
                     current_low = close

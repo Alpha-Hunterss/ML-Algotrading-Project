@@ -295,7 +295,7 @@ def cal_leg_base_func(
     pip_size: float,
     prefix: str = "fe_leg",
     percentage_feature: bool = True,
-    percentage: float = 0.0009,  # This is compatible with EURUSD, change for other pairs
+    percentage: float = 0.001,  # This is compatible with EURUSD, change for other pairs
 ) -> pl.DataFrame:
     """
     This function calculates the distance of the current candle's close price from 

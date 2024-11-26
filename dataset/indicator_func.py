@@ -715,6 +715,9 @@ def cal_leg_base_func(
         pl.Series(name=f"{prefix}_brsh_low_dist_M{time_frame}_th_{th}{suffix}",values=bearish_low_pivot_distances)
     ]).lazy()
 
+    # Dropping price column (Comment it if you want to plot legs in Colab)
+    df = df.drop(features[0])
+
     return df.collect()
 
 
@@ -972,11 +975,6 @@ def add_candle_base_indicators_polars(
             file_name = (
                 features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
             )
-
-            #!!! Delete this after leg feature's test
-            if prefix == 'fe_leg':
-                if "M5_CLOSE_right" in df.columns:
-                    df = df.drop("M5_CLOSE_right")
 
             df.write_parquet(file_name)
 
@@ -1303,11 +1301,12 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                     f"{features_folder_path}/unmerged/{fe_prefix}_**_{symbol}_*.parquet"
                 )
 
+                # Uncomment the for loop in order to plot legs (fe_leg feature) in Colab
                 for df_path in pathes:
                     df_loaded = pl.read_parquet(df_path)
-                    for tf in [5, 15, 60]:
-                        if f"M{tf}_CLOSE_right" in df.columns:
-                            df = df.drop(f"M{tf}_CLOSE_right")
+                    # for tf in [5, 15, 60]:
+                    #     if f"M{tf}_CLOSE_right" in df.columns:
+                    #         df = df.drop(f"M{tf}_CLOSE_right")
                     df = df.join(df_loaded, on="_time", how="left", coalesce=True)
 
                 max_candle_timeframe = max(opts["candle_timeframe"])

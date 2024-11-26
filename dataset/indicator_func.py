@@ -545,13 +545,19 @@ def cal_leg_base_func(
     reserved_high = float('-inf')
     current_low = float('inf')
     reserved_low = float('inf')
+    current_high_idx = 0
+    reserved_high_idx = 0
+    current_low_idx = 0
+    reserved_low_idx = 0
     reserved_status = False
     leg_counter = 0
     pivot_status = 0
 
     if percentage_feature:
-        high_pivot_distances = np.full(len(df), 150)
-        low_pivot_distances = np.full(len(df), 150)
+        bullish_high_pivot_distances = np.full(len(df), 150)
+        bullish_low_pivot_distances = np.full(len(df), 150)
+        bearish_high_pivot_distances = np.full(len(df), 150)
+        bearish_low_pivot_distances = np.full(len(df), 150)
         suffix = "_pct"
 
         for i in range(len(df)):
@@ -560,55 +566,69 @@ def cal_leg_base_func(
             if close > current_low and close < current_high:
                 total_range = current_high - current_low
 
-                high_pivot_distances[i] = ((current_high - close) / total_range) * 100
-                low_pivot_distances[i] = ((close - current_low) / total_range) * 100
+                if current_high_idx > current_low_idx:
+                    bullish_high_pivot_distances[i] = ((current_high - close) / total_range) * 100
+                    bullish_low_pivot_distances[i] = ((close - current_low) / total_range) * 100
+                else:
+                    bearish_high_pivot_distances[i] = ((current_high - close) / total_range) * 100
+                    bearish_low_pivot_distances[i] = ((close - current_low) / total_range) * 100
 
             if pivot_points[i] == 1:  # High pivot
                 if leg_counter == 1:
                     if pivot_status == -1:
                         current_high = close
+                        current_high_idx = i
                         pivot_status = 1
                         leg_counter += 1
                         if reserved_status:
                             current_low = reserved_low
+                            current_low_idx = reserved_low_idx
                             reserved_status = False
                     else:
                         print(f"There has come a duplicate high in the {i}th index at {df['_time'][i]} with th = {th}")
                 elif leg_counter > 1:
                     if pivot_status == -1:
                         current_high = close
+                        current_high_idx = i
                         pivot_status = 1
                         leg_counter += 1
                     else:
                         reserved_high = close
+                        reserved_high_idx = i
                         reserved_status = True
                         leg_counter = 1
                 else:
                     current_high = close
+                    current_high_idx = i
                     pivot_status = 1
                     leg_counter += 1
             elif pivot_points[i] == -1:  # Low pivot
                 if leg_counter == 1:
                     if pivot_status == 1:
                         current_low = close
+                        current_low_idx = i
                         pivot_status = -1
                         leg_counter += 1
                         if reserved_status:
                             current_high = reserved_high
+                            current_high_idx = reserved_high_idx
                             reserved_status = False
                     else:
                         print(f"There has come a duplicate low in the {i}th index at {df['_time'][i]} with th = {th}")
                 elif leg_counter > 1:
                     if pivot_status == 1:
                         current_low = close
+                        current_low_idx = i
                         pivot_status = -1
                         leg_counter += 1
                     else:
                         reserved_low = close
+                        reserved_low_idx = i
                         reserved_status = True
                         leg_counter = 1
                 else:
                     current_low = close
+                    current_low_idx = i
                     pivot_status = -1
                     leg_counter += 1
 
@@ -617,8 +637,10 @@ def cal_leg_base_func(
             pivot_statuses[i] = pivot_status
 
     else:
-        high_pivot_distances = np.full(len(df), 50/pip_size)
-        low_pivot_distances = np.full(len(df), 50/pip_size)
+        bullish_high_pivot_distances = np.full(len(df), 50/pip_size)
+        bullish_low_pivot_distances = np.full(len(df), 50/pip_size)
+        bearish_high_pivot_distances = np.full(len(df), 50/pip_size)
+        bearish_low_pivot_distances = np.full(len(df), 50/pip_size)
         suffix = "_pips_norm"
 
         for i in range(len(df)):
@@ -627,55 +649,69 @@ def cal_leg_base_func(
             if close > current_low and close < current_high:
                 total_range = current_high - current_low
 
-                high_pivot_distances[i] = (current_high - close)*1000 / (pip_size*close)
-                low_pivot_distances[i] = (close - current_low)*1000 / (pip_size*close)
+                if current_high_idx > current_low_idx:
+                    bullish_high_pivot_distances[i] = (current_high - close)*1000 / (pip_size*close)
+                    bullish_low_pivot_distances[i] = (close - current_low)*1000 / (pip_size*close)
+                else:
+                    bearish_high_pivot_distances[i] = (current_high - close)*1000 / (pip_size*close)
+                    bearish_low_pivot_distances[i] = (close - current_low)*1000 / (pip_size*close)
 
             if pivot_points[i] == 1:  # High pivot
                 if leg_counter == 1:
                     if pivot_status == -1:
                         current_high = close
+                        current_high_idx = i
                         pivot_status = 1
                         leg_counter += 1
                         if reserved_status:
                             current_low = reserved_low
+                            current_low_idx = reserved_low_idx
                             reserved_status = False
                     else:
                         raise Exception(f"There has come a duplicate high in the {i}th index")
                 elif leg_counter > 1:
                     if pivot_status == -1:
                         current_high = close
+                        current_high_idx = i
                         pivot_status = 1
                         leg_counter += 1
                     else:
                         reserved_high = close
+                        reserved_high_idx = i
                         reserved_status = True
                         leg_counter = 1
                 else:
                     current_high = close
+                    current_high_idx = i
                     pivot_status = 1
                     leg_counter += 1
             elif pivot_points[i] == -1:  # Low pivot
                 if leg_counter == 1:
                     if pivot_status == 1:
                         current_low = close
+                        current_low_idx = i
                         pivot_status = -1
                         leg_counter += 1
                         if reserved_status:
                             current_high = reserved_high
+                            current_high_idx = reserved_high_idx
                             reserved_status = False
                     else:
                         raise Exception(f"There has come a duplicate low in the {i}th index")
                 elif leg_counter > 1:
                     if pivot_status == 1:
                         current_low = close
+                        current_low_idx = i
                         pivot_status = -1
                         leg_counter += 1
                     else:
                         reserved_low = close
+                        reserved_low_idx = i
                         reserved_status = True
                         leg_counter = 1
                 else:
                     current_low = close
+                    current_low_idx = i
                     pivot_status = -1
                     leg_counter += 1
 
@@ -687,8 +723,10 @@ def cal_leg_base_func(
         pl.Series(name=f"{prefix}_pvt_leg_endeds_M{time_frame}_th_{th}{suffix}",values=leg_endeds),
         pl.Series(name=f"{prefix}_pvt_indicators_M{time_frame}_th_{th}{suffix}",values=pivot_indicators),
         pl.Series(name=f"{prefix}_pvt_points_M{time_frame}_th_{th}{suffix}",values=pivot_points),
-        pl.Series(name=f"{prefix}_high_dist_M{time_frame}_th_{th}{suffix}",values=high_pivot_distances),
-        pl.Series(name=f"{prefix}_low_dist_M{time_frame}_th_{th}{suffix}",values=low_pivot_distances)
+        pl.Series(name=f"{prefix}_blsh_high_dist_M{time_frame}_th_{th}{suffix}",values=bullish_high_pivot_distances),
+        pl.Series(name=f"{prefix}_blsh_low_dist_M{time_frame}_th_{th}{suffix}",values=bullish_low_pivot_distances),
+        pl.Series(name=f"{prefix}_brsh_high_dist_M{time_frame}_th_{th}{suffix}",values=bearish_high_pivot_distances),
+        pl.Series(name=f"{prefix}_brsh_low_dist_M{time_frame}_th_{th}{suffix}",values=bearish_low_pivot_distances)
     ]).lazy()
 
     return df.collect()

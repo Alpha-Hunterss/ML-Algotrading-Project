@@ -939,6 +939,12 @@ def add_candle_base_indicators_polars(
             file_name = (
                 features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
             )
+
+            #!!! Delete this after leg feature's test
+            if prefix == 'fe_leg':
+                if "M5_CLOSE_right" in df.columns:
+                    df = df.drop("M5_CLOSE_right")
+
             df.write_parquet(file_name)
 
     return

@@ -290,7 +290,7 @@ def cal_cndl_shape_n_cntxt_func(
 def cal_leg_base_func(
     df: pl.DataFrame,
     w: int,
-    time_frame: int,  # only for compatibility
+    time_frame: int,
     features: List[str],
     pip_size: float,
     prefix: str = "fe_leg",
@@ -305,7 +305,7 @@ def cal_leg_base_func(
     assert (
         len(features) == 1
     ), f"Only 1 feature should have been passed but {len(features)} received!"
-    # features[0] == f'M{time_frame}_CLOSE'
+    # features[0] == f'M{time_frame}_CLOSE
 
     df = df.sort("_time")
 
@@ -314,6 +314,15 @@ def cal_leg_base_func(
 
     # Not a window size, but a return's threshold
     th = w
+
+    # Set percentages and thresholds for timeframes other than 5M
+    # This is compatible with EURUSD, change for other pairs
+    if time_frame == 15:
+        percentage = 0.0015
+        th *= 1.75
+    elif time_frame == 60:
+        percentage = 0.003
+        th *= 4.5
 
     # Initialize arrays for pivot points
     pivot_indicators = np.zeros(len(df))
@@ -672,14 +681,14 @@ def cal_leg_base_func(
 
     # Create leg columns in DataFrame
     df = df.with_columns([
-        pl.Series(name=f"{prefix}_pvt_crrnt_highs_th_{th}{suffix}",values=current_highs),
-        pl.Series(name=f"{prefix}_pvt_crrnt_lows_th_{th}{suffix}",values=current_lows),
-        pl.Series(name=f"{prefix}_pvt_pivot_stts_th_{th}{suffix}",values=pivot_statuses),
-        pl.Series(name=f"{prefix}_pvt_leg_endeds_th_{th}{suffix}",values=leg_endeds),
-        pl.Series(name=f"{prefix}_pvt_indicators_th_{th}{suffix}",values=pivot_indicators),
-        pl.Series(name=f"{prefix}_pvt_points_th_{th}{suffix}",values=pivot_points),
-        pl.Series(name=f"{prefix}_high_dist_th_{th}{suffix}",values=high_pivot_distances),
-        pl.Series(name=f"{prefix}_low_dist_th_{th}{suffix}",values=low_pivot_distances)
+        pl.Series(name=f"{prefix}_pvt_crrnt_highs_M{time_frame}_th_{th}{suffix}",values=current_highs),
+        pl.Series(name=f"{prefix}_pvt_crrnt_lows_M{time_frame}_th_{th}{suffix}",values=current_lows),
+        pl.Series(name=f"{prefix}_pvt_pivot_stts_M{time_frame}_th_{th}{suffix}",values=pivot_statuses),
+        pl.Series(name=f"{prefix}_pvt_leg_endeds_M{time_frame}_th_{th}{suffix}",values=leg_endeds),
+        pl.Series(name=f"{prefix}_pvt_indicators_M{time_frame}_th_{th}{suffix}",values=pivot_indicators),
+        pl.Series(name=f"{prefix}_pvt_points_M{time_frame}_th_{th}{suffix}",values=pivot_points),
+        pl.Series(name=f"{prefix}_high_dist_M{time_frame}_th_{th}{suffix}",values=high_pivot_distances),
+        pl.Series(name=f"{prefix}_low_dist_M{time_frame}_th_{th}{suffix}",values=low_pivot_distances)
     ]).lazy()
 
     return df.collect()

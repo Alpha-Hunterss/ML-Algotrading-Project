@@ -1281,8 +1281,9 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
                 for df_path in pathes:
                     df_loaded = pl.read_parquet(df_path)
-                    if "M5_CLOSE_right" in df.columns:
-                        df = df.drop("M5_CLOSE_right")
+                    for tf in [5, 15, 60]:
+                        if f"M{tf}_CLOSE_right" in df.columns:
+                            df = df.drop(f"M{tf}_CLOSE_right")
                     df = df.join(df_loaded, on="_time", how="left", coalesce=True)
 
                 max_candle_timeframe = max(opts["candle_timeframe"])

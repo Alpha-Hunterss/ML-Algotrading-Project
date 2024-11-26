@@ -1301,6 +1301,11 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                         .fill_null(strategy="forward")
                         .drop(*["index"])
                     )
+                else:
+                    df = (
+                        df.fill_null(strategy="forward")
+                        .drop(*["index"])
+                    )
 
                 df = df.drop_nulls()
                 df = df.with_columns(pl.lit(symbol).alias("symbol"))

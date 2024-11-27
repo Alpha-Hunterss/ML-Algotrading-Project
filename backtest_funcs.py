@@ -2,19 +2,30 @@ import numpy as np
 import pandas as pd
 from configss.symbols_info import symbols_dict
 
+
 # Function to calculate the rolling standard deviation (RSTD)
-def calculate_rstd(rstd_selected_chunk):
+def calculate_rstd(selected_chunk, symbol_decimal_multiply):
     """
     Calculate the rolling standard deviation (RSTD) based on the selected chunk of data.
     """
-    if len(rstd_selected_chunk) == 0:
+    chunks_len = len(selected_chunk)
+    if chunks_len == 0:
         return 0
-    return np.std(rstd_selected_chunk[:, 0])
+
+    returns = [
+        (selected_chunk[i+1, 0] - selected_chunk[i, 0]) / symbol_decimal_multiply
+        for i in range(chunks_len-1)
+    ]
+
+    return np.std(returns)
+
 
 def calculate_classification_target_backtest(
     array,
     window_size,
-    rstd_windows_size=12,
+    use_dynamic_sl: bool = False,
+    dynamic_sl_scale_type: str = "third_quartile",
+    rstd_window_size: int = 12,
     symbol_decimal_multiply: float = 0.0001,
     take_profit: int = 70,
     stop_loss: int = 30,
@@ -30,99 +41,191 @@ def calculate_classification_target_backtest(
     target_list = []
     exit_price_diff_list = []
 
-    if mode == "long":
-        for i in range(array.shape[0] - window_size):
-            selected_chunk = array[i : i + window_size]
-            if i >= rstd_windows_size:  # Ensure that there's enough data for RSTD calculation
-                rstd_selected_chunk = array[i - rstd_windows_size : i]
-            else:
-                rstd_selected_chunk = array[:i]
+    if use_dynamic_sl:
+        rstds = [
+            calculate_rstd(array[i - rstd_window_size: i], symbol_decimal_multiply)
+            for i in range(rstd_window_size, array.shape[0] - window_size)
+        ]
 
-            # Calculate pip differences
-            pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
-            pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
+        if dynamic_sl_scale_type == 'third_quartile':
+            third_quartile = np.percentile(rstds, 75)
+            rstd_exponent = stop_loss/third_quartile
+        elif dynamic_sl_scale_type == 'second_tercile':
+            second_tercile = np.percentile(rstds, 66)
+            rstd_exponent = stop_loss/second_tercile
+        elif dynamic_sl_scale_type == 'median':
+            median = np.percentile(rstds, 50)
+            rstd_exponent = stop_loss/median
+        else:
+            raise ValueError("The scale type should be either `third_quartile`, `second_tercile` or `median`")
 
-            # Calculate RSTD and adjust stop-loss/take-profit dynamically
-            rstd = calculate_rstd(rstd_selected_chunk) / symbol_decimal_multiply
-            rstd_sl = 2 * rstd
-            rstd_tp = 2 * rstd_sl
-            print('long :rstd value is : ',rstd)
+        rstds_norm = rstd_exponent*rstds
+        reward = take_profit/stop_loss
 
-            buy_tp_cond = pip_diff_high >= max(0.25 * 20,min(take_profit, rstd_tp))
-            buy_sl_cond = pip_diff_low <= -max(0.25 * 20,min(take_profit, rstd_tp))
-
-            if buy_tp_cond.any():
-                arg_buy_tp_cond = np.where((pip_diff_high >= max(0.25 * 20,min(take_profit, rstd_tp))))[0][0]
-                if not buy_sl_cond[: arg_buy_tp_cond + 1].any():
-                    swap_days = selected_chunk[1 : arg_buy_tp_cond + 1, 3].sum()
-                    target = 1
-                    exit_price_diff = take_profit
+        if mode == "long":
+            for i in range(array.shape[0] - window_size):
+                selected_chunk = array[i : i + window_size]
+                if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
+                    rstd_sl = rstds_norm[i-rstd_window_size]
+                    calc_sl = -max(stop_loss/4, min(stop_loss, rstd_sl))
+                    calc_tp = -reward * calc_sl
                 else:
-                    arg_buy_sl_cond = np.where((pip_diff_low <= -max(0.25 * 20,min(take_profit, rstd_tp))))[0][0]
+                    calc_sl = -stop_loss
+                    calc_tp = take_profit
+
+                # Calculate pip differences
+                pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
+                pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
+
+                buy_tp_cond = pip_diff_high >= calc_tp
+                buy_sl_cond = pip_diff_low <= calc_sl
+
+                if buy_tp_cond.any():
+                    arg_buy_tp_cond = np.where((pip_diff_high >= calc_tp))[0][0]
+                    if not buy_sl_cond[: arg_buy_tp_cond + 1].any():
+                        swap_days = selected_chunk[1 : arg_buy_tp_cond + 1, 3].sum()
+                        target = 1
+                        exit_price_diff = calc_tp
+                    else:
+                        arg_buy_sl_cond = np.where((pip_diff_low <= calc_sl))[0][0]
+                        swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
+                        target = -1
+                        exit_price_diff = calc_sl
+
+                elif buy_sl_cond.any():
+                    arg_buy_sl_cond = np.where((pip_diff_low <= calc_sl))[0][0]
+                    swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
+                    target = -1
+                    exit_price_diff = calc_sl
+
+                else:
+                    target = 0
+                    swap_days = selected_chunk[1:, 3].sum()
+                    exit_price_diff = (selected_chunk[-1, 0] - selected_chunk[0, 0]) / symbol_decimal_multiply
+
+                target_list.append(target)
+                swap_days_list.append(swap_days)
+                exit_price_diff_list.append(exit_price_diff)
+
+        elif mode == "short":
+            for i in range(array.shape[0] - window_size):
+                selected_chunk = array[i : i + window_size]
+                if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
+                    rstd_sl = rstds_norm[i-rstd_window_size]
+                    calc_sl = max(stop_loss/4, min(stop_loss, rstd_sl))
+                    calc_tp = -reward * calc_sl
+                else:
+                    calc_sl = stop_loss
+                    calc_tp = -take_profit
+
+                pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
+                pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
+
+                sell_tp_cond = pip_diff_low <= calc_tp
+                sell_sl_cond = pip_diff_high >= calc_sl
+
+                if sell_tp_cond.any():
+                    arg_sell_tp_cond = np.where((pip_diff_low <= calc_tp))[0][0]
+                    if not sell_sl_cond[: arg_sell_tp_cond + 1].any():
+                        swap_days = selected_chunk[1 : arg_sell_tp_cond + 1, 3].sum()
+                        target = 1
+                        exit_price_diff = -calc_tp
+                    else:
+                        arg_sell_sl_cond = np.where((pip_diff_high >= calc_sl))[0][0]
+                        swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
+                        target = -1
+                        exit_price_diff = -calc_sl
+
+                elif sell_sl_cond.any():
+                    arg_sell_sl_cond = np.where((pip_diff_high >= calc_sl))[0][0]
+                    swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
+                    target = -1
+                    exit_price_diff = -calc_sl
+
+                else:
+                    target = 0
+                    swap_days = selected_chunk[1:, 3].sum()
+                    exit_price_diff = (selected_chunk[-1, 0] - selected_chunk[0, 0]) / symbol_decimal_multiply
+
+                target_list.append(target)
+                swap_days_list.append(swap_days)
+                exit_price_diff_list.append(exit_price_diff)
+
+    else:
+        if mode == "long":
+            for i in range(array.shape[0] - window_size):
+                selected_chunk = array[i : i + window_size]
+
+                # Calculate pip differences
+                pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
+                pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
+
+                buy_tp_cond = pip_diff_high >= take_profit
+                buy_sl_cond = pip_diff_low <= -stop_loss
+
+                if buy_tp_cond.any():
+                    arg_buy_tp_cond = np.where((pip_diff_high >= take_profit))[0][0]
+                    if not buy_sl_cond[: arg_buy_tp_cond + 1].any():
+                        swap_days = selected_chunk[1 : arg_buy_tp_cond + 1, 3].sum()
+                        target = 1
+                        exit_price_diff = take_profit
+                    else:
+                        arg_buy_sl_cond = np.where((pip_diff_low <= -stop_loss))[0][0]
+                        swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
+                        target = -1
+                        exit_price_diff = -stop_loss
+
+                elif buy_sl_cond.any():
+                    arg_buy_sl_cond = np.where((pip_diff_low <= -stop_loss))[0][0]
                     swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
                     target = -1
                     exit_price_diff = -stop_loss
 
-            elif buy_sl_cond.any():
-                arg_buy_sl_cond = np.where((pip_diff_low <= -max(0.25 * 20,min(take_profit, rstd_tp))))[0][0]
-                swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
-                target = -1
-                exit_price_diff = -stop_loss
-
-            else:
-                target = 0
-                swap_days = selected_chunk[1:, 3].sum()
-                exit_price_diff = (selected_chunk[-1, 0] - selected_chunk[0, 0]) / symbol_decimal_multiply
-
-            target_list.append(target)
-            swap_days_list.append(swap_days)
-            exit_price_diff_list.append(exit_price_diff)
-
-    elif mode == "short":
-        for i in range(array.shape[0] - window_size):
-            selected_chunk = array[i : i + window_size]
-            if i >= rstd_windows_size:
-                rstd_selected_chunk = array[i - rstd_windows_size : i]
-            else:
-                rstd_selected_chunk = array[:i]
-
-            pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
-            pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
-
-            rstd = calculate_rstd(rstd_selected_chunk) / symbol_decimal_multiply
-            rstd_sl = 2 * rstd
-            rstd_tp = 2 * rstd_sl
-            print('short rstd value is : ',rstd)
-
-            sell_tp_cond = pip_diff_low <= -max(0.25 * 20,min(take_profit, rstd_tp))
-            sell_sl_cond = pip_diff_high >= max(0.25 * 20,min(take_profit, rstd_tp))
-
-            if sell_tp_cond.any():
-                arg_sell_tp_cond = np.where((pip_diff_low <= -max(0.25 * 20,min(take_profit, rstd_tp))))[0][0]
-                if not sell_sl_cond[: arg_sell_tp_cond + 1].any():
-                    swap_days = selected_chunk[1 : arg_sell_tp_cond + 1, 3].sum()
-                    target = 1
-                    exit_price_diff = take_profit
                 else:
-                    arg_sell_sl_cond = np.where((pip_diff_high >= max(0.25 * 20,min(take_profit, rstd_tp))))[0][0]
+                    target = 0
+                    swap_days = selected_chunk[1:, 3].sum()
+                    exit_price_diff = (selected_chunk[-1, 0] - selected_chunk[0, 0]) / symbol_decimal_multiply
+
+                target_list.append(target)
+                swap_days_list.append(swap_days)
+                exit_price_diff_list.append(exit_price_diff)
+
+        elif mode == "short":
+            for i in range(array.shape[0] - window_size):
+                selected_chunk = array[i : i + window_size]
+
+                pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
+                pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
+
+                sell_tp_cond = pip_diff_low <= -take_profit
+                sell_sl_cond = pip_diff_high >= stop_loss
+
+                if sell_tp_cond.any():
+                    arg_sell_tp_cond = np.where((pip_diff_low <= -take_profit))[0][0]
+                    if not sell_sl_cond[: arg_sell_tp_cond + 1].any():
+                        swap_days = selected_chunk[1 : arg_sell_tp_cond + 1, 3].sum()
+                        target = 1
+                        exit_price_diff = take_profit
+                    else:
+                        arg_sell_sl_cond = np.where((pip_diff_high >= stop_loss))[0][0]
+                        swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
+                        target = -1
+                        exit_price_diff = -stop_loss
+
+                elif sell_sl_cond.any():
+                    arg_sell_sl_cond = np.where((pip_diff_high >= stop_loss))[0][0]
                     swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
                     target = -1
                     exit_price_diff = -stop_loss
 
-            elif sell_sl_cond.any():
-                arg_sell_sl_cond = np.where((pip_diff_high >= max(0.25 * 20,min(take_profit, rstd_tp))))[0][0]
-                swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
-                target = -1
-                exit_price_diff = -stop_loss
+                else:
+                    target = 0
+                    swap_days = selected_chunk[1:, 3].sum()
+                    exit_price_diff = (selected_chunk[-1, 0] - selected_chunk[0, 0]) / symbol_decimal_multiply
 
-            else:
-                target = 0
-                swap_days = selected_chunk[1:, 3].sum()
-                exit_price_diff = (selected_chunk[-1, 0] - selected_chunk[0, 0]) / symbol_decimal_multiply
-
-            target_list.append(target)
-            swap_days_list.append(swap_days)
-            exit_price_diff_list.append(exit_price_diff)
+                target_list.append(target)
+                swap_days_list.append(swap_days)
+                exit_price_diff_list.append(exit_price_diff)
 
     for _ in range(window_size):
         swap_days_list.append(None)
@@ -130,6 +233,7 @@ def calculate_classification_target_backtest(
         exit_price_diff_list.append(None)
 
     return target_list, exit_price_diff_list, swap_days_list
+
 
 def calculate_max_drawdown(balance_series):
     """
@@ -151,13 +255,17 @@ def calculate_max_drawdown(balance_series):
     # Return the maximum drawdown
     return drawdowns.min() * 100
 
+
 def cal_backtest_on_raw_cndl(
     df_raw_path: str,
     target_symbol: str,
     look_ahead: int,
     take_profit: int,
     stop_loss: int,
-    trade_mode: str
+    trade_mode: str,
+    use_dynamic_sl: bool,
+    dynamic_sl_scale_type: str,
+    rstd_window_size: int
 )-> pd.DataFrame:
     """
     This function is basicaly a pre-backtest fucntion that calculates Backtest on all raw data (all times) based on strategy. 
@@ -189,13 +297,18 @@ def cal_backtest_on_raw_cndl(
     df_raw_backtest[bt_column_name], df_raw_backtest["pip_diff"], df_raw_backtest["swap_days"] = calculate_classification_target_backtest(
         array,
         window_size,
+        use_dynamic_sl=use_dynamic_sl,
+        dynamic_sl_scale_type=dynamic_sl_scale_type,
+        rstd_window_size=rstd_window_size,
         symbol_decimal_multiply=symbols_dict[target_symbol]["pip_size"],
         take_profit=take_profit,
         stop_loss=stop_loss,
         mode=trade_mode,
     )
     df_raw_backtest.dropna(inplace=True)
+
     return df_raw_backtest, bt_column_name
+
 
 def do_backtest(
     df_model_signal: pd.DataFrame,
@@ -251,4 +364,3 @@ def do_backtest(
             ]
         ],
     )
-

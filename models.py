@@ -6,6 +6,7 @@ from typing_extensions import runtime_checkable
 from typing import Protocol, Any, Type
 import inspect
 
+
 @runtime_checkable
 class TrainableModel(Protocol):
     """
@@ -19,6 +20,7 @@ class TrainableModel(Protocol):
 
     def predict_proba(self, X: Any) -> Any:
         ...
+
 
 def set_model_parameters(model_class, all_params):
     # Check if the model class has the `get_params` method
@@ -35,6 +37,7 @@ def set_model_parameters(model_class, all_params):
     parameters = {param: value for param, value in all_params.items() if param in valid_params}
     
     return parameters
+
 
 def model_func( 
         manual: bool,

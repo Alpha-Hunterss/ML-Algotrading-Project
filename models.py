@@ -2,9 +2,10 @@ from numbers import Integral, Real
 from typing import Protocol, Any, Type
 import inspect
 import wandb
+from sklearn import clone
 from sklearn.ensemble import RandomForestClassifier, BaseEnsemble
 from sklearn.utils._param_validation import Interval, RealNotInt
-from sklearn.utils.validation import _check_sample_weight
+from sklearn.utils.validation import _check_sample_weight, check_is_fitted
 from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils import check_random_state, compute_sample_weight
 from sklearn.utils.parallel import Parallel, delayed
@@ -59,6 +60,64 @@ def _get_n_samples_bootstrap(n_samples, max_samples):
 
     if isinstance(max_samples, Real):
         return max(round(n_samples * max_samples), 1)
+
+
+def _set_random_states(estimator, random_state=None):
+    """Set fixed random_state parameters for an estimator.
+
+    Finds all parameters ending ``random_state`` and sets them to integers
+    derived from ``random_state``.
+
+    Parameters
+    ----------
+    estimator : estimator supporting get/set_params
+        Estimator with potential randomness managed by random_state
+        parameters.
+
+    random_state : int, RandomState instance or None, default=None
+        Pseudo-random number generator to control the generation of the random
+        integers. Pass an int for reproducible output across multiple function
+        calls.
+        See :term:`Glossary <random_state>`.
+
+    Notes
+    -----
+    This does not necessarily set *all* ``random_state`` attributes that
+    control an estimator's randomness, only those accessible through
+    ``estimator.get_params()``.  ``random_state``s not controlled include
+    those belonging to:
+
+        * cross-validation splitters
+        * ``scipy.stats`` rvs
+    """
+    random_state = check_random_state(random_state)
+    to_set = {}
+    for key in sorted(estimator.get_params(deep=True)):
+        if key == "random_state" or key.endswith("__random_state"):
+            to_set[key] = random_state.randint(np.iinfo(np.int32).max)
+
+    if to_set:
+        estimator.set_params(**to_set)
+
+
+def is_not_trivial(tree):
+    """Filters out an XGB if any of its trees have depth = 0.
+
+    Args:
+        tree: An XGBoost tree object.
+
+    Returns:
+        False if any tree is trivial (depth = 0), True otherwise.
+    """
+    booster = tree.get_booster()
+    tree_dump = booster.get_dump(with_stats=True)
+
+    # A tree is trivial (depth = 0) if it consists only of a single leaf node.
+    for node in tree_dump:
+        if "leaf=" in node and "yes=" not in node and "no=" not in node:
+            return False  # Found a trivial tree
+
+    return True
 
 
 @runtime_checkable
@@ -170,8 +229,9 @@ class XGBForestClassifier(BaseEnsemble):
         "class_weight": [str, None],
         "p_strategy": [str],
         "use_loky": ["boolean"],
+        "xgb_n_estimators": [Interval(Integral, 1, None, closed="left")],
         "objective": [str],
-        "max_depth": [Interval(Integral, 1, None, closed="left")],
+        "max_depth": [Interval(Integral, 0, None, closed="left")],
         "learning_rate": [Interval(Real, 0.0, 1.0, closed="right")],
         "subsample": [Interval(Real, 0.0, 1.0, closed="right")],
         "colsample_bytree": [Interval(Real, 0.0, 1.0, closed="right")],
@@ -219,6 +279,7 @@ class XGBForestClassifier(BaseEnsemble):
         class_weight=None,
         p_strategy="threads",
         use_loky=False,
+        xgb_n_estimators=100,
         objective="binary:logistic",
         nthread=-1,
         max_depth=6,
@@ -309,6 +370,7 @@ class XGBForestClassifier(BaseEnsemble):
         self.class_weight = class_weight
         self.p_strategy = p_strategy
         self.use_loky = use_loky
+        self.xgb_n_estimators = xgb_n_estimators
         self.objective = objective
         self.nthread = nthread
         self.max_depth = max_depth
@@ -347,9 +409,6 @@ class XGBForestClassifier(BaseEnsemble):
         self.gamma = gamma
         self.n_samples = None
         self.n_samples_bootstrap = None
-        self.estimators_ = []
-        self.classes_ = []
-        self.n_classes_ = []
 
     def fit(self, X, y, sample_weight=None):
         """
@@ -493,6 +552,9 @@ class XGBForestClassifier(BaseEnsemble):
         y = np.copy(y)
         expanded_class_weight = None
 
+        self.classes_ = []
+        self.n_classes_ = []
+
         classes_k = np.unique(y)
         self.classes_.append(classes_k)
         self.n_classes_.append(classes_k.shape[0])
@@ -524,6 +586,68 @@ class XGBForestClassifier(BaseEnsemble):
             isinstance(self.nthread, int) and self.nthread >= 1
         ):
             raise ValueError("nthread must be -1 or a positive integer.")
+
+    def _make_estimator(self, append=True, random_state=None):
+        """Make and configure a copy of the `estimator_` attribute.
+
+        Warning: This method should be used to properly instantiate new
+        sub-estimators.
+        """
+        estimator = clone(self.estimator_)
+
+        # Create a dictionary of parameters to set, including 'n_estimators'
+        params = {p: getattr(self, p) for p in self.estimator_params}
+        params['n_estimators'] = self.xgb_n_estimators
+
+        estimator.set_params(**params)
+
+        if random_state is not None:
+            _set_random_states(estimator, random_state)
+
+        if append:
+            self.estimators_.append(estimator)
+
+        return estimator
+
+    @property
+    def feature_importances_(self):
+        """
+        The impurity-based feature importances.
+
+        The higher, the more important the feature.
+        The importance of a feature is computed as the (normalized)
+        total reduction of the criterion brought by that feature.  It is also
+        known as the Gini importance.
+
+        Warning: impurity-based feature importances can be misleading for
+        high cardinality features (many unique values). See
+        :func:`sklearn.inspection.permutation_importance` as an alternative.
+
+        Returns
+        -------
+        feature_importances_ : ndarray of shape (n_features,)
+            The values of this array sum to 1, unless all trees are single node
+            trees consisting of only the root node, in which case it will be an
+            array of zeros.
+        """
+        check_is_fitted(self)
+
+        all_importances = Parallel(n_jobs=self.n_jobs, prefer="threads")(
+            delayed(getattr)(tree, "feature_importances_")
+            for tree in self.estimators_
+            if len(tree.get_booster().get_dump()) > 1 and is_not_trivial(tree)
+        )
+
+        if not all_importances:
+
+            return np.zeros(self.n_features_in_, dtype=np.float64)
+
+        all_importances = np.mean(all_importances, axis=0, dtype=np.float64)
+
+        if np.sum(all_importances) == 0:
+            return np.zeros_like(all_importances)
+
+        return all_importances / np.sum(all_importances)
 
 
 def set_model_parameters(model_class, all_params):

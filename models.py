@@ -1,6 +1,7 @@
 from numbers import Integral, Real
 from typing import Protocol, Any, Type
 import inspect
+import threading
 import wandb
 from sklearn import clone
 from sklearn.ensemble import RandomForestClassifier, BaseEnsemble
@@ -10,6 +11,7 @@ from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils import check_random_state, compute_sample_weight
 from sklearn.utils.parallel import Parallel, delayed
 from scipy.sparse import issparse
+from joblib import effective_n_jobs
 from warnings import catch_warnings, simplefilter
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
@@ -118,6 +120,31 @@ def is_not_trivial(tree):
             return False  # Found a trivial tree
 
     return True
+
+
+def _partition_estimators(n_estimators, n_jobs):
+    """Private function used to partition estimators between jobs."""
+    # Compute the number of jobs
+    n_jobs = min(effective_n_jobs(n_jobs), n_estimators)
+
+    # Partition estimators between jobs
+    n_estimators_per_job = np.full(n_jobs, n_estimators // n_jobs, dtype=int)
+    n_estimators_per_job[: n_estimators % n_jobs] += 1
+    starts = np.cumsum(n_estimators_per_job)
+
+    return n_jobs, n_estimators_per_job.tolist(), [0] + starts.tolist()
+
+
+def _accumulate_prediction(predict, X, out, lock):
+    """
+    This is a utility function for joblib's Parallel."""
+    prediction = predict(X)
+    with lock:
+        if len(out) == 1:
+            out[0] += prediction
+        else:
+            for i in range(len(out)):
+                out[i] += prediction[i]
 
 
 @runtime_checkable
@@ -609,6 +636,27 @@ class XGBForestClassifier(BaseEnsemble):
 
         return estimator
 
+    def _validate_X_predict(self, X):
+        """
+        Validate X whenever one tries to predict, apply, predict_proba."""
+        X = self._validate_data(
+            X,
+            dtype=np.float32,
+            accept_sparse="csr",
+            reset=False,
+            force_all_finite="allow-nan",
+        )
+        if issparse(X):
+            if X.indices.dtype != np.intc or X.indptr.dtype != np.intc:
+                raise ValueError(
+                    "Sparse matrices with np.int64 indices are not supported. "
+                    "Convert the indices and indptr to np.int32 using the following: "
+                    "X.indices = X.indices.astype(np.intc); "
+                    "X.indptr = X.indptr.astype(np.intc)."
+                )
+
+        return X
+
     @property
     def feature_importances_(self):
         """
@@ -626,9 +674,9 @@ class XGBForestClassifier(BaseEnsemble):
         Returns
         -------
         feature_importances_ : ndarray of shape (n_features,)
-            The values of this array sum to 1, unless all trees are single node
-            trees consisting of only the root node, in which case it will be an
-            array of zeros.
+            The values of this array sum to 1, unless all trees in the ensemble 
+            are trivial (e.g., single-node trees or trees with no meaningful splits), 
+            in which case it will be an array of zeros.
         """
         check_is_fitted(self)
 
@@ -648,6 +696,81 @@ class XGBForestClassifier(BaseEnsemble):
             return np.zeros_like(all_importances)
 
         return all_importances / np.sum(all_importances)
+
+    def predict_proba(self, X):
+        """
+        Predict class probabilities for X.
+
+        The predicted class probabilities of an input sample are computed as
+        the mean predicted class probabilities of the trees in the forest.
+        The class probability of a single tree is the fraction of samples of
+        the same class in a leaf.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            The input samples. Internally, its dtype will be converted to
+            ``dtype=np.float32``. If a sparse matrix is provided, it will be
+            converted into a sparse ``csr_matrix``.
+
+        Returns
+        -------
+        p : ndarray of shape (n_samples, n_classes), or a list of such arrays
+            The class probabilities of the input samples. The order of the
+            classes corresponds to that in the attribute :term:`classes_`.
+        """
+        check_is_fitted(self)
+        # Check data
+        X = self._validate_X_predict(X)
+
+        # Assign chunk of trees to jobs
+        n_jobs, _, _ = _partition_estimators(self.n_estimators, self.n_jobs)
+
+        # avoid storing the output of every estimator by summing them here
+        all_proba = [
+            np.zeros((X.shape[0], j), dtype=np.float64)
+            for j in np.atleast_1d(self.n_classes_)
+        ]
+        lock = threading.Lock()
+        Parallel(n_jobs=n_jobs, verbose=self.verbose, require="sharedmem")(
+            delayed(_accumulate_prediction)(e.predict_proba, X, all_proba, lock)
+            for e in self.estimators_
+        )
+
+        for proba in all_proba:
+            proba /= len(self.estimators_)
+
+        if len(all_proba) == 1:
+
+            return all_proba[0]
+        else:
+
+            return all_proba
+
+    def predict(self, X):
+        """
+        Predict class for X.
+
+        The predicted class of an input sample is a vote by the trees in
+        the forest, weighted by their probability estimates. That is,
+        the predicted class is the one with highest mean probability
+        estimate across the trees.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            The input samples. Internally, its dtype will be converted to
+            ``dtype=np.float32``. If a sparse matrix is provided, it will be
+            converted into a sparse ``csr_matrix``.
+
+        Returns
+        -------
+        y : ndarray of shape (n_samples,)
+            The predicted classes.
+        """
+        proba = self.predict_proba(X)
+
+        return self.classes_.take(np.argmax(proba, axis=1), axis=0)
 
 
 def set_model_parameters(model_class, all_params):
@@ -676,12 +799,15 @@ def model_func(
     if model_mapping is None:
         model_mapping = {
             "RF": RandomForestClassifier,
-            'XGB' : XGBClassifier,
+            "XGB" : XGBClassifier,
+            "XGBF": XGBForestClassifier,
             "LGBM": LGBMClassifier,
         }
     model_class = model_mapping.get(model)
     if not model_class or not issubclass(model_class, TrainableModel):
-        raise TypeError("Make sure the model has the following methods: `fit`, `predict` and `predict_proba`")
+        raise TypeError(
+            "Make sure the model has the following methods: `fit`, `predict` and `predict_proba`"
+        )
 
     all_params = man_params["parameters"] if manual else dict(wandb.config)
     parameters = set_model_parameters(model_class, all_params)

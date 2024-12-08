@@ -17,7 +17,7 @@ def calculate_rstd(selected_chunk, symbol_decimal_multiply):
         for i in range(chunks_len-1)
     ]
 
-    return np.std(returns)
+    return float(np.std(returns))
 
 
 def calculate_classification_target_backtest(
@@ -59,7 +59,7 @@ def calculate_classification_target_backtest(
         else:
             raise ValueError("The scale type should be either `third_quartile`, `second_tercile` or `median`")
 
-        rstds_norm = rstd_exponent*rstds
+        rstds_norm = np.array(rstds) * rstd_exponent
         reward = take_profit/stop_loss
 
         if mode == "long":

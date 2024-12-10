@@ -1,5 +1,5 @@
 from numbers import Integral, Real
-from typing import Protocol, Any, Type
+from typing import Protocol, Any, Type, Tuple, List
 import inspect
 import threading
 import wandb
@@ -145,6 +145,55 @@ def _accumulate_prediction(predict, X, out, lock):
         else:
             for i in range(len(out)):
                 out[i] += prediction[i]
+
+
+def stratified_train_test_split(X, y, test_size=0.2, random_state=None):
+    """
+    Randomly splits data into train and test sets using stratified sampling 
+    to preserve label distribution.
+
+    Args:
+        X: Input features (numpy array or similar structure).
+        y: Target labels (numpy array or similar structure).
+        test_size: Proportion of the dataset to include in the test set (float).
+        random_state: Seed for the random number generator (int).
+
+    Returns:
+        X_train, X_test, y_train, y_test: The split data.
+    """
+    if len(X) == 0 or len(y) == 0:
+        raise ValueError("Input data X and y cannot be empty.")
+
+    # Set random seed for reproducibility
+    rng = np.random.default_rng(seed=random_state)
+
+    # Unique classes and their indices
+    unique_classes, class_indices = np.unique(y, return_inverse=True)
+    test_indices = []
+
+    # For each class, determine the test indices
+    for cls in unique_classes:
+        # Get all indices of the current class
+        cls_indices = np.where(class_indices == cls)[0]
+        # Shuffle class indices
+        rng.shuffle(cls_indices)
+        # Calculate the number of test samples for this class
+        n_test_samples = max(1, int(len(cls_indices) * test_size))
+        # Select test indices for the current class
+        test_indices.extend(cls_indices[:n_test_samples])
+
+    # Convert to numpy array and shuffle
+    test_indices = np.array(test_indices)
+    rng.shuffle(test_indices)
+
+    # Get train indices by excluding test indices
+    train_indices = np.setdiff1d(np.arange(len(X)), test_indices)
+
+    # Split the data
+    X_test, y_test = X[test_indices], y[test_indices]
+    X_train, y_train = X[train_indices], y[train_indices]
+
+    return X_train, X_test, y_train, y_test
 
 
 @runtime_checkable
@@ -771,6 +820,100 @@ class XGBForestClassifier(BaseEnsemble):
         proba = self.predict_proba(X)
 
         return self.classes_.take(np.argmax(proba, axis=1), axis=0)
+
+
+class ClassificationConformalPredictor:
+
+    def __init__(self, model, alpha=0.1, test_size=0.2):
+        """
+        Parameters:
+        model: Any sklearn-compatible classifier with predict_proba
+        alpha: Significance level (1 - confidence)
+        """
+        self.model = model
+        self.alpha = alpha
+        self.test_size = test_size
+        self.calibration_scores = {}
+        self.classes_ = None
+
+    def fit(self, X_train, y_train):
+        if self.model is None:
+            raise ValueError("Model cannot be None.")
+
+        if len(np.unique(y_train)) == 1:
+            raise ValueError("'y_train' cannot contain only one class.")
+
+        if len(X_train) == 0 or len(y_train) == 0:
+            raise ValueError("Training data X_train and y_train cannot be empty.")
+
+        # Split data into proper training and calibration sets
+        X_proper_train, X_calib, y_proper_train, y_calib = stratified_train_test_split(
+            X_train, y_train, test_size=self.test_size, random_state=42
+        )
+
+        # Fit the model on proper training set
+        self.model.fit(X_proper_train, y_proper_train)
+        self.classes_ = self.model.classes_
+
+        # Calculate nonconformity scores per class
+        prob_pred = self.model.predict_proba(X_calib)
+        self.calibration_scores = {cls: [] for cls in self.classes_}
+
+        for cls in self.classes_:
+            cls_indices = np.where(y_calib == cls)[0]
+            self.calibration_scores[cls] = 1 - prob_pred[
+                cls_indices, np.where(self.classes_ == cls)[0][0]
+            ]
+
+        return self
+
+    def predict(
+        self, X, confidence_level=None
+    ) -> Tuple[np.ndarray, np.ndarray, List[set]]:
+        """
+        Returns:
+        - predictions: most likely class for each sample
+        - confidence: confidence score for each prediction
+        - prediction_sets: array of sets of possible classes for each sample 
+            within the confidence level
+        """
+        if len(X) == 0:
+            raise ValueError("Input data X cannot be empty.")
+
+        if self.classes_ is None:
+            raise ValueError("Model has not been fitted yet.")
+
+        if confidence_level is not None and (
+            confidence_level <= 0 or confidence_level >= 1
+        ):
+            raise ValueError("Confidence level must be between 0 and 1.")
+
+        if confidence_level is not None:
+            self.alpha = 1 - confidence_level
+
+        # Get probability predictions
+        prob_pred = self.model.predict_proba(X)
+
+        # Calculate per-class thresholds
+        thresholds = {
+            cls: np.quantile(self.calibration_scores[cls], 1 - self.alpha)
+            for cls in self.classes_
+        }
+
+        # Get predictions and confidence scores
+        predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+        confidence = np.max(prob_pred, axis=1)
+
+        # Create an array of prediction sets, one set per sample
+        prediction_sets = [
+            set(
+                cls for cls, threshold in thresholds.items()
+                if 1 - probs[np.where(self.classes_ == cls)[0][0]] <= threshold
+            )
+            for probs in prob_pred
+        ]
+
+        return predictions, confidence, prediction_sets
 
 
 def set_model_parameters(model_class, all_params):

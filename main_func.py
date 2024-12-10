@@ -119,14 +119,14 @@ def main(
             C5M_data_path = "/content/ML-Algotrading-Project/dataset/data/stage_one_data/"
 
         df_all = ETL(
-            path =dataset_path,
+            path=dataset_path,
             C5M_data_path=C5M_data_path,
-            trade_mode = trade_mode,
-            target_symbol =target_symbol,
-            trg_look_ahead =trg_look_ahead,
-            trg_take_profit =trg_take_profit,
-            trg_stop_loss =trg_stop_loss,
-            n_rand_features = n_rand_features,
+            trade_mode=trade_mode,
+            target_symbol=target_symbol,
+            trg_look_ahead=trg_look_ahead,
+            trg_take_profit=trg_take_profit,
+            trg_stop_loss=trg_stop_loss,
+            n_rand_features=n_rand_features,
             target_col=target_col,
             base_time_frame=5,
         )
@@ -148,12 +148,13 @@ def main(
         )
         # ______________________________Pre-Backtest: Backtest on all raw data_______________________________
         df_raw_backtest, bt_column_name = cal_backtest_on_raw_cndl(
-            df_raw_path = C5M_data_path,
-            target_symbol = target_symbol,
-            look_ahead= strg_look_ahead,
-            take_profit= strg_take_profit,
-            stop_loss= strg_stop_loss,
-            trade_mode= trade_mode)
+            df_raw_path=C5M_data_path,
+            target_symbol=target_symbol,
+            look_ahead=strg_look_ahead,
+            take_profit=strg_take_profit,
+            stop_loss=strg_stop_loss,
+            trade_mode=trade_mode
+        )
         # ______________________________RUN Quant Cross-Validation and Backtest on Folds_____________________
         non_feature_columns = ["target", "pred_as_val", "pred_val_proba", "pred_as_test", "pred_test_proba", "K","symbol"]
         swap_rate = symbols_dict[target_symbol]["swap_rate"][trade_mode]
@@ -163,11 +164,11 @@ def main(
             folds,
             model=clf,
             early_stopping_rounds=early_stopping_rounds,
-            df_raw_backtest = df_raw_backtest,
-            bt_column_name = bt_column_name,
-            non_feature_columns = non_feature_columns,
-            swap_rate = swap_rate,
-            )
+            df_raw_backtest=df_raw_backtest,
+            bt_column_name=bt_column_name,
+            non_feature_columns=non_feature_columns,
+            swap_rate=swap_rate,
+        )
         # ______________________________Retrain Last Model to Save___________________________________________
         if save_model_mode is not None:
             final_clf = model_func(

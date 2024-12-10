@@ -12,6 +12,9 @@ def calculate_rstd(selected_chunk, symbol_decimal_multiply):
     if chunks_len == 0:
         return 0
 
+    if chunks_len == 1:
+        raise ValueError("'rstd_window_size' cannot be 1.")
+
     returns = [
         (selected_chunk[i+1, 0] - selected_chunk[i, 0]) / symbol_decimal_multiply
         for i in range(chunks_len-1)
@@ -81,19 +84,19 @@ def calculate_classification_target_backtest(
                 buy_sl_cond = pip_diff_low <= calc_sl
 
                 if buy_tp_cond.any():
-                    arg_buy_tp_cond = np.where((pip_diff_high >= calc_tp))[0][0]
+                    arg_buy_tp_cond = np.where(pip_diff_high >= calc_tp)[0][0]
                     if not buy_sl_cond[: arg_buy_tp_cond + 1].any():
                         swap_days = selected_chunk[1 : arg_buy_tp_cond + 1, 3].sum()
                         target = 1
                         exit_price_diff = calc_tp
                     else:
-                        arg_buy_sl_cond = np.where((pip_diff_low <= calc_sl))[0][0]
+                        arg_buy_sl_cond = np.where(pip_diff_low <= calc_sl)[0][0]
                         swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
                         target = -1
                         exit_price_diff = calc_sl
 
                 elif buy_sl_cond.any():
-                    arg_buy_sl_cond = np.where((pip_diff_low <= calc_sl))[0][0]
+                    arg_buy_sl_cond = np.where(pip_diff_low <= calc_sl)[0][0]
                     swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
                     target = -1
                     exit_price_diff = calc_sl
@@ -125,19 +128,19 @@ def calculate_classification_target_backtest(
                 sell_sl_cond = pip_diff_high >= calc_sl
 
                 if sell_tp_cond.any():
-                    arg_sell_tp_cond = np.where((pip_diff_low <= calc_tp))[0][0]
+                    arg_sell_tp_cond = np.where(pip_diff_low <= calc_tp)[0][0]
                     if not sell_sl_cond[: arg_sell_tp_cond + 1].any():
                         swap_days = selected_chunk[1 : arg_sell_tp_cond + 1, 3].sum()
                         target = 1
                         exit_price_diff = -calc_tp
                     else:
-                        arg_sell_sl_cond = np.where((pip_diff_high >= calc_sl))[0][0]
+                        arg_sell_sl_cond = np.where(pip_diff_high >= calc_sl)[0][0]
                         swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
                         target = -1
                         exit_price_diff = -calc_sl
 
                 elif sell_sl_cond.any():
-                    arg_sell_sl_cond = np.where((pip_diff_high >= calc_sl))[0][0]
+                    arg_sell_sl_cond = np.where(pip_diff_high >= calc_sl)[0][0]
                     swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
                     target = -1
                     exit_price_diff = -calc_sl
@@ -145,7 +148,7 @@ def calculate_classification_target_backtest(
                 else:
                     target = 0
                     swap_days = selected_chunk[1:, 3].sum()
-                    exit_price_diff = (selected_chunk[-1, 0] - selected_chunk[0, 0]) / symbol_decimal_multiply
+                    exit_price_diff = (selected_chunk[0, 0] - selected_chunk[-1, 0]) / symbol_decimal_multiply
 
                 target_list.append(target)
                 swap_days_list.append(swap_days)
@@ -164,19 +167,19 @@ def calculate_classification_target_backtest(
                 buy_sl_cond = pip_diff_low <= -stop_loss
 
                 if buy_tp_cond.any():
-                    arg_buy_tp_cond = np.where((pip_diff_high >= take_profit))[0][0]
+                    arg_buy_tp_cond = np.where(pip_diff_high >= take_profit)[0][0]
                     if not buy_sl_cond[: arg_buy_tp_cond + 1].any():
                         swap_days = selected_chunk[1 : arg_buy_tp_cond + 1, 3].sum()
                         target = 1
                         exit_price_diff = take_profit
                     else:
-                        arg_buy_sl_cond = np.where((pip_diff_low <= -stop_loss))[0][0]
+                        arg_buy_sl_cond = np.where(pip_diff_low <= -stop_loss)[0][0]
                         swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
                         target = -1
                         exit_price_diff = -stop_loss
 
                 elif buy_sl_cond.any():
-                    arg_buy_sl_cond = np.where((pip_diff_low <= -stop_loss))[0][0]
+                    arg_buy_sl_cond = np.where(pip_diff_low <= -stop_loss)[0][0]
                     swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
                     target = -1
                     exit_price_diff = -stop_loss
@@ -201,19 +204,19 @@ def calculate_classification_target_backtest(
                 sell_sl_cond = pip_diff_high >= stop_loss
 
                 if sell_tp_cond.any():
-                    arg_sell_tp_cond = np.where((pip_diff_low <= -take_profit))[0][0]
+                    arg_sell_tp_cond = np.where(pip_diff_low <= -take_profit)[0][0]
                     if not sell_sl_cond[: arg_sell_tp_cond + 1].any():
                         swap_days = selected_chunk[1 : arg_sell_tp_cond + 1, 3].sum()
                         target = 1
                         exit_price_diff = take_profit
                     else:
-                        arg_sell_sl_cond = np.where((pip_diff_high >= stop_loss))[0][0]
+                        arg_sell_sl_cond = np.where(pip_diff_high >= stop_loss)[0][0]
                         swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
                         target = -1
                         exit_price_diff = -stop_loss
 
                 elif sell_sl_cond.any():
-                    arg_sell_sl_cond = np.where((pip_diff_high >= stop_loss))[0][0]
+                    arg_sell_sl_cond = np.where(pip_diff_high >= stop_loss)[0][0]
                     swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
                     target = -1
                     exit_price_diff = -stop_loss
@@ -221,7 +224,7 @@ def calculate_classification_target_backtest(
                 else:
                     target = 0
                     swap_days = selected_chunk[1:, 3].sum()
-                    exit_price_diff = (selected_chunk[-1, 0] - selected_chunk[0, 0]) / symbol_decimal_multiply
+                    exit_price_diff = (selected_chunk[0, 0] - selected_chunk[-1, 0]) / symbol_decimal_multiply
 
                 target_list.append(target)
                 swap_days_list.append(swap_days)

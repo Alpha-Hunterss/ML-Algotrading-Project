@@ -125,14 +125,14 @@ def main(
             C5M_data_path = "/content/ML-Algotrading-Project/dataset/data/stage_one_data/"
 
         df_all = ETL(
-            path =dataset_path,
+            path=dataset_path,
             C5M_data_path=C5M_data_path,
-            trade_mode = trade_mode,
-            target_symbol =target_symbol,
-            trg_look_ahead =trg_look_ahead,
-            trg_take_profit =trg_take_profit,
-            trg_stop_loss =trg_stop_loss,
-            n_rand_features = n_rand_features,
+            trade_mode=trade_mode,
+            target_symbol=target_symbol,
+            trg_look_ahead=trg_look_ahead,
+            trg_take_profit=trg_take_profit,
+            trg_stop_loss=trg_stop_loss,
+            n_rand_features=n_rand_features,
             target_col=target_col,
             base_time_frame=5,
         )
@@ -175,12 +175,11 @@ def main(
             folds,
             model=clf,
             early_stopping_rounds=early_stopping_rounds,
-            df_raw_backtest = df_raw_backtest,
-            bt_column_name = bt_column_name,
-            non_feature_columns = non_feature_columns,
-            swap_rate = swap_rate,
+            df_raw_backtest=df_raw_backtest,
+            bt_column_name=bt_column_name,
+            non_feature_columns=non_feature_columns,
+            swap_rate=swap_rate,
         )
-
         # ______________________________Retrain Last Model to Save___________________________________________
         if save_model_mode is not None:
             final_clf = model_func(

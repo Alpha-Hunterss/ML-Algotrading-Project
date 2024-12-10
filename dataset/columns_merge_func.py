@@ -126,6 +126,7 @@ def history_columns_merge(feature_config, logger=default_logger,general_mode=Fal
     fe_refrece_list = [
         "fe_cndl",
         'fe_cndl_shape_n_cntxt',
+        'fe_leg',
         "fe_RSI",
         "fe_RSTD",
         "fe_ATR",

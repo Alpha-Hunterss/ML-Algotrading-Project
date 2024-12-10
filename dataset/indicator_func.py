@@ -1,4 +1,5 @@
 import polars as pl
+import numpy as np
 from pathlib import Path
 from dataset.configs.history_data_crawlers_config import symbols_dict
 import os, glob
@@ -203,10 +204,9 @@ def cal_cndl_shape_n_cntxt_func(
     alpha = 2.0 / (w + 1)
     calcs = []
 
-    # Create lagged features for historical context
-    # and rolling statistics for each context feature
+    # Create rolling statistics for each context feature
     for feature in context_features:
-        # Calculate rolling mean
+        # Calculate rolling stats
         calcs.extend([
             pl.col(feature)
             .rolling_mean(window_size=w)
@@ -215,14 +215,18 @@ def cal_cndl_shape_n_cntxt_func(
             .rolling_median(window_size=w)
             .alias(f"{feature}_rolling_median"),
             pl.col(feature)
+            .rolling_std(window_size=w)
+            .alias(f"{feature}_rolling_std"),
+            (pl.col(feature).rolling_max(window_size=w) -
+             pl.col(feature).rolling_min(window_size=w))
+            .alias(f"{feature}_rolling_range"),
+            (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) - 
+             pl.col(feature).rolling_quantile(quantile=0.25, window_size=w))
+            .alias(f"{feature}_rolling_iqr"),
+            pl.col(feature)
             .ewm_mean(alpha=alpha)
             .alias(f"{feature}_ema")
         ])
-
-        for lag in range(1, w):  # w-1 previous candles
-            calcs.extend([
-                pl.col(feature).shift(lag).alias(f"{feature}_lag_{lag}")
-            ])
 
     # Calculate rounded price distances for different decimal places
     for i in range(1, 4):  # For n-1, n-2, n-3
@@ -281,6 +285,440 @@ def cal_cndl_shape_n_cntxt_func(
     df = df.drop(cols_to_drop)
 
     return df
+
+
+def cal_leg_base_func(
+    df: pl.DataFrame,
+    w: int,
+    time_frame: int,
+    features: List[str],
+    pip_size: float,
+    prefix: str = "fe_leg",
+    percentage_feature: bool = True,
+    percentage: float = 0.001,  # This is compatible with EURUSD, change for other pairs
+) -> pl.DataFrame:
+    """
+    This function calculates the distance of the current candle's close price from 
+    the pivots (highs and lows) of the legs of price movements based upon 
+    the zigzag indicator's calculations
+    """
+    assert (
+        len(features) == 1
+    ), f"Only 1 feature should have been passed but {len(features)} received!"
+    # features[0] == f'M{time_frame}_CLOSE
+
+    df = df.sort("_time")
+
+    # Convert to numpy for easier calculations
+    close_prices = df[features[0]].to_numpy()
+
+    # Not a window size, but a return's threshold
+    th = w
+
+    # Set percentages and thresholds for timeframes other than 5M
+    # This is compatible with EURUSD, change for other pairs
+    if time_frame == 15:
+        percentage = 0.0015
+        th *= 1.75
+    elif time_frame == 60:
+        percentage = 0.003
+        th *= 4.5
+
+    # Initialize arrays for pivot points
+    # pivot_indicators = np.zeros(len(df))
+    pivot_points = np.zeros(len(df))
+    pivot_prices = np.zeros(len(df))
+
+    # First pass: identify potential pivot points
+    trend = None
+    leg_ended = True
+    last_pivot_idx = 0
+    movement_pivot_idx = 0
+    last_pivot_idx_high = 0
+    last_pivot_idx_low = 0
+    # indicator = 0
+    ups = 0
+    downs = 0
+
+    for i in range(1, len(df)):
+        price_move = abs(close_prices[i] - close_prices[last_pivot_idx]) / close_prices[last_pivot_idx]
+
+        if price_move >= percentage:
+            # indicator += 10 # 10
+            returns = np.zeros(i - last_pivot_idx)
+
+            for j in range(last_pivot_idx, i):
+                returns[j - last_pivot_idx] = close_prices[j+1] - close_prices[j]
+
+            mean_return_norm = np.mean(returns)*1000 / (pip_size*close_prices[last_pivot_idx])
+
+            if close_prices[i] > close_prices[last_pivot_idx]: # Upward movements
+
+                if mean_return_norm > th:
+                    # indicator += 5 # 15
+                    if trend != 'up':
+                        # indicator += 1 # 16
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                        pivot_points[last_pivot_idx] = -1 # Mark as low pivot (the beginning of the current leg)
+                        pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
+                        leg_ended = False
+                        trend = 'up'
+                        downs = 0
+                    else:
+                        # indicator += 2 # 17
+                        if ups >= 2:
+                            # indicator += 1 # 18
+                            pivot_points[last_pivot_idx] = -1 # Mark as low pivot (the beginning of the current leg)
+                            pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
+                            leg_ended = False
+                            ups = 0
+
+                    movement_pivot_idx = i
+                    last_pivot_idx = i
+                    last_pivot_idx_high = i
+                else:
+                    # indicator += 1 # 11
+                    if trend == 'down':
+                        # indicator += 1 # 12
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                            leg_ended = True
+                        trend = 'up'
+                        downs = 0
+                    elif trend == 'up':
+                        # indicator += 2 # 13
+                        ups += 1
+
+                    movement_pivot_idx = i
+                    last_pivot_idx = i
+                    if ups == 2:
+                        # indicator += 1 # 14
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                            leg_ended = True
+
+            elif close_prices[i] < close_prices[last_pivot_idx]: # Downward movements
+                # indicator += 10 # 20
+
+                if mean_return_norm < -th:
+                    # indicator += 5 # 25
+                    if trend != 'down':
+                        # indicator += 1 # 26
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                        pivot_points[last_pivot_idx] = 1 # Mark as high pivot (the beginning of the current leg)
+                        pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
+                        leg_ended = False
+                        trend = 'down'
+                        ups = 0
+                    else:
+                        # indicator += 2 # 27
+                        if downs >= 2:
+                            # indicator += 1 # 28
+                            pivot_points[last_pivot_idx] = 1 # Mark as high pivot (the beginning of the current leg)
+                            pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
+                            leg_ended = False
+                            downs = 0
+
+                    movement_pivot_idx = i
+                    last_pivot_idx = i
+                    last_pivot_idx_low = i
+                else:
+                    # indicator += 1 # 21
+                    if trend == 'up':
+                        # indicator += 1 # 22
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                            leg_ended = True
+                        trend = 'down'
+                        ups = 0
+                    elif trend == 'down':
+                        # indicator += 2 # 23
+                        downs += 1
+
+                    movement_pivot_idx = i
+                    last_pivot_idx = i
+                    if downs == 2:
+                        # indicator += 1 # 24
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                            leg_ended = True
+
+            # pivot_indicators[i] = indicator
+            # indicator = 0
+            continue
+        else:
+            if trend == 'up':
+                if close_prices[i] > close_prices[last_pivot_idx]:
+                    # indicator -= 1 # -1
+                    last_pivot_idx = i
+                if close_prices[i] < close_prices[movement_pivot_idx]:
+                    # indicator -= 2 # -2
+                    movement_pivot_idx = i
+            elif trend == 'down':
+                if close_prices[i] < close_prices[last_pivot_idx]:
+                    # indicator -= 3 # -3
+                    last_pivot_idx = i
+                if close_prices[i] > close_prices[movement_pivot_idx]:
+                    # indicator -= 4 # -4
+                    movement_pivot_idx = i
+
+        # Calculating slow opposite-side movements effects
+        mvmnt_price_move = abs(close_prices[i] - close_prices[movement_pivot_idx]) / close_prices[movement_pivot_idx]
+
+        if mvmnt_price_move > percentage:
+            # indicator -= 10 # -10, -11, -12, -13, -14
+            returns = np.zeros(i - movement_pivot_idx)
+
+            for j in range(movement_pivot_idx, i):
+                returns[j - movement_pivot_idx] = close_prices[j+1] - close_prices[j]
+
+            mean_return_norm = np.mean(returns)*1000 / (pip_size*close_prices[movement_pivot_idx])
+
+            if trend == 'up': # Upward movements
+                if mean_return_norm > th:
+                    # indicator -= 10 # -20, -21, -22
+                    if ups >= 2:
+                        # indicator -= 5 # -25, -26, -27
+                        pivot_points[movement_pivot_idx] = -1 # Mark as low pivot (the beginning of the current leg)
+                        pivot_prices[movement_pivot_idx] = close_prices[movement_pivot_idx]
+                        leg_ended = False
+                        ups = 0
+
+                    movement_pivot_idx = i
+                    last_pivot_idx = i
+                    last_pivot_idx_high = i
+                else:
+                    # indicator -= 20 # -30, -31, -32
+                    ups += 1
+                    movement_pivot_idx = i
+                    last_pivot_idx = i
+                    if ups == 2:
+                        # indicator -= 5 # -35, -36, -37
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_high] = 1 # Mark as high pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_high] = close_prices[last_pivot_idx_high]
+                            leg_ended = True
+
+            elif trend == 'down': # Downward movements
+                if mean_return_norm < -th:
+                    # indicator -= 10 # -20, -23, -24
+                    if downs >= 2:
+                        # indicator -= 5 # -25, -28, -29
+                        pivot_points[movement_pivot_idx] = 1 # Mark as high pivot (the beginning of the current leg)
+                        pivot_prices[movement_pivot_idx] = close_prices[movement_pivot_idx]
+                        leg_ended = False
+                        downs = 0
+
+                    movement_pivot_idx = i
+                    last_pivot_idx = i
+                    last_pivot_idx_low = i
+                else:
+                    # indicator -= 20 # -30, -33, -34
+                    downs += 1
+                    movement_pivot_idx = i
+                    last_pivot_idx = i
+                    if downs == 2:
+                        # indicator -= 5 # -35, -38, -39
+                        if not leg_ended:
+                            pivot_points[last_pivot_idx_low] = -1 # Mark as low pivot (the end of the previous leg)
+                            pivot_prices[last_pivot_idx_low] = close_prices[last_pivot_idx_low]
+                            leg_ended = True
+
+        # pivot_indicators[i] = indicator
+        # indicator = 0
+
+    current_high = float('-inf')
+    reserved_high = float('-inf')
+    current_low = float('inf')
+    reserved_low = float('inf')
+    current_high_idx = 0
+    reserved_high_idx = 0
+    current_low_idx = 0
+    reserved_low_idx = 0
+    reserved_status = False
+    leg_counter = 0
+    pivot_status = 0
+
+    if percentage_feature:
+        bullish_high_pivot_distances = np.full(len(df), 150)
+        bullish_low_pivot_distances = np.full(len(df), 150)
+        bearish_high_pivot_distances = np.full(len(df), 150)
+        bearish_low_pivot_distances = np.full(len(df), 150)
+        suffix = "_pct"
+
+        for i in range(len(df)):
+            close = close_prices[i]
+            # Calculate distances
+            if close > current_low and close < current_high:
+                total_range = current_high - current_low
+
+                if current_high_idx > current_low_idx:
+                    bullish_high_pivot_distances[i] = ((current_high - close) / total_range) * 100
+                    bullish_low_pivot_distances[i] = ((close - current_low) / total_range) * 100
+                else:
+                    bearish_high_pivot_distances[i] = ((current_high - close) / total_range) * 100
+                    bearish_low_pivot_distances[i] = ((close - current_low) / total_range) * 100
+
+            if pivot_points[i] == 1:  # High pivot
+                if leg_counter == 1:
+                    if pivot_status == -1:
+                        current_high = close
+                        current_high_idx = i
+                        pivot_status = 1
+                        leg_counter += 1
+                        if reserved_status:
+                            current_low = reserved_low
+                            current_low_idx = reserved_low_idx
+                            reserved_status = False
+                    else:
+                        raise Exception(f"There has come a duplicate high in the {i}th index at {df['_time'][i]} with th = {th}")
+                elif leg_counter > 1:
+                    if pivot_status == -1:
+                        current_high = close
+                        current_high_idx = i
+                        pivot_status = 1
+                        leg_counter += 1
+                    else:
+                        reserved_high = close
+                        reserved_high_idx = i
+                        reserved_status = True
+                        leg_counter = 1
+                else:
+                    current_high = close
+                    current_high_idx = i
+                    pivot_status = 1
+                    leg_counter += 1
+            elif pivot_points[i] == -1:  # Low pivot
+                if leg_counter == 1:
+                    if pivot_status == 1:
+                        current_low = close
+                        current_low_idx = i
+                        pivot_status = -1
+                        leg_counter += 1
+                        if reserved_status:
+                            current_high = reserved_high
+                            current_high_idx = reserved_high_idx
+                            reserved_status = False
+                    else:
+                        raise Exception(f"There has come a duplicate low in the {i}th index at {df['_time'][i]} with th = {th}")
+                elif leg_counter > 1:
+                    if pivot_status == 1:
+                        current_low = close
+                        current_low_idx = i
+                        pivot_status = -1
+                        leg_counter += 1
+                    else:
+                        reserved_low = close
+                        reserved_low_idx = i
+                        reserved_status = True
+                        leg_counter = 1
+                else:
+                    current_low = close
+                    current_low_idx = i
+                    pivot_status = -1
+                    leg_counter += 1
+
+    else:
+        bullish_high_pivot_distances = np.full(len(df), 50/pip_size)
+        bullish_low_pivot_distances = np.full(len(df), 50/pip_size)
+        bearish_high_pivot_distances = np.full(len(df), 50/pip_size)
+        bearish_low_pivot_distances = np.full(len(df), 50/pip_size)
+        suffix = "_pips_norm"
+
+        for i in range(len(df)):
+            close = close_prices[i]
+            # Calculate distances
+            if close > current_low and close < current_high:
+                total_range = current_high - current_low
+
+                if current_high_idx > current_low_idx:
+                    bullish_high_pivot_distances[i] = (current_high - close)*1000 / (pip_size*close)
+                    bullish_low_pivot_distances[i] = (close - current_low)*1000 / (pip_size*close)
+                else:
+                    bearish_high_pivot_distances[i] = (current_high - close)*1000 / (pip_size*close)
+                    bearish_low_pivot_distances[i] = (close - current_low)*1000 / (pip_size*close)
+
+            if pivot_points[i] == 1:  # High pivot
+                if leg_counter == 1:
+                    if pivot_status == -1:
+                        current_high = close
+                        current_high_idx = i
+                        pivot_status = 1
+                        leg_counter += 1
+                        if reserved_status:
+                            current_low = reserved_low
+                            current_low_idx = reserved_low_idx
+                            reserved_status = False
+                    else:
+                        raise Exception(f"There has come a duplicate high in the {i}th index at {df['_time'][i]} with th = {th}")
+                elif leg_counter > 1:
+                    if pivot_status == -1:
+                        current_high = close
+                        current_high_idx = i
+                        pivot_status = 1
+                        leg_counter += 1
+                    else:
+                        reserved_high = close
+                        reserved_high_idx = i
+                        reserved_status = True
+                        leg_counter = 1
+                else:
+                    current_high = close
+                    current_high_idx = i
+                    pivot_status = 1
+                    leg_counter += 1
+            elif pivot_points[i] == -1:  # Low pivot
+                if leg_counter == 1:
+                    if pivot_status == 1:
+                        current_low = close
+                        current_low_idx = i
+                        pivot_status = -1
+                        leg_counter += 1
+                        if reserved_status:
+                            current_high = reserved_high
+                            current_high_idx = reserved_high_idx
+                            reserved_status = False
+                    else:
+                        raise Exception(f"There has come a duplicate low in the {i}th index at {df['_time'][i]} with th = {th}")
+                elif leg_counter > 1:
+                    if pivot_status == 1:
+                        current_low = close
+                        current_low_idx = i
+                        pivot_status = -1
+                        leg_counter += 1
+                    else:
+                        reserved_low = close
+                        reserved_low_idx = i
+                        reserved_status = True
+                        leg_counter = 1
+                else:
+                    current_low = close
+                    current_low_idx = i
+                    pivot_status = -1
+                    leg_counter += 1
+
+    # Create leg columns in DataFrame
+    df = df.with_columns([
+        # pl.Series(name=f"{prefix}_pvt_indicators_M{time_frame}_th_{th}{suffix}",values=pivot_indicators),
+        # pl.Series(name=f"{prefix}_pvt_points_M{time_frame}_th_{th}{suffix}",values=pivot_points),
+        pl.Series(name=f"{prefix}_blsh_high_dist_M{time_frame}_th_{th}{suffix}",values=bullish_high_pivot_distances),
+        pl.Series(name=f"{prefix}_blsh_low_dist_M{time_frame}_th_{th}{suffix}",values=bullish_low_pivot_distances),
+        pl.Series(name=f"{prefix}_brsh_high_dist_M{time_frame}_th_{th}{suffix}",values=bearish_high_pivot_distances),
+        pl.Series(name=f"{prefix}_brsh_low_dist_M{time_frame}_th_{th}{suffix}",values=bearish_low_pivot_distances)
+    ]).lazy()
+
+    # Dropping price column (Comment it if you want to plot legs in Colab)
+    df = df.drop(features[0])
+
+    return df.collect()
 
 
 def cal_RSI_base_func(
@@ -537,12 +975,13 @@ def add_candle_base_indicators_polars(
             file_name = (
                 features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
             )
+
             df.write_parquet(file_name)
 
     return
 
 
-# ?? ratio  -----------------------------------------------------
+# ??  ratio  -----------------------------------------------------
 def add_ratio_by_columns(
     df: pl.DataFrame, col_name_a: str, col_name_b: str, ratio_col_name
 ) -> pl.DataFrame:
@@ -810,6 +1249,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_SMA": {"func": cal_SMA_base_func},
             "fe_ATR": {"func": cal_ATR_func},
             "fe_RSTD": {"func": cal_RSTD_func},
+            "fe_leg": {"func": cal_leg_base_func},
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
         }
 
@@ -861,8 +1301,12 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                     f"{features_folder_path}/unmerged/{fe_prefix}_**_{symbol}_*.parquet"
                 )
 
+                # Uncomment the for loop in order to plot legs (fe_leg feature) in Colab
                 for df_path in pathes:
                     df_loaded = pl.read_parquet(df_path)
+                    # for tf in [5, 15, 60]:
+                    #     if f"M{tf}_CLOSE_right" in df.columns:
+                    #         df = df.drop(f"M{tf}_CLOSE_right")
                     df = df.join(df_loaded, on="_time", how="left", coalesce=True)
 
                 max_candle_timeframe = max(opts["candle_timeframe"])
@@ -874,11 +1318,17 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 )
 
                 df = df.with_row_index()
-                df = (
-                    df.filter(pl.col("index") >= drop_rows)
-                    .fill_null(strategy="forward")
-                    .drop(*["index"])
-                )
+                if fe_prefix != 'fe_leg':
+                    df = (
+                        df.filter(pl.col("index") >= drop_rows)
+                        .fill_null(strategy="forward")
+                        .drop(*["index"])
+                    )
+                else:
+                    df = (
+                        df.fill_null(strategy="forward")
+                        .drop(*["index"])
+                    )
 
                 df = df.drop_nulls()
                 df = df.with_columns(pl.lit(symbol).alias("symbol"))

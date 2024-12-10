@@ -37,6 +37,9 @@ def main(
             strg_look_ahead = man_params["strg_look_ahead"]
             strg_take_profit = man_params["strg_take_profit"]
             strg_stop_loss = man_params["strg_stop_loss"]
+            use_dynamic_sl = man_params["use_dynamic_sl"]
+            dynamic_sl_scale_type = man_params["dynamic_sl_scale_type"]
+            rstd_window_size = man_params["rstd_window_size"]
             # Output Model:
             save_model_mode = man_params["save_model_mode"]
 
@@ -92,6 +95,9 @@ def main(
             strg_look_ahead = wandb.config.strg_look_ahead
             strg_take_profit = wandb.config.strg_take_profit
             strg_stop_loss = wandb.config.strg_stop_loss
+            use_dynamic_sl = wandb.config.use_dynamic_sl
+            dynamic_sl_scale_type = wandb.config.dynamic_sl_scale_type
+            rstd_window_size = wandb.config.rstd_window_size
             # Output Model:
             save_model_mode = wandb.config.save_model_mode
             # Feature Selection & Transform:
@@ -146,15 +152,20 @@ def main(
             test_size=test_size,
             train_test_gap=train_test_gap,
         )
+
         # ______________________________Pre-Backtest: Backtest on all raw data_______________________________
         df_raw_backtest, bt_column_name = cal_backtest_on_raw_cndl(
-            df_raw_path=C5M_data_path,
-            target_symbol=target_symbol,
-            look_ahead=strg_look_ahead,
-            take_profit=strg_take_profit,
-            stop_loss=strg_stop_loss,
-            trade_mode=trade_mode
+            df_raw_path = C5M_data_path,
+            target_symbol = target_symbol,
+            look_ahead= strg_look_ahead,
+            take_profit= strg_take_profit,
+            stop_loss= strg_stop_loss,
+            trade_mode= trade_mode,
+            use_dynamic_sl=use_dynamic_sl,
+            dynamic_sl_scale_type=dynamic_sl_scale_type,
+            rstd_window_size=rstd_window_size
         )
+
         # ______________________________RUN Quant Cross-Validation and Backtest on Folds_____________________
         non_feature_columns = ["target", "pred_as_val", "pred_val_proba", "pred_as_test", "pred_test_proba", "K","symbol"]
         swap_rate = symbols_dict[target_symbol]["swap_rate"][trade_mode]

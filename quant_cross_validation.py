@@ -129,9 +129,15 @@ def quant_CV(
                 df.loc[folds[i]["train_dates"]]["target"],
             )
         try:
-            input_cols = model.feature_names_in_
+            if is_cf_model:
+                input_cols = model.model.feature_names_in_
+            else:
+                input_cols = model.feature_names_in_
         except:
-            input_cols = model.feature_name_
+            if is_cf_model:
+                input_cols = model.model.feature_name_
+            else:
+                input_cols = model.feature_name_
 
         # Store feature importances for this fold
         if is_cf_model:

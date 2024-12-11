@@ -827,7 +827,7 @@ class ClassificationConformalPredictor:
 
     def __init__(
         self,
-        model,
+        model=None,
         retrain=False,
         use_cv=False,
         n_folds=1,
@@ -847,6 +847,37 @@ class ClassificationConformalPredictor:
         self.random_state = random_state
         self.calibration_scores = {}
         self.classes_ = None
+
+    def get_params(self, deep=True):
+        """
+        Get parameters for this conformal predictor.
+
+        Parameters
+        ----------
+        deep : bool, default=True
+            If True, returns the parameters of this predictor and
+            the contained model.
+
+        Returns
+        -------
+        params : dict
+            Parameter names mapped to their values.
+        """
+        params = {
+            "model": self.model,
+            "retrain": self.retrain,
+            "use_cv": self.use_cv,
+            "n_folds": self.n_folds,
+            "calibration_size": self.calibration_size,
+            "random_state": self.random_state,
+        }
+
+        if deep and self.model is not None and hasattr(self.model, "get_params"):
+            # Add nested model's parameters
+            model_params = self.model.get_params(deep=True)
+            params.update({f"model__{key}": value for key, value in model_params.items()})
+
+        return params
 
     def fit(self, X_train, y_train):
         if self.model is None:

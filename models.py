@@ -18,6 +18,7 @@ from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from typing_extensions import runtime_checkable
 import numpy as np
+import pandas as pd
 
 
 def _generate_sample_indices(random_state, n_samples, n_samples_bootstrap):
@@ -168,6 +169,12 @@ def stratified_train_test_split(X, y, test_size=0.2, random_state=None):
     # Set random seed for reproducibility
     rng = np.random.default_rng(seed=random_state)
 
+    # Convert pandas objects to numpy if necessary
+    if isinstance(X, (pd.DataFrame, pd.Series)):
+        X = X.reset_index(drop=True)  # Reset indices for consistency
+    if isinstance(y, pd.Series):
+        y = y.reset_index(drop=True)
+
     # Unique classes and their indices
     unique_classes, class_indices = np.unique(y, return_inverse=True)
     test_indices = []
@@ -190,9 +197,13 @@ def stratified_train_test_split(X, y, test_size=0.2, random_state=None):
     # Get train indices by excluding test indices
     train_indices = np.setdiff1d(np.arange(len(X)), test_indices)
 
-    # Split the data
-    X_test, y_test = X[test_indices], y[test_indices]
-    X_train, y_train = X[train_indices], y[train_indices]
+    # Use iloc for pandas and direct indexing for numpy
+    if isinstance(X, (pd.DataFrame, pd.Series)):
+        X_train, X_test = X.iloc[train_indices], X.iloc[test_indices]
+        y_train, y_test = y.iloc[train_indices], y.iloc[test_indices]
+    else:
+        X_train, X_test = X[train_indices], X[test_indices]
+        y_train, y_test = y[train_indices], y[test_indices]
 
     return X_train, X_test, y_train, y_test
 
@@ -1001,7 +1012,7 @@ class ClassificationConformalPredictor:
 
     def categorize_proba(
             self, X, confidence_levels: List[float]
-    ) -> Tuple[np.ndarray, List[float]]:
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Categorizes predictions based on the range of confidence levels at which they remain stable.
 
@@ -1045,7 +1056,7 @@ class ClassificationConformalPredictor:
                 if j == confidence_levels_len:
                     confidence_level_range.append(cl)
 
-        return predictions, confidence_level_range
+        return predictions, np.array(confidence_level_range)
 
     def predict_proba(self, X):
         """

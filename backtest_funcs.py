@@ -318,7 +318,7 @@ def do_backtest(
     spread: float,
     volume: float,
     initial_balance: int,
-    df_raw_backtest : pd.DataFrame,
+    df_raw_backtest: pd.DataFrame,
     bt_column_name:   str,
     swap_rate: float,
 ):
@@ -326,8 +326,17 @@ def do_backtest(
     new_trg_df = df_model_signal.merge(df_raw_backtest, on="_time", how="inner")
     new_trg_df["net_profit"] = new_trg_df.pip_diff - spread
 
-    ##? calculate balance
-    new_trg_df["balance"] = new_trg_df["net_profit"] * volume * 10 + new_trg_df["swap_days"] * volume * swap_rate
+    if 'confidence_levels' in new_trg_df.columns:
+        ##? calculate balance
+        new_trg_df["balance"] = new_trg_df["net_profit"] * volume * new_trg_df[
+            "confidence_levels"
+        ] * 10 + new_trg_df["swap_days"] * volume * swap_rate
+    else:
+        ##? calculate balance
+        new_trg_df["balance"] = new_trg_df[
+            "net_profit"
+        ] * volume * 10 + new_trg_df["swap_days"] * volume * swap_rate
+
     new_trg_df["balance"] = new_trg_df["balance"].cumsum()
     new_trg_df["balance"] += initial_balance
 

@@ -4,6 +4,7 @@ import inspect
 import threading
 import wandb
 from sklearn import clone
+from sklearn.model_selection import StratifiedKFold
 from sklearn.ensemble import RandomForestClassifier, BaseEnsemble
 from sklearn.utils._param_validation import Interval, RealNotInt
 from sklearn.utils.validation import _check_sample_weight, check_is_fitted
@@ -824,15 +825,26 @@ class XGBForestClassifier(BaseEnsemble):
 
 class ClassificationConformalPredictor:
 
-    def __init__(self, model, alpha=0.1, test_size=0.2):
+    def __init__(
+        self,
+        model,
+        retrain=False,
+        use_cv=False,
+        n_folds=1,
+        calibration_size=0.2,
+        random_state=42,
+    ):
         """
         Parameters:
         model: Any sklearn-compatible classifier with predict_proba
         alpha: Significance level (1 - confidence)
         """
         self.model = model
-        self.alpha = alpha
-        self.test_size = test_size
+        self.retrain = retrain
+        self.use_cv = use_cv
+        self.n_folds = n_folds
+        self.calibration_size = calibration_size
+        self.random_state = random_state
         self.calibration_scores = {}
         self.classes_ = None
 
@@ -846,30 +858,69 @@ class ClassificationConformalPredictor:
         if len(X_train) == 0 or len(y_train) == 0:
             raise ValueError("Training data X_train and y_train cannot be empty.")
 
-        # Split data into proper training and calibration sets
-        X_proper_train, X_calib, y_proper_train, y_calib = stratified_train_test_split(
-            X_train, y_train, test_size=self.test_size, random_state=42
-        )
+        if self.n_folds < 1:
+            raise ValueError("'n_folds' cannot be negative or zero.")
 
-        # Fit the model on proper training set
-        self.model.fit(X_proper_train, y_proper_train)
-        self.classes_ = self.model.classes_
+        if self.use_cv:
+            kf = StratifiedKFold(
+                n_splits=self.n_folds, shuffle=True, random_state=self.random_state
+            )
+            self.classes_ = np.unique(y_train)
+            self.calibration_scores = {cls: [] for cls in self.classes_}
 
-        # Calculate nonconformity scores per class
-        prob_pred = self.model.predict_proba(X_calib)
-        self.calibration_scores = {cls: [] for cls in self.classes_}
+            for train_idx, calib_idx in kf.split(X_train, y_train):
+                # Split data
+                X_proper_train = X_train[train_idx]
+                y_proper_train = y_train[train_idx]
+                X_calib = X_train[calib_idx]
+                y_calib = y_train[calib_idx]
 
-        for cls in self.classes_:
-            cls_indices = np.where(y_calib == cls)[0]
-            self.calibration_scores[cls] = 1 - prob_pred[
-                cls_indices, np.where(self.classes_ == cls)[0][0]
-            ]
+                # Train model
+                model_clone = clone(self.model)
+                model_clone.fit(X_proper_train, y_proper_train)
+
+                # Calculate calibration scores
+                prob_pred = model_clone.predict_proba(X_calib)
+
+                for cls in self.classes_:
+                    cls_indices = np.where(y_calib == cls)[0]
+                    self.calibration_scores[cls].extend(
+                        1 - prob_pred[
+                            cls_indices, np.where(self.classes_ == cls)[0][0]
+                        ]
+                    )
+
+            # Fit final model on all data
+            self.model.fit(X_train, y_train)
+        else:
+            # Split data into proper training and calibration sets
+            X_proper_train, X_calib, y_proper_train, y_calib = stratified_train_test_split(
+                X_train, y_train, test_size=self.calibration_size, random_state=self.random_state
+            )
+
+            # Fit the model on proper training set
+            self.model.fit(X_proper_train, y_proper_train)
+            self.classes_ = self.model.classes_
+
+            # Calculate nonconformity scores per class
+            prob_pred = self.model.predict_proba(X_calib)
+            self.calibration_scores = {cls: [] for cls in self.classes_}
+
+            for cls in self.classes_:
+                cls_indices = np.where(y_calib == cls)[0]
+                self.calibration_scores[cls] = 1 - prob_pred[
+                    cls_indices, np.where(self.classes_ == cls)[0][0]
+                ]
+
+            if self.retrain:
+                # Fit final model on all data if needed
+                self.model.fit(X_train, y_train)
 
         return self
 
     def predict(
         self, X, confidence_level=None
-    ) -> Tuple[np.ndarray, np.ndarray, List[set]]:
+    ) -> Tuple[np.ndarray, List[set] | None]:
         """
         Returns:
         - predictions: most likely class for each sample
@@ -889,31 +940,86 @@ class ClassificationConformalPredictor:
             raise ValueError("Confidence level must be between 0 and 1.")
 
         if confidence_level is not None:
-            self.alpha = 1 - confidence_level
+            alpha = 1 - confidence_level
+
+            # Calculate per-class thresholds
+            thresholds = {
+                cls: np.quantile(self.calibration_scores[cls], 1 - alpha)
+                for cls in self.classes_
+            }
 
         # Get probability predictions
         prob_pred = self.model.predict_proba(X)
 
-        # Calculate per-class thresholds
-        thresholds = {
-            cls: np.quantile(self.calibration_scores[cls], 1 - self.alpha)
-            for cls in self.classes_
-        }
-
-        # Get predictions and confidence scores
+        # Get predictions
         predictions = self.classes_[np.argmax(prob_pred, axis=1)]
-        confidence = np.max(prob_pred, axis=1)
 
-        # Create an array of prediction sets, one set per sample
-        prediction_sets = [
-            set(
-                cls for cls, threshold in thresholds.items()
-                if 1 - probs[np.where(self.classes_ == cls)[0][0]] <= threshold
-            )
-            for probs in prob_pred
-        ]
+        if confidence_level is not None:
+            # Create an array of prediction sets, one set per sample
+            prediction_sets = [
+                set(
+                    cls for cls, threshold in thresholds.items()
+                    if 1 - probs[np.where(self.classes_ == cls)[0][0]] <= threshold
+                )
+                for probs in prob_pred
+            ]
+        else:
+            prediction_sets = None
 
-        return predictions, confidence, prediction_sets
+        return predictions, prediction_sets
+
+    def categorize_proba(
+            self, X, confidence_levels: List[float]
+    ) -> Tuple[np.ndarray, List[float]]:
+        """
+        Categorizes predictions based on the range of confidence levels at which they remain stable.
+
+        Args:
+            X: Input data to predict on.
+            confidence_levels: List of confidence levels to evaluate, in descending order.
+
+        Returns:
+            A list of confidence levels indicating the range each prediction can be trusted upon.
+        """
+        # Ensure confidence levels are sorted in descending order and get its length
+        confidence_levels = sorted(confidence_levels, reverse=True)
+        confidence_levels_len = len(confidence_levels) - 1
+
+        # Store prediction sets for each confidence level
+        prediction_sets_per_level = []
+
+        for cl in confidence_levels:
+            predictions, prediction_sets = self.predict(X, confidence_level=cl)
+            prediction_sets_per_level.append(prediction_sets)
+
+        # Determine confidence range for each prediction
+        confidence_level_range = []
+
+        for i, pred in enumerate(predictions):
+            for j, cl in enumerate(confidence_levels):
+                prediction_set = prediction_sets_per_level[j][i]
+                pred_set_len = len(prediction_set)
+                if pred not in prediction_set:
+                    if pred_set_len > 0:
+                        confidence_level_range.append(0.0)
+                    else:
+                        if j == 0:
+                            confidence_level_range.append(0.0)
+                        else:
+                            confidence_level_range.append(cl)
+                    break
+                if pred_set_len == 1:
+                    confidence_level_range.append(cl)
+                    break
+                if j == confidence_levels_len:
+                    confidence_level_range.append(cl)
+
+        return predictions, confidence_level_range
+
+    def predict_proba(self, X):
+        """
+        Just for compatibility"""
+        return self.model.predict_proba(X)
 
 
 def set_model_parameters(model_class, all_params):
@@ -945,15 +1051,36 @@ def model_func(
             "XGB" : XGBClassifier,
             "XGBF": XGBForestClassifier,
             "LGBM": LGBMClassifier,
+            "CF-RF": ClassificationConformalPredictor,
+            "CF-XGB": ClassificationConformalPredictor,
+            "CF-XGBF": ClassificationConformalPredictor,
+            "CF-LGBM": ClassificationConformalPredictor,
         }
+
     model_class = model_mapping.get(model)
     if not model_class or not issubclass(model_class, TrainableModel):
         raise TypeError(
-            "Make sure the model has the following methods: `fit`, `predict` and `predict_proba`"
+            "Make sure the model has the following methods: "
+            "`fit`, `predict` and `predict_proba`"
         )
 
-    all_params = man_params["parameters"] if manual else dict(wandb.config)
-    parameters = set_model_parameters(model_class, all_params)
+    # Conformal Prediction-based models
+    if model.startswith("CF-"):
+        all_params = man_params["parameters"] if manual else dict(wandb.config)
+        parameters = set_model_parameters(model_class, all_params)
+        sec_model_class = model_mapping.get(model.split('-')[1])
+
+        if not sec_model_class or not issubclass(sec_model_class, TrainableModel):
+            raise TypeError(
+                "Make sure the secondary model has the following methods: "
+                "`fit`, `predict` and `predict_proba`"
+            )
+
+        sec_parameters = set_model_parameters(sec_model_class, all_params)
+        parameters["model"] = sec_model_class(**sec_parameters)
+    else:
+        all_params = man_params["parameters"] if manual else dict(wandb.config)
+        parameters = set_model_parameters(model_class, all_params)
 
     print(f'Final Parameters of the Model: {parameters}')
     clf = model_class(**parameters)

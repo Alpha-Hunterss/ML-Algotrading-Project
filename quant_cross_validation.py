@@ -40,6 +40,8 @@ def quant_CV(
         df: pd.DataFrame,
         folds: dict[int,pd.DatetimeIndex],
         model,
+        model_name,
+        cnf_levels,
         early_stopping_rounds: int|None,
         df_raw_backtest: pd.DataFrame,
         bt_column_name: str,
@@ -74,10 +76,12 @@ def quant_CV(
     df["pred_val_proba"] = -1
     df["pred_as_test"] = -1
     df["pred_test_proba"] = -1
+    df["confidence_levels"] = 0.0
     df["K"] = -1
 
     the_features = df.drop(columns=non_feature_columns).columns
     feature_importances = {feature: [] for feature in the_features}
+    is_cf_model = model_name.startswith("CF-")
 
     for i in list(folds.keys()):
         print(f"Fold {i}:")
@@ -130,8 +134,12 @@ def quant_CV(
             input_cols = model.feature_name_
 
         # Store feature importances for this fold
-        for feature, importance in zip(input_cols, model.feature_importances_):
-            feature_importances[feature].append(importance)
+        if is_cf_model:
+            for feature, importance in zip(input_cols, model.model.feature_importances_):
+                feature_importances[feature].append(importance)
+        else:
+            for feature, importance in zip(input_cols, model.feature_importances_):
+                feature_importances[feature].append(importance)
 
         toc = time.time()
         gc.collect()
@@ -142,9 +150,13 @@ def quant_CV(
                 "valid_dates": "valid",
                 "test_dates": "test",
             }
-            y_pred = model.predict(df.loc[folds[i][set_name]][input_cols]).reshape(
-                -1, 1
-            )
+            if is_cf_model:
+                preds, _ = model.predict(df.loc[folds[i][set_name]][input_cols])
+                y_pred = preds.reshape(-1, 1)
+            else:
+                y_pred = model.predict(df.loc[folds[i][set_name]][input_cols]).reshape(
+                    -1, 1
+                )
 
             y_real = df.loc[folds[i][set_name]][["target"]]
 
@@ -155,6 +167,12 @@ def quant_CV(
                 df.loc[folds[i][set_name], "K"] = i
                 df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] = y_pred
                 proba_pred = model.predict_proba(df.loc[folds[i][set_name]][input_cols])
+
+                if is_cf_model:
+                    _, confidence_levels = model.categorize_proba(
+                        df.loc[folds[i][set_name]][input_cols], cnf_levels
+                    )
+                    df.loc[folds[i][set_name], "confidence_levels"] = confidence_levels
 
                 if np.shape(proba_pred)[1] > 1:
                     df.loc[
@@ -167,21 +185,40 @@ def quant_CV(
                 # Calculate n_unique days and max daily n_signals in each fold
                 fold_unique_days = pd.Series(df.loc[folds[i][set_name]].loc[
                             df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1].index.date).nunique()
-                
+
                 fold_max_daily_sig = df.loc[folds[i][set_name]].loc[
                             df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1].groupby(pd.Grouper(freq='D')).size().max()
-                #? Backtest
-                bt_report, bt_df = do_backtest(
-                    df_model_signal = df.loc[folds[i][set_name]].loc[
-                            df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1][[f"pred_as_{pred_name[set_name]}"]].rename(
-                            columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}),
-                    spread = 2,
-                    volume = 0.1,
-                    initial_balance= 1000,
-                    df_raw_backtest  = df_raw_backtest,
-                    bt_column_name = bt_column_name,
-                    swap_rate= swap_rate,
-                )
+
+                if is_cf_model:
+                    #? Backtest
+                    bt_report, bt_df = do_backtest(
+                        df_model_signal = df.loc[folds[i][set_name]].loc[
+                                df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
+                        ][[f"pred_as_{pred_name[set_name]}", "confidence_levels"]].rename(
+                                columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
+                        ),
+                        spread = 2,
+                        volume = 0.1,
+                        initial_balance= 1000,
+                        df_raw_backtest  = df_raw_backtest,
+                        bt_column_name = bt_column_name,
+                        swap_rate= swap_rate,
+                    )
+                else:
+                    #? Backtest
+                    bt_report, bt_df = do_backtest(
+                        df_model_signal = df.loc[folds[i][set_name]].loc[
+                                df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
+                        ][[f"pred_as_{pred_name[set_name]}"]].rename(
+                                columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
+                        ),
+                        spread = 2,
+                        volume = 0.1,
+                        initial_balance= 1000,
+                        df_raw_backtest  = df_raw_backtest,
+                        bt_column_name = bt_column_name,
+                        swap_rate= swap_rate,
+                    )
                 
                 fold_profit_percent = bt_report['profit_percent']
                 fold_max_dd = bt_report['max_draw_down']

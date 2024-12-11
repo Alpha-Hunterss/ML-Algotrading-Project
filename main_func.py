@@ -40,6 +40,7 @@ def main(
             use_dynamic_sl = man_params["use_dynamic_sl"]
             dynamic_sl_scale_type = man_params["dynamic_sl_scale_type"]
             rstd_window_size = man_params["rstd_window_size"]
+            confidence_levels = man_params["confidence_levels"]
             # Output Model:
             save_model_mode = man_params["save_model_mode"]
 
@@ -71,6 +72,7 @@ def main(
                 "use_dynamic_sl",
                 "dynamic_sl_scale_type",
                 "rstd_window_size",
+                "confidence_levels",
                 "save_model_mode",
                 "feature_set",
                 "imp_features",
@@ -101,6 +103,7 @@ def main(
             use_dynamic_sl = wandb.config.use_dynamic_sl
             dynamic_sl_scale_type = wandb.config.dynamic_sl_scale_type
             rstd_window_size = wandb.config.rstd_window_size
+            confidence_levels = wandb.config.confidence_levels
             # Output Model:
             save_model_mode = wandb.config.save_model_mode
             # Feature Selection & Transform:
@@ -177,6 +180,8 @@ def main(
             df_all,
             folds,
             model=clf,
+            model_name=model_name,
+            cnf_levels=confidence_levels,
             early_stopping_rounds=early_stopping_rounds,
             df_raw_backtest=df_raw_backtest,
             bt_column_name=bt_column_name,

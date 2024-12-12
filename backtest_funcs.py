@@ -403,6 +403,14 @@ def cal_backtest_on_raw_cndl(
 
     return df_raw_backtest, bt_column_name
 
+def sortino_ratio(balance:pd.Series):
+    return_balance = balance.pct_change()
+    mean_portfolio_return = return_balance.mean()
+    risk_free_rate = 0
+    downside_returns = np.minimum(return_balance - risk_free_rate, 0)
+    downside_deviation = np.maximum(np.sqrt((downside_returns**2).mean()),1e-5)
+    sortino_ratio = (mean_portfolio_return - risk_free_rate) / downside_deviation
+    return sortino_ratio
 
 def plot_profit_distribution(df, bins=100, figsize=(9, 7)):
     """

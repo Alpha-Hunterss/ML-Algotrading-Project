@@ -912,10 +912,10 @@ class ClassificationConformalPredictor:
 
             for train_idx, calib_idx in kf.split(X_train, y_train):
                 # Split data
-                X_proper_train = X_train[train_idx]
-                y_proper_train = y_train[train_idx]
-                X_calib = X_train[calib_idx]
-                y_calib = y_train[calib_idx]
+                X_proper_train = X_train.iloc[train_idx]
+                y_proper_train = y_train.iloc[train_idx]
+                X_calib = X_train.iloc[calib_idx]
+                y_calib = y_train.iloc[calib_idx]
 
                 # Train model
                 model_clone = clone(self.model)

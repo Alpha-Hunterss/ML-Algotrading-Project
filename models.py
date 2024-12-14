@@ -12,6 +12,9 @@ from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils import check_random_state, compute_sample_weight
 from sklearn.utils.parallel import Parallel, delayed
 from scipy.sparse import issparse
+from scipy.special import logsumexp
+from scipy.optimize import minimize
+from betacal import BetaCalibration
 from joblib import effective_n_jobs
 from warnings import catch_warnings, simplefilter
 from xgboost import XGBClassifier
@@ -834,6 +837,32 @@ class XGBForestClassifier(BaseEnsemble):
         return self.classes_.take(np.argmax(proba, axis=1), axis=0)
 
 
+# Temperature Scaling calibration
+class TemperatureScalingCalibrator:
+
+    def __init__(self):
+        self.temperature = 1.0
+
+    def fit(self, logits, y_true):
+        def loss_fn(temp):
+            scaled_logits = logits / temp[0]
+            log_probs = scaled_logits - logsumexp(scaled_logits, axis=1, keepdims=True)
+            loss = -np.mean(log_probs[np.arange(len(y_true)), y_true])
+
+            return loss
+
+        res = minimize(loss_fn, [self.temperature], bounds=[(1e-2, 1e2)], method="L-BFGS-B")
+        self.temperature = res.x[0]
+
+    def predict_proba(self, logits):
+        scaled_logits = logits / self.temperature
+        exp_logits = np.exp(
+            scaled_logits - logsumexp(scaled_logits, axis=1, keepdims=True)
+        )
+
+        return exp_logits
+
+
 class ClassificationConformalPredictor:
 
     def __init__(
@@ -843,6 +872,7 @@ class ClassificationConformalPredictor:
         use_cv=False,
         n_folds=1,
         calibration_size=0.2,
+        calibration_method=None,
         random_state=42,
     ):
         """
@@ -855,9 +885,56 @@ class ClassificationConformalPredictor:
         self.use_cv = use_cv
         self.n_folds = n_folds
         self.calibration_size = calibration_size
+        self.calibration_method = calibration_method
         self.random_state = random_state
         self.calibration_scores = {}
         self.classes_ = None
+        self.calibrator = None
+
+    def _apply_calibration(self, prob_pred, y_calib):
+        """
+        Applies the selected calibration method to the model's probabilities.
+        """
+        if self.calibration_method == "temperature_scaling":
+            self.calibrator = TemperatureScalingCalibrator()
+            logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
+            self.calibrator.fit(logits, y_calib)
+
+        elif self.calibration_method == "beta_calibration":
+            self.calibrator = {}
+            for idx, cls in enumerate(self.classes_):
+                # For each class, fit a separate BetaCalibration instance
+                calibrator = BetaCalibration()
+                calibrator.fit(prob_pred[:, idx], (y_calib == cls).astype(int))
+                self.calibrator[cls] = calibrator
+
+        elif self.calibration_method is None:
+            self.calibrator = None
+
+        else:
+            raise ValueError(
+                "'calibration_method' should either be one of "
+                "'beta_calibration', 'temperature_scaling' or None. "
+                f"Given {self.calibration_method} instead."
+            )
+
+    def _calibrate_proba(self, prob_pred):
+        """
+        Calibrates the probabilities using the chosen method if applicable.
+        """
+        if self.calibrator is not None:
+            if self.calibration_method == "temperature_scaling":
+                logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
+                prob_pred = self.calibrator.predict_proba(logits)
+
+            elif self.calibration_method == "beta_calibration":
+                # Calibrate probabilities for each class separately
+                calibrated_probs = np.zeros_like(prob_pred)
+                for idx, cls in enumerate(self.classes_):
+                    calibrated_probs[:, idx] = self.calibrator[cls].predict(prob_pred[:, idx])
+                prob_pred = calibrated_probs
+
+        return prob_pred
 
     def get_params(self, deep=True):
         """
@@ -920,9 +997,15 @@ class ClassificationConformalPredictor:
                 # Train model
                 model_clone = clone(self.model)
                 model_clone.fit(X_proper_train, y_proper_train)
+                self.classes_ = model_clone.classes_
 
-                # Calculate calibration scores
+                # Get probability predictions of the calibration data
                 prob_pred = model_clone.predict_proba(X_calib)
+
+                # Apply calibration
+                if self.calibration_method is not None:
+                    self._apply_calibration(prob_pred, y_calib)
+                    prob_pred = self._calibrate_proba(prob_pred)
 
                 for cls in self.classes_:
                     cls_indices = np.where(y_calib == cls)[0]
@@ -944,8 +1027,15 @@ class ClassificationConformalPredictor:
             self.model.fit(X_proper_train, y_proper_train)
             self.classes_ = self.model.classes_
 
-            # Calculate nonconformity scores per class
+            # Get probability predictions of the calibration data
             prob_pred = self.model.predict_proba(X_calib)
+
+            # Apply calibration
+            if self.calibration_method is not None:
+                self._apply_calibration(prob_pred, y_calib)
+                prob_pred = self._calibrate_proba(prob_pred)
+
+            # Calculate nonconformity scores per class
             self.calibration_scores = {cls: [] for cls in self.classes_}
 
             for cls in self.classes_:
@@ -991,7 +1081,7 @@ class ClassificationConformalPredictor:
             }
 
         # Get probability predictions
-        prob_pred = self.model.predict_proba(X)
+        prob_pred = self._calibrate_proba(self.model.predict_proba(X))
 
         # Get predictions
         predictions = self.classes_[np.argmax(prob_pred, axis=1)]
@@ -1061,7 +1151,7 @@ class ClassificationConformalPredictor:
     def predict_proba(self, X):
         """
         Just for compatibility"""
-        return self.model.predict_proba(X)
+        return self._calibrate_proba(self.model.predict_proba(X))
 
 
 def set_model_parameters(model_class, all_params):

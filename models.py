@@ -896,13 +896,11 @@ class ClassificationConformalPredictor:
         Applies the selected calibration method to the model's probabilities.
         """
         if self.calibration_method == "temperature_scaling":
-            print("I am Temperature")
             self.calibrator = TemperatureScalingCalibrator()
             logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
             self.calibrator.fit(logits, y_calib)
 
         elif self.calibration_method == "beta_calibration":
-            print("I am Beta Calibration")
             self.calibrator = {}
             for idx, cls in enumerate(self.classes_):
                 # For each class, fit a separate BetaCalibration instance
@@ -911,7 +909,6 @@ class ClassificationConformalPredictor:
                 self.calibrator[cls] = calibrator
 
         elif self.calibration_method is None:
-            print("I am Nobody")
             self.calibrator = None
 
         else:
@@ -972,7 +969,6 @@ class ClassificationConformalPredictor:
         return params
 
     def fit(self, X_train, y_train):
-        print(f"The calibration method is: {self.calibration_method}")
         if self.model is None:
             raise ValueError("Model cannot be None.")
 

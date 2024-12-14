@@ -873,6 +873,7 @@ class ClassificationConformalPredictor:
         n_folds=1,
         calibration_size=0.2,
         calibration_method=None,
+        apply_calibs=False,
         random_state=42,
     ):
         """
@@ -886,6 +887,7 @@ class ClassificationConformalPredictor:
         self.n_folds = n_folds
         self.calibration_size = calibration_size
         self.calibration_method = calibration_method
+        self.apply_calibs = apply_calibs
         self.random_state = random_state
         self.calibration_scores = {}
         self.classes_ = None
@@ -958,6 +960,7 @@ class ClassificationConformalPredictor:
             "n_folds": self.n_folds,
             "calibration_size": self.calibration_size,
             "calibration_method": self.calibration_method,
+            "apply_calibs": self.apply_calibs,
             "random_state": self.random_state,
         }
 
@@ -1081,11 +1084,21 @@ class ClassificationConformalPredictor:
                 for cls in self.classes_
             }
 
-        # Get probability predictions
-        prob_pred = self._calibrate_proba(self.model.predict_proba(X))
+        if self.apply_calibs:
+            # Get probability predictions
+            prob_pred = self._calibrate_proba(self.model.predict_proba(X))
 
-        # Get predictions
-        predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+            # Get predictions
+            predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+        else:
+            # Get probability predictions
+            prob_pred = self.model.predict_proba(X)
+
+            # Get predictions
+            predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+
+            # Calibrate probabilities
+            prob_pred = self._calibrate_proba(prob_pred)
 
         if confidence_level is not None:
             # Create an array of prediction sets, one set per sample

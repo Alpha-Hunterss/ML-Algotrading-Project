@@ -960,6 +960,7 @@ class ClassificationConformalPredictor:
             "use_cv": self.use_cv,
             "n_folds": self.n_folds,
             "calibration_size": self.calibration_size,
+            "calibration_method": self.calibration_method,
             "random_state": self.random_state,
         }
 

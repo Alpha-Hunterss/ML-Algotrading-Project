@@ -971,6 +971,7 @@ class ClassificationConformalPredictor:
         return params
 
     def fit(self, X_train, y_train):
+        print(f"The calibration method is: {self.calibration_method}")
         if self.model is None:
             raise ValueError("Model cannot be None.")
 

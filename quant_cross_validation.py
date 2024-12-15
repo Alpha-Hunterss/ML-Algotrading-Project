@@ -209,10 +209,14 @@ def quant_CV(
 
                 # Calculate n_unique days and max daily n_signals in each fold
                 fold_unique_days = pd.Series(df.loc[folds[i][set_name]].loc[
-                            df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1].index.date).nunique()
+                    df.loc[folds[i][set_name],
+                           f"pred_as_{pred_name[set_name]}"] == 1
+                ].index.date).nunique()
 
                 fold_max_daily_sig = df.loc[folds[i][set_name]].loc[
-                            df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1].groupby(pd.Grouper(freq='D')).size().max()
+                    df.loc[folds[i][set_name],
+                            f"pred_as_{pred_name[set_name]}"] == 1
+                ].groupby(pd.Grouper(freq='D')).size().max()
 
                 if is_cf_model:
                     #? Backtest

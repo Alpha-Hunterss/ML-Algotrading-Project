@@ -873,6 +873,7 @@ class ClassificationConformalPredictor:
         n_folds=1,
         calibration_size=0.2,
         calibration_method=None,
+        zero_cls_scale=1,
         apply_calibs=False,
         random_state=42,
     ):
@@ -887,6 +888,7 @@ class ClassificationConformalPredictor:
         self.n_folds = n_folds
         self.calibration_size = calibration_size
         self.calibration_method = calibration_method
+        self.zero_cls_scale = zero_cls_scale
         self.apply_calibs = apply_calibs
         self.random_state = random_state
         self.calibration_scores = {}
@@ -960,6 +962,7 @@ class ClassificationConformalPredictor:
             "n_folds": self.n_folds,
             "calibration_size": self.calibration_size,
             "calibration_method": self.calibration_method,
+            "zero_cls_scale": self.zero_cls_scale,
             "apply_calibs": self.apply_calibs,
             "random_state": self.random_state,
         }
@@ -1075,14 +1078,18 @@ class ClassificationConformalPredictor:
         ):
             raise ValueError("Confidence level must be between 0 and 1.")
 
-        if confidence_level is not None:
-            alpha = 1 - confidence_level
+        if self.zero_cls_scale <= 0:
+            raise ValueError("'zero_cls_scale' cannot be negative or zero.")
 
+        if confidence_level is not None:
             # Calculate per-class thresholds
             thresholds = {
-                cls: np.quantile(self.calibration_scores[cls], 1 - alpha)
+                cls: np.quantile(self.calibration_scores[cls], confidence_level)
                 for cls in self.classes_
             }
+
+            if self.zero_cls_scale != 1:
+                thresholds[0] *= self.zero_cls_scale
 
         if self.apply_calibs:
             # Get probability predictions

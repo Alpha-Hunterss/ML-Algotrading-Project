@@ -868,6 +868,7 @@ class ClassificationConformalPredictor:
     def __init__(
         self,
         model=None,
+        use_valid_as_calib=False,
         retrain=False,
         use_cv=False,
         n_folds=1,
@@ -883,6 +884,7 @@ class ClassificationConformalPredictor:
         alpha: Significance level (1 - confidence)
         """
         self.model = model
+        self.use_valid_as_calib = use_valid_as_calib
         self.retrain = retrain
         self.use_cv = use_cv
         self.n_folds = n_folds
@@ -957,6 +959,7 @@ class ClassificationConformalPredictor:
         """
         params = {
             "model": self.model,
+            "use_valid_as_calib": self.use_valid_as_calib,
             "retrain": self.retrain,
             "use_cv": self.use_cv,
             "n_folds": self.n_folds,
@@ -987,78 +990,83 @@ class ClassificationConformalPredictor:
         if self.n_folds < 1:
             raise ValueError("'n_folds' cannot be negative or zero.")
 
-        if self.use_cv:
-            kf = StratifiedKFold(
-                n_splits=self.n_folds, shuffle=True, random_state=self.random_state
-            )
-            self.classes_ = np.unique(y_train)
-            self.calibration_scores = {cls: [] for cls in self.classes_}
+        if self.use_valid_as_calib:
+            self.model.fit(X_train, y_train)
+            self.classes_ = self.model.classes_
+        else:
+            if self.use_cv:
+                kf = StratifiedKFold(
+                    n_splits=self.n_folds, shuffle=True, random_state=self.random_state
+                )
+                self.classes_ = np.unique(y_train)
+                self.calibration_scores = {cls: [] for cls in self.classes_}
 
-            for train_idx, calib_idx in kf.split(X_train, y_train):
-                # Split data
-                X_proper_train = X_train.iloc[train_idx]
-                y_proper_train = y_train.iloc[train_idx]
-                X_calib = X_train.iloc[calib_idx]
-                y_calib = y_train.iloc[calib_idx]
+                for train_idx, calib_idx in kf.split(X_train, y_train):
+                    # Split data
+                    X_proper_train = X_train.iloc[train_idx]
+                    y_proper_train = y_train.iloc[train_idx]
+                    X_calib = X_train.iloc[calib_idx]
+                    y_calib = y_train.iloc[calib_idx]
 
-                # Train model
-                model_clone = clone(self.model)
-                model_clone.fit(X_proper_train, y_proper_train)
-                self.classes_ = model_clone.classes_
+                    # Train model
+                    model_clone = clone(self.model)
+                    model_clone.fit(X_proper_train, y_proper_train)
+                    self.classes_ = model_clone.classes_
+
+                    # Get probability predictions of the calibration data
+                    prob_pred = model_clone.predict_proba(X_calib)
+
+                    # Apply calibration
+                    if self.calibration_method is not None:
+                        self._apply_calibration(prob_pred, y_calib)
+                        prob_pred = self._calibrate_proba(prob_pred)
+
+                    for cls in self.classes_:
+                        cls_indices = np.where(y_calib == cls)[0]
+                        self.calibration_scores[cls].extend(
+                            1 - prob_pred[
+                                cls_indices, np.where(self.classes_ == cls)[0][0]
+                            ]
+                        )
+
+                # Fit final model on all data
+                self.model.fit(X_train, y_train)
+            else:
+                # Split data into proper training and calibration sets
+                X_proper_train, X_calib, y_proper_train, y_calib = stratified_train_test_split(
+                    X_train, y_train, test_size=self.calibration_size,
+                    random_state=self.random_state
+                )
+
+                # Fit the model on proper training set
+                self.model.fit(X_proper_train, y_proper_train)
+                self.classes_ = self.model.classes_
 
                 # Get probability predictions of the calibration data
-                prob_pred = model_clone.predict_proba(X_calib)
+                prob_pred = self.model.predict_proba(X_calib)
 
                 # Apply calibration
                 if self.calibration_method is not None:
                     self._apply_calibration(prob_pred, y_calib)
                     prob_pred = self._calibrate_proba(prob_pred)
 
+                # Calculate nonconformity scores per class
+                self.calibration_scores = {cls: [] for cls in self.classes_}
+
                 for cls in self.classes_:
                     cls_indices = np.where(y_calib == cls)[0]
-                    self.calibration_scores[cls].extend(
-                        1 - prob_pred[
-                            cls_indices, np.where(self.classes_ == cls)[0][0]
-                        ]
-                    )
+                    self.calibration_scores[cls] = 1 - prob_pred[
+                        cls_indices, np.where(self.classes_ == cls)[0][0]
+                    ]
 
-            # Fit final model on all data
-            self.model.fit(X_train, y_train)
-        else:
-            # Split data into proper training and calibration sets
-            X_proper_train, X_calib, y_proper_train, y_calib = stratified_train_test_split(
-                X_train, y_train, test_size=self.calibration_size, random_state=self.random_state
-            )
-
-            # Fit the model on proper training set
-            self.model.fit(X_proper_train, y_proper_train)
-            self.classes_ = self.model.classes_
-
-            # Get probability predictions of the calibration data
-            prob_pred = self.model.predict_proba(X_calib)
-
-            # Apply calibration
-            if self.calibration_method is not None:
-                self._apply_calibration(prob_pred, y_calib)
-                prob_pred = self._calibrate_proba(prob_pred)
-
-            # Calculate nonconformity scores per class
-            self.calibration_scores = {cls: [] for cls in self.classes_}
-
-            for cls in self.classes_:
-                cls_indices = np.where(y_calib == cls)[0]
-                self.calibration_scores[cls] = 1 - prob_pred[
-                    cls_indices, np.where(self.classes_ == cls)[0][0]
-                ]
-
-            if self.retrain:
-                # Fit final model on all data if needed
-                self.model.fit(X_train, y_train)
+                if self.retrain:
+                    # Fit final model on all data if needed
+                    self.model.fit(X_train, y_train)
 
         return self
 
     def predict(
-        self, X, confidence_level=None
+        self, X, y, set_name, confidence_level=None
     ) -> Tuple[np.ndarray, List[set] | None]:
         """
         Returns:
@@ -1069,6 +1077,11 @@ class ClassificationConformalPredictor:
         """
         if len(X) == 0:
             raise ValueError("Input data X cannot be empty.")
+
+        if set_name not in ["train", "valid", "test"]:
+            raise ValueError(
+                "'set_name' should either be 'train', 'valid' or 'test'."
+                f" Given {set_name}")
 
         if self.classes_ is None:
             raise ValueError("Model has not been fitted yet.")
@@ -1081,43 +1094,117 @@ class ClassificationConformalPredictor:
         if self.zero_cls_scale <= 0:
             raise ValueError("'zero_cls_scale' cannot be negative or zero.")
 
-        if confidence_level is not None:
-            # Calculate per-class thresholds
-            thresholds = {
-                cls: np.quantile(self.calibration_scores[cls], confidence_level)
-                for cls in self.classes_
-            }
+        if self.use_valid_as_calib:
+            if set_name == "train":
+                # Get probability predictions
+                prob_pred = self.model.predict_proba(X)
 
-            if self.zero_cls_scale != 1:
-                thresholds[0] *= self.zero_cls_scale
+                # Get predictions
+                predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+                prediction_sets = None
 
-        if self.apply_calibs:
-            # Get probability predictions
-            prob_pred = self._calibrate_proba(self.model.predict_proba(X))
+            elif set_name == "valid":
+                if len(y) == 0:
+                    raise ValueError("Input data y cannot be empty.")
 
-            # Get predictions
-            predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+                # Get probability predictions
+                prob_pred = self.model.predict_proba(X)
+
+                # Get predictions
+                predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+                prediction_sets = None
+
+                # Apply calibration
+                if self.calibration_method is not None:
+                    self._apply_calibration(prob_pred, y)
+                    prob_pred = self._calibrate_proba(prob_pred)
+
+                # Calculate nonconformity scores per class
+                self.calibration_scores = {cls: [] for cls in self.classes_}
+
+                for cls in self.classes_:
+                    cls_indices = np.where(y == cls)[0]
+                    self.calibration_scores[cls] = 1 - prob_pred[
+                        cls_indices, np.where(self.classes_ == cls)[0][0]
+                    ]
+
+            else: # set_name == test
+                if confidence_level is not None:
+                    # Calculate per-class thresholds
+                    thresholds = {
+                        cls: np.quantile(self.calibration_scores[cls], confidence_level)
+                        for cls in self.classes_
+                    }
+
+                    if self.zero_cls_scale != 1:
+                        thresholds[0] *= self.zero_cls_scale
+
+                if self.apply_calibs:
+                    # Get probability predictions
+                    prob_pred = self._calibrate_proba(self.model.predict_proba(X))
+
+                    # Get predictions
+                    predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+                else:
+                    # Get probability predictions
+                    prob_pred = self.model.predict_proba(X)
+
+                    # Get predictions
+                    predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+
+                    # Calibrate probabilities
+                    prob_pred = self._calibrate_proba(prob_pred)
+
+                if confidence_level is not None:
+                    # Create an array of prediction sets, one set per sample
+                    prediction_sets = [
+                        set(
+                            cls for cls, threshold in thresholds.items()
+                            if 1 - probs[np.where(self.classes_ == cls)[0][0]] <= threshold
+                        )
+                        for probs in prob_pred
+                    ]
+                else:
+                    prediction_sets = None
+
         else:
-            # Get probability predictions
-            prob_pred = self.model.predict_proba(X)
+            if confidence_level is not None:
+                # Calculate per-class thresholds
+                thresholds = {
+                    cls: np.quantile(self.calibration_scores[cls], confidence_level)
+                    for cls in self.classes_
+                }
 
-            # Get predictions
-            predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+                if self.zero_cls_scale != 1:
+                    thresholds[0] *= self.zero_cls_scale
 
-            # Calibrate probabilities
-            prob_pred = self._calibrate_proba(prob_pred)
+            if self.apply_calibs:
+                # Get probability predictions
+                prob_pred = self._calibrate_proba(self.model.predict_proba(X))
 
-        if confidence_level is not None:
-            # Create an array of prediction sets, one set per sample
-            prediction_sets = [
-                set(
-                    cls for cls, threshold in thresholds.items()
-                    if 1 - probs[np.where(self.classes_ == cls)[0][0]] <= threshold
-                )
-                for probs in prob_pred
-            ]
-        else:
-            prediction_sets = None
+                # Get predictions
+                predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+            else:
+                # Get probability predictions
+                prob_pred = self.model.predict_proba(X)
+
+                # Get predictions
+                predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+
+                # Calibrate probabilities
+                prob_pred = self._calibrate_proba(prob_pred)
+
+            if confidence_level is not None:
+                # Create an array of prediction sets, one set per sample
+                prediction_sets = [
+                    set(
+                        cls for cls, threshold in thresholds.items()
+                        if 1 - probs[np.where(self.classes_ == cls)[0][0]] <= threshold
+                    )
+                    for probs in prob_pred
+                ]
+            else:
+                prediction_sets = None
 
         return predictions, prediction_sets
 
@@ -1142,7 +1229,7 @@ class ClassificationConformalPredictor:
         prediction_sets_per_level = []
 
         for cl in confidence_levels:
-            predictions, prediction_sets = self.predict(X, confidence_level=cl)
+            predictions, prediction_sets = self.predict(X, None, "test", confidence_level=cl)
             prediction_sets_per_level.append(prediction_sets)
 
         # Determine confidence range for each prediction
@@ -1172,7 +1259,12 @@ class ClassificationConformalPredictor:
     def predict_proba(self, X):
         """
         Just for compatibility"""
-        return self._calibrate_proba(self.model.predict_proba(X))
+        if self.apply_calibs:
+            prob_pred = self._calibrate_proba(self.model.predict_proba(X))
+        else:
+            prob_pred = self.model.predict_proba(X)
+
+        return prob_pred
 
 
 def set_model_parameters(model_class, all_params):

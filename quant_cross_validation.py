@@ -157,7 +157,11 @@ def quant_CV(
                 "test_dates": "test",
             }
             if is_cf_model:
-                preds, _ = model.predict(df.loc[folds[i][set_name]][input_cols])
+                preds, _ = model.predict(
+                    df.loc[folds[i][set_name]][input_cols],
+                    df.loc[folds[i][set_name]]["target"],
+                    set_name_dict[set_name]
+                )
                 y_pred = preds.reshape(-1, 1)
             else:
                 y_pred = model.predict(df.loc[folds[i][set_name]][input_cols]).reshape(
@@ -175,10 +179,25 @@ def quant_CV(
                 proba_pred = model.predict_proba(df.loc[folds[i][set_name]][input_cols])
 
                 if is_cf_model:
-                    _, confidence_levels = model.categorize_proba(
-                        df.loc[folds[i][set_name]][input_cols], cnf_levels
-                    )
-                    df.loc[folds[i][set_name], "confidence_levels"] = confidence_levels
+                    if model.use_valid_as_calib:
+                        if pred_name[set_name] == "test":
+                            _, confidence_levels = model.categorize_proba(
+                                df.loc[folds[i][set_name]][input_cols], cnf_levels
+                            )
+                        else:
+                            confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
+                        df.loc[
+                            folds[i][set_name],
+                            "confidence_levels"
+                        ] = confidence_levels.reshape(-1, 1)
+                    else:
+                        _, confidence_levels = model.categorize_proba(
+                            df.loc[folds[i][set_name]][input_cols], cnf_levels
+                        )
+                        df.loc[
+                            folds[i][set_name],
+                            "confidence_levels"
+                        ] = confidence_levels.reshape(-1, 1)
 
                 if np.shape(proba_pred)[1] > 1:
                     df.loc[

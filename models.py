@@ -1326,7 +1326,9 @@ def set_model_parameters(model_class, all_params):
         valid_params = {param: None for param in model_params if param != 'self'}
 
     # Filter all_params to include only the valid parameters
-    parameters = {param: value for param, value in all_params.items() if param in valid_params}
+    parameters = {
+        param: value for param, value in all_params.items() if param in valid_params
+    }
 
     return parameters
 

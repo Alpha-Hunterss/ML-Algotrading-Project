@@ -4,6 +4,7 @@ import inspect
 import threading
 import wandb
 from sklearn import clone
+from sklearn.isotonic import IsotonicRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.ensemble import RandomForestClassifier, BaseEnsemble
 from sklearn.utils._param_validation import Interval, RealNotInt
@@ -869,6 +870,8 @@ class ClassificationConformalPredictor:
         self,
         model=None,
         use_valid_as_calib=False,
+        use_venn_abers=False,
+        lower_bound_applied=False,
         retrain=False,
         use_cv=False,
         n_folds=1,
@@ -885,6 +888,8 @@ class ClassificationConformalPredictor:
         """
         self.model = model
         self.use_valid_as_calib = use_valid_as_calib
+        self.use_venn_abers = use_venn_abers
+        self.lower_bound_applied = lower_bound_applied
         self.retrain = retrain
         self.use_cv = use_cv
         self.n_folds = n_folds
@@ -893,6 +898,8 @@ class ClassificationConformalPredictor:
         self.zero_cls_scale = zero_cls_scale
         self.apply_calibs = apply_calibs
         self.random_state = random_state
+        self.iso_positive = IsotonicRegression(out_of_bounds='clip')
+        self.iso_negative = IsotonicRegression(out_of_bounds='clip')
         self.calibration_scores = {}
         self.classes_ = None
         self.calibrator = None
@@ -960,6 +967,8 @@ class ClassificationConformalPredictor:
         params = {
             "model": self.model,
             "use_valid_as_calib": self.use_valid_as_calib,
+            "use_venn_abers": self.use_venn_abers,
+            "lower_bound_applied": self.lower_bound_applied,
             "retrain": self.retrain,
             "use_cv": self.use_cv,
             "n_folds": self.n_folds,
@@ -1094,6 +1103,12 @@ class ClassificationConformalPredictor:
         if self.zero_cls_scale <= 0:
             raise ValueError("'zero_cls_scale' cannot be negative or zero.")
 
+        if self.calibration_method is None and self.apply_calibs:
+            raise ValueError(
+                "Calibration probabilities cannot be applied "
+                "when 'calibration_method' is set to None."
+            )
+
         if self.use_valid_as_calib:
             if set_name == "train":
                 # Get probability predictions
@@ -1119,14 +1134,19 @@ class ClassificationConformalPredictor:
                     self._apply_calibration(prob_pred, y)
                     prob_pred = self._calibrate_proba(prob_pred)
 
-                # Calculate nonconformity scores per class
-                self.calibration_scores = {cls: [] for cls in self.classes_}
+                if self.use_venn_abers:
+                    # Fit isotonic regressions for the positive and negative classes
+                    self.iso_positive.fit(prob_pred[:, 1][y == 1], y[y == 1])
+                    self.iso_negative.fit(prob_pred[:, 1][y == 0], y[y == 0])
+                else:
+                    # Calculate nonconformity scores per class
+                    self.calibration_scores = {cls: [] for cls in self.classes_}
 
-                for cls in self.classes_:
-                    cls_indices = np.where(y == cls)[0]
-                    self.calibration_scores[cls] = 1 - prob_pred[
-                        cls_indices, np.where(self.classes_ == cls)[0][0]
-                    ]
+                    for cls in self.classes_:
+                        cls_indices = np.where(y == cls)[0]
+                        self.calibration_scores[cls] = 1 - prob_pred[
+                            cls_indices, np.where(self.classes_ == cls)[0][0]
+                        ]
 
             else: # set_name == test
                 if confidence_level is not None:
@@ -1221,40 +1241,67 @@ class ClassificationConformalPredictor:
         Returns:
             A list of confidence levels indicating the range each prediction can be trusted upon.
         """
-        # Ensure confidence levels are sorted in descending order and get its length
-        confidence_levels = sorted(confidence_levels, reverse=True)
-        confidence_levels_len = len(confidence_levels) - 1
+        if self.use_venn_abers:
+            # Obtain the model's outputs (scores or probabilities)
+            prob_pred = self.model.predict_proba(X)
 
-        # Store prediction sets for each confidence level
-        prediction_sets_per_level = []
+            # Get predictions
+            predictions = self.classes_[np.argmax(prob_pred, axis=1)]
 
-        for cl in confidence_levels:
-            predictions, prediction_sets = self.predict(X, None, "test", confidence_level=cl)
-            prediction_sets_per_level.append(prediction_sets)
+            # Apply pre-calibration, if necessary
+            if self.calibration_method is not None:
+                prob_pred = self._calibrate_proba(prob_pred)
 
-        # Determine confidence range for each prediction
-        confidence_level_range = []
+            # Take the positive label's probabilities
+            scores = prob_pred[:, 1]
 
-        for i, pred in enumerate(predictions):
-            for j, cl in enumerate(confidence_levels):
-                prediction_set = prediction_sets_per_level[j][i]
-                pred_set_len = len(prediction_set)
-                if pred not in prediction_set:
-                    if pred_set_len > 0:
-                        confidence_level_range.append(0.0)
-                    else:
-                        if j == 0:
+            # Compute lower and upper probabilities using isotonic regression models
+            p_lower = self.iso_negative.predict(scores)
+            p_upper = self.iso_positive.predict(scores)
+
+            prob_intervals = np.column_stack((p_lower, p_upper))
+
+            if self.lower_bound_applied:
+                confidence_level_range = prob_intervals[:, 0]
+            else:
+                confidence_level_range = prob_intervals.mean(axis=1)
+        else:
+            # Ensure confidence levels are sorted in descending order and get its length
+            confidence_levels = sorted(confidence_levels, reverse=True)
+            confidence_levels_len = len(confidence_levels) - 1
+
+            # Store prediction sets for each confidence level
+            prediction_sets_per_level = []
+
+            for cl in confidence_levels:
+                predictions, prediction_sets = self.predict(X, None, "test", confidence_level=cl)
+                prediction_sets_per_level.append(prediction_sets)
+
+            # Determine confidence range for each prediction
+            confidence_level_range = []
+
+            for i, pred in enumerate(predictions):
+                for j, cl in enumerate(confidence_levels):
+                    prediction_set = prediction_sets_per_level[j][i]
+                    pred_set_len = len(prediction_set)
+                    if pred not in prediction_set:
+                        if pred_set_len > 0:
                             confidence_level_range.append(0.0)
                         else:
-                            confidence_level_range.append(cl)
-                    break
-                if pred_set_len == 1:
-                    confidence_level_range.append(cl)
-                    break
-                if j == confidence_levels_len:
-                    confidence_level_range.append(cl)
+                            if j == 0:
+                                confidence_level_range.append(0.0)
+                            else:
+                                confidence_level_range.append(cl)
+                        break
+                    if pred_set_len == 1:
+                        confidence_level_range.append(cl)
+                        break
+                    if j == confidence_levels_len:
+                        confidence_level_range.append(cl)
 
-        return predictions, np.array(confidence_level_range)
+            confidence_level_range = np.array(confidence_level_range)
+
+        return predictions, confidence_level_range
 
     def predict_proba(self, X):
         """

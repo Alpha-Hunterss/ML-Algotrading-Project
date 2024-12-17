@@ -1261,7 +1261,7 @@ class ClassificationConformalPredictor:
                     sorted_idx = np.argsort(feature_importances)[::-1]
                     top_features = X.columns[sorted_idx[:self.n_top_features]]
 
-                    X_meta = X[top_features]
+                    X_meta = X[top_features].copy()
                     y_meta = (predictions == y).astype(int)
 
                     if self.calibration_method is not None:
@@ -1413,7 +1413,7 @@ class ClassificationConformalPredictor:
             sorted_idx = np.argsort(feature_importances)[::-1]
             top_features = X.columns[sorted_idx[:self.n_top_features]]
 
-            X_meta = X[top_features]
+            X_meta = X[top_features].copy()
 
             if self.calibration_method is not None:
                 X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)

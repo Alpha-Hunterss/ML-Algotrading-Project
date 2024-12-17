@@ -16,6 +16,7 @@ from scipy.sparse import issparse
 from scipy.special import logsumexp
 from scipy.optimize import minimize
 from betacal import BetaCalibration
+from venn_abers import VennAbersCalibrator
 from joblib import effective_n_jobs
 from warnings import catch_warnings, simplefilter
 from xgboost import XGBClassifier
@@ -869,9 +870,10 @@ class ClassificationConformalPredictor:
     def __init__(
         self,
         model=None,
+        meta_model=None,
+        meta_models_params=None,
         use_valid_as_calib=False,
-        use_venn_abers=False,
-        lower_bound_applied=False,
+        prob_estimator=None,
         retrain=False,
         use_cv=False,
         n_folds=1,
@@ -887,9 +889,10 @@ class ClassificationConformalPredictor:
         alpha: Significance level (1 - confidence)
         """
         self.model = model
+        self.meta_model = meta_model
+        self.meta_models_params = meta_models_params
         self.use_valid_as_calib = use_valid_as_calib
-        self.use_venn_abers = use_venn_abers
-        self.lower_bound_applied = lower_bound_applied
+        self.prob_estimator = prob_estimator
         self.retrain = retrain
         self.use_cv = use_cv
         self.n_folds = n_folds
@@ -921,6 +924,15 @@ class ClassificationConformalPredictor:
                 calibrator.fit(prob_pred[:, idx], (y_calib == cls).astype(int))
                 self.calibrator[cls] = calibrator
 
+        elif self.calibration_method == "venn_abers":
+            self.calibrator = VennAbersCalibrator(
+                estimator=self.model,
+                inductive=True,
+                random_state=self.random_state,
+                precision=2
+            )
+            self.calibrator.fit(prob_pred, y_calib)
+
         elif self.calibration_method is None:
             self.calibrator = None
 
@@ -947,6 +959,9 @@ class ClassificationConformalPredictor:
                     calibrated_probs[:, idx] = self.calibrator[cls].predict(prob_pred[:, idx])
                 prob_pred = calibrated_probs
 
+            elif self.calibration_method == "venn_abers":
+                prob_pred = self.calibrator.predict_proba(prob_pred)
+
         return prob_pred
 
     def get_params(self, deep=True):
@@ -966,9 +981,10 @@ class ClassificationConformalPredictor:
         """
         params = {
             "model": self.model,
+            "meta_model": self.meta_model,
+            "meta_models_params": self.meta_models_params,
             "use_valid_as_calib": self.use_valid_as_calib,
-            "use_venn_abers": self.use_venn_abers,
-            "lower_bound_applied": self.lower_bound_applied,
+            "prob_estimator": self.prob_estimator,
             "retrain": self.retrain,
             "use_cv": self.use_cv,
             "n_folds": self.n_folds,
@@ -1000,6 +1016,9 @@ class ClassificationConformalPredictor:
             raise ValueError("'n_folds' cannot be negative or zero.")
 
         if self.use_valid_as_calib:
+            if self.calibration_method == "venn_abers":
+                self._apply_calibration(X_train, y_train)
+
             self.model.fit(X_train, y_train)
             self.classes_ = self.model.classes_
         else:
@@ -1026,7 +1045,7 @@ class ClassificationConformalPredictor:
                     prob_pred = model_clone.predict_proba(X_calib)
 
                     # Apply calibration
-                    if self.calibration_method is not None:
+                    if self.calibration_method is not None and self.calibration_method != "venn_abers":
                         self._apply_calibration(prob_pred, y_calib)
                         prob_pred = self._calibrate_proba(prob_pred)
 
@@ -1037,6 +1056,10 @@ class ClassificationConformalPredictor:
                                 cls_indices, np.where(self.classes_ == cls)[0][0]
                             ]
                         )
+
+                # Apply Venn-ABERS
+                if self.calibration_method == "venn_abers" and self.apply_calibs:
+                    self._apply_calibration(X_train, y_train)
 
                 # Fit final model on all data
                 self.model.fit(X_train, y_train)
@@ -1055,7 +1078,7 @@ class ClassificationConformalPredictor:
                 prob_pred = self.model.predict_proba(X_calib)
 
                 # Apply calibration
-                if self.calibration_method is not None:
+                if self.calibration_method is not None and self.calibration_method != "venn_abers":
                     self._apply_calibration(prob_pred, y_calib)
                     prob_pred = self._calibrate_proba(prob_pred)
 
@@ -1067,6 +1090,10 @@ class ClassificationConformalPredictor:
                     self.calibration_scores[cls] = 1 - prob_pred[
                         cls_indices, np.where(self.classes_ == cls)[0][0]
                     ]
+
+                # Apply Venn-ABERS
+                if self.calibration_method == "venn_abers" and self.apply_calibs:
+                    self._apply_calibration(X_train, y_train)
 
                 if self.retrain:
                     # Fit final model on all data if needed
@@ -1131,13 +1158,55 @@ class ClassificationConformalPredictor:
 
                 # Apply calibration
                 if self.calibration_method is not None:
-                    self._apply_calibration(prob_pred, y)
-                    prob_pred = self._calibrate_proba(prob_pred)
+                    if self.calibration_method == "venn_abers":
+                        prob_pred = self._calibrate_proba(X)
+                    else:
+                        self._apply_calibration(prob_pred, y)
+                        prob_pred = self._calibrate_proba(prob_pred)
 
-                if self.use_venn_abers:
-                    # Fit isotonic regressions for the positive and negative classes
-                    self.iso_positive.fit(prob_pred[:, 1][y == 1], y[y == 1])
-                    self.iso_negative.fit(prob_pred[:, 1][y == 0], y[y == 0])
+                if self.prob_estimator == "meta":
+                    if isinstance(self.meta_models_params, dict):
+                        for key in self.meta_models_params.keys():
+                            if not isinstance(key, str):
+                                raise ValueError(
+                                    "All of the keys of the 'meta_models_params' "
+                                    "dictionary must be non-string keys."
+                                )
+                    else:
+                        raise ValueError(
+                            "'meta_models_params' should be a dictionary "
+                            "containing the meta model's parameters. "
+                            f"Given {self.meta_models_params}."
+                        )
+
+                    if self.meta_model not in ["RF", "XGB", "XGBF", "LGBM"]:
+                        raise ValueError(
+                            "Currently, the meta model should either be one of "
+                            f"'RF', 'XGB', 'XGBF' or 'LGBM'. Given {self.meta_model}."
+                        )
+
+                    if self.meta_model == "RF":
+                        model_class = RandomForestClassifier
+                    elif self.meta_model == "XGB":
+                        model_class = XGBClassifier
+                    elif self.meta_model == "XGBF":
+                        model_class = XGBForestClassifier
+                    else: # self.meta_model == "LGBM"
+                        model_class = LGBMClassifier
+
+                    model_instance = model_class()
+                    valid_params = model_instance.get_params()
+                    parameters = {
+                        param: value for param, value in self.meta_models_params.items()
+                        if param in valid_params
+                    }
+                    self.meta_model = model_class(**parameters)
+
+                    X_meta = X
+                    X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+                    self.meta_model.fit(X_meta, (predictions == y).astype(int))
+                    del X_meta
+
                 else:
                     # Calculate nonconformity scores per class
                     self.calibration_scores = {cls: [] for cls in self.classes_}
@@ -1161,7 +1230,10 @@ class ClassificationConformalPredictor:
 
                 if self.apply_calibs:
                     # Get probability predictions
-                    prob_pred = self._calibrate_proba(self.model.predict_proba(X))
+                    if self.calibration_method == "venn_abers":
+                        prob_pred = self._calibrate_proba(X)
+                    else:
+                        prob_pred = self._calibrate_proba(self.model.predict_proba(X))
 
                     # Get predictions
                     predictions = self.classes_[np.argmax(prob_pred, axis=1)]
@@ -1173,7 +1245,10 @@ class ClassificationConformalPredictor:
                     predictions = self.classes_[np.argmax(prob_pred, axis=1)]
 
                     # Calibrate probabilities
-                    prob_pred = self._calibrate_proba(prob_pred)
+                    if self.calibration_method == "venn_abers":
+                        prob_pred = self._calibrate_proba(X)
+                    else:
+                        prob_pred = self._calibrate_proba(prob_pred)
 
                 if confidence_level is not None:
                     # Create an array of prediction sets, one set per sample
@@ -1200,10 +1275,16 @@ class ClassificationConformalPredictor:
 
             if self.apply_calibs:
                 # Get probability predictions
-                prob_pred = self._calibrate_proba(self.model.predict_proba(X))
+                if self.calibration_method == "venn_abers":
+                    prob_pred = self._calibrate_proba(X)
+                else:
+                    prob_pred = self._calibrate_proba(self.model.predict_proba(X))
 
                 # Get predictions
                 predictions = self.classes_[np.argmax(prob_pred, axis=1)]
+
+                if self.calibration_method == "venn_abers":
+                    prob_pred = self.model.predict_proba(X)
             else:
                 # Get probability predictions
                 prob_pred = self.model.predict_proba(X)
@@ -1212,7 +1293,8 @@ class ClassificationConformalPredictor:
                 predictions = self.classes_[np.argmax(prob_pred, axis=1)]
 
                 # Calibrate probabilities
-                prob_pred = self._calibrate_proba(prob_pred)
+                if self.calibration_method != "venn_abers":
+                    prob_pred = self._calibrate_proba(prob_pred)
 
             if confidence_level is not None:
                 # Create an array of prediction sets, one set per sample
@@ -1241,30 +1323,33 @@ class ClassificationConformalPredictor:
         Returns:
             A list of confidence levels indicating the range each prediction can be trusted upon.
         """
-        if self.use_venn_abers:
-            # Obtain the model's outputs (scores or probabilities)
+        if self.prob_estimator == "meta":
+            # Get base model's probabilities
             prob_pred = self.model.predict_proba(X)
 
             # Get predictions
             predictions = self.classes_[np.argmax(prob_pred, axis=1)]
 
-            # Apply pre-calibration, if necessary
+            # Apply calibration
             if self.calibration_method is not None:
-                prob_pred = self._calibrate_proba(prob_pred)
+                if self.calibration_method == "venn_abers":
+                    prob_pred = self._calibrate_proba(X)
+                else:
+                    prob_pred = self._calibrate_proba(prob_pred)
 
-            # Take the positive label's probabilities
-            scores = prob_pred[:, 1]
+            X_meta = X
+            X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+            meta_pos_probs = self.meta_model.predict_proba(X_meta)[:, 1]
+            del X_meta
 
-            # Compute lower and upper probabilities using isotonic regression models
-            p_lower = self.iso_negative.predict(scores)
-            p_upper = self.iso_positive.predict(scores)
+            confidence_levels = np.array(confidence_levels)
+            confidence_levels = np.sort(confidence_levels)[::-1]
+            confidence_level_range = np.zeros_like(meta_pos_probs)
 
-            prob_intervals = np.column_stack((p_lower, p_upper))
+            for i, prob in enumerate(meta_pos_probs):
+                valid_levels = confidence_levels[confidence_levels <= prob]
+                confidence_level_range[i] = np.max(valid_levels) if valid_levels.size > 0 else 0.0
 
-            if self.lower_bound_applied:
-                confidence_level_range = prob_intervals[:, 0]
-            else:
-                confidence_level_range = prob_intervals.mean(axis=1)
         else:
             # Ensure confidence levels are sorted in descending order and get its length
             confidence_levels = sorted(confidence_levels, reverse=True)
@@ -1307,7 +1392,10 @@ class ClassificationConformalPredictor:
         """
         Just for compatibility"""
         if self.apply_calibs:
-            prob_pred = self._calibrate_proba(self.model.predict_proba(X))
+            if self.calibration_method == "venn_abers":
+                prob_pred = self._calibrate_proba(X)
+            else:
+                prob_pred = self._calibrate_proba(self.model.predict_proba(X))
         else:
             prob_pred = self.model.predict_proba(X)
 

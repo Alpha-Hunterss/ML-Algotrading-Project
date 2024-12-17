@@ -1179,19 +1179,32 @@ class ClassificationConformalPredictor:
                             f"Given {self.meta_models_params}."
                         )
 
-                    if self.meta_model not in ["RF", "XGB", "XGBF", "LGBM"]:
-                        raise ValueError(
-                            "Currently, the meta model should either be one of "
-                            f"'RF', 'XGB', 'XGBF' or 'LGBM'. Given {self.meta_model}."
-                        )
+                    if isinstance(self.meta_model, str):
+                        if self.meta_model not in ["RF", "XGB", "XGBF", "LGBM"]:
+                            raise ValueError(
+                                "Currently, the meta model should either be one of "
+                                f"'RF', 'XGB', 'XGBF' or 'LGBM'. Given {self.meta_model}."
+                            )
 
-                    if self.meta_model == "RF":
+                        if self.meta_model == "RF":
+                            model_class = RandomForestClassifier
+                        elif self.meta_model == "XGB":
+                            model_class = XGBClassifier
+                        elif self.meta_model == "XGBF":
+                            model_class = XGBForestClassifier
+                        else: # self.meta_model == "LGBM"
+                            model_class = LGBMClassifier
+
+                    elif isinstance(self.meta_model, RandomForestClassifier):
                         model_class = RandomForestClassifier
-                    elif self.meta_model == "XGB":
+
+                    elif isinstance(self.meta_model, XGBClassifier):
                         model_class = XGBClassifier
-                    elif self.meta_model == "XGBF":
+
+                    elif isinstance(self.meta_model, XGBForestClassifier):
                         model_class = XGBForestClassifier
-                    else: # self.meta_model == "LGBM"
+
+                    elif isinstance(self.meta_model, LGBMClassifier):
                         model_class = LGBMClassifier
 
                     model_instance = model_class()

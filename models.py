@@ -872,6 +872,7 @@ class ClassificationConformalPredictor:
         model=None,
         meta_model=None,
         meta_models_params=None,
+        calibrate_meta=False,
         n_top_features=50,
         use_valid_as_calib=False,
         prob_estimator=None,
@@ -892,6 +893,7 @@ class ClassificationConformalPredictor:
         self.model = model
         self.meta_model = meta_model
         self.meta_models_params = meta_models_params
+        self.calibrate_meta = calibrate_meta
         self.n_top_features = n_top_features
         self.use_valid_as_calib = use_valid_as_calib
         self.prob_estimator = prob_estimator
@@ -906,33 +908,57 @@ class ClassificationConformalPredictor:
         self.calibration_scores = {}
         self.classes_ = None
         self.calibrator = None
+        self.meta_calibrator = None
 
-    def _apply_calibration(self, prob_pred, y_calib):
+    def _apply_calibration(self, prob_pred, y_calib, model=None):
         """
         Applies the selected calibration method to the model's probabilities.
         """
         if self.calibration_method == "temperature_scaling":
-            self.calibrator = TemperatureScalingCalibrator()
-            logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
-            self.calibrator.fit(logits, y_calib)
+            if model == "meta":
+                self.meta_calibrator = TemperatureScalingCalibrator()
+                logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
+                self.meta_calibrator.fit(logits, y_calib)
+            else:
+                self.calibrator = TemperatureScalingCalibrator()
+                logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
+                self.calibrator.fit(logits, y_calib)
 
         elif self.calibration_method == "beta_calibration":
-            self.calibrator = {}
-            for idx, cls in enumerate(self.classes_):
-                # For each class, fit a separate BetaCalibration instance
-                calibrator = BetaCalibration()
-                calibrator.fit(prob_pred[:, idx], (y_calib == cls).astype(int))
-                self.calibrator[cls] = calibrator
+            if model == "meta":
+                self.meta_calibrator = {}
+                for idx, cls in enumerate(self.classes_):
+                    # For each class, fit a separate BetaCalibration instance
+                    meta_calibrator = BetaCalibration()
+                    meta_calibrator.fit(prob_pred[:, idx], (y_calib == cls).astype(int))
+                    self.meta_calibrator[cls] = meta_calibrator
+            else:
+                self.calibrator = {}
+                for idx, cls in enumerate(self.classes_):
+                    # For each class, fit a separate BetaCalibration instance
+                    calibrator = BetaCalibration()
+                    calibrator.fit(prob_pred[:, idx], (y_calib == cls).astype(int))
+                    self.calibrator[cls] = calibrator
 
         elif self.calibration_method == "venn_abers":
-            self.calibrator = VennAbersCalibrator(
-                estimator=self.model,
-                inductive=True,
-                cal_size=0.25,
-                random_state=self.random_state,
-                precision=2
-            )
-            self.calibrator.fit(prob_pred, y_calib)
+            if model == "meta":
+                self.meta_calibrator = VennAbersCalibrator(
+                    estimator=self.meta_model,
+                    inductive=True,
+                    cal_size=0.25,
+                    random_state=self.random_state,
+                    precision=2
+                )
+                self.meta_calibrator.fit(prob_pred, y_calib)
+            else:
+                self.calibrator = VennAbersCalibrator(
+                    estimator=self.model,
+                    inductive=True,
+                    cal_size=0.25,
+                    random_state=self.random_state,
+                    precision=2
+                )
+                self.calibrator.fit(prob_pred, y_calib)
 
         elif self.calibration_method is None:
             self.calibrator = None
@@ -944,24 +970,34 @@ class ClassificationConformalPredictor:
                 f"Given {self.calibration_method} instead."
             )
 
-    def _calibrate_proba(self, prob_pred):
+    def _calibrate_proba(self, prob_pred, model=None):
         """
         Calibrates the probabilities using the chosen method if applicable.
         """
         if self.calibrator is not None:
             if self.calibration_method == "temperature_scaling":
                 logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
-                prob_pred = self.calibrator.predict_proba(logits)
+                if model == "meta":
+                    prob_pred = self.meta_calibrator.predict_proba(logits)
+                else:
+                    prob_pred = self.calibrator.predict_proba(logits)
 
             elif self.calibration_method == "beta_calibration":
                 # Calibrate probabilities for each class separately
                 calibrated_probs = np.zeros_like(prob_pred)
-                for idx, cls in enumerate(self.classes_):
-                    calibrated_probs[:, idx] = self.calibrator[cls].predict(prob_pred[:, idx])
+                if model == "meta":
+                    for idx, cls in enumerate(self.classes_):
+                        calibrated_probs[:, idx] = self.meta_calibrator[cls].predict(prob_pred[:, idx])
+                else:
+                    for idx, cls in enumerate(self.classes_):
+                        calibrated_probs[:, idx] = self.calibrator[cls].predict(prob_pred[:, idx])
                 prob_pred = calibrated_probs
 
             elif self.calibration_method == "venn_abers":
-                prob_pred = self.calibrator.predict_proba(prob_pred)
+                if model == "meta":
+                    prob_pred = self.meta_calibrator.predict_proba(prob_pred)
+                else:
+                    prob_pred = self.calibrator.predict_proba(prob_pred)
 
         return prob_pred
 
@@ -984,6 +1020,7 @@ class ClassificationConformalPredictor:
             "model": self.model,
             "meta_model": self.meta_model,
             "meta_models_params": self.meta_models_params,
+            "calibrate_meta": self.calibrate_meta,
             "n_top_features": self.n_top_features,
             "use_valid_as_calib": self.use_valid_as_calib,
             "prob_estimator": self.prob_estimator,
@@ -1225,6 +1262,7 @@ class ClassificationConformalPredictor:
                     top_features = X.columns[sorted_idx[:self.n_top_features]]
 
                     X_meta = X[top_features]
+                    y_meta = (predictions == y).astype(int)
 
                     if self.calibration_method is not None:
                         X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
@@ -1232,9 +1270,13 @@ class ClassificationConformalPredictor:
                     else:
                         X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
 
-                    self.meta_model.fit(X_meta, (predictions == y).astype(int))
-                    del X_meta
+                    self.meta_model.fit(X_meta, y_meta)
 
+                    if self.calibrate_meta and self.calibration_method == "venn_abers":
+                        self._apply_calibration(X_meta, y_meta, model="meta")
+
+                    del X_meta
+                    del y_meta
                 else:
                     # Calculate nonconformity scores per class
                     self.calibration_scores = {cls: [] for cls in self.classes_}
@@ -1339,7 +1381,7 @@ class ClassificationConformalPredictor:
         return predictions, prediction_sets
 
     def categorize_proba(
-            self, X, confidence_levels: List[float]
+            self, X, y, confidence_levels: List[float]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Categorizes predictions based on the range of confidence levels at which they remain stable.
@@ -1379,8 +1421,20 @@ class ClassificationConformalPredictor:
             else:
                 X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
 
-            meta_pos_probs = self.meta_model.predict_proba(X_meta)[:, 1]
+            meta_probs = self.meta_model.predict_proba(X_meta)
+
+            if self.calibrate_meta and self.calibration_method is not None:
+                if len(y) == 0:
+                    raise ValueError("Input data y cannot be empty.")
+
+                if self.calibration_method == "venn_abers":
+                    meta_probs = self._calibrate_proba(X_meta, model="meta")
+                else:
+                    self._apply_calibration(meta_probs, (predictions == y).astype(int), model="meta")
+                    meta_probs = self._calibrate_proba(meta_probs, model="meta")
+
             del X_meta
+            meta_pos_probs = meta_probs[:, 1]
 
             confidence_levels = np.array(confidence_levels)
             confidence_levels = np.sort(confidence_levels)[::-1]

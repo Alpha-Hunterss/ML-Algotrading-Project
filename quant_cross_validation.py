@@ -182,7 +182,9 @@ def quant_CV(
                     if model.use_valid_as_calib:
                         if pred_name[set_name] == "test":
                             _, confidence_levels = model.categorize_proba(
-                                df.loc[folds[i][set_name]][input_cols], cnf_levels
+                                df.loc[folds[i][set_name]][input_cols],
+                                df.loc[folds[i][set_name]]["target"],
+                                cnf_levels
                             )
                         else:
                             confidence_levels = np.ones((len(y_pred),), dtype=np.float16)

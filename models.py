@@ -901,8 +901,6 @@ class ClassificationConformalPredictor:
         self.zero_cls_scale = zero_cls_scale
         self.apply_calibs = apply_calibs
         self.random_state = random_state
-        self.iso_positive = IsotonicRegression(out_of_bounds='clip')
-        self.iso_negative = IsotonicRegression(out_of_bounds='clip')
         self.calibration_scores = {}
         self.classes_ = None
         self.calibrator = None
@@ -928,6 +926,7 @@ class ClassificationConformalPredictor:
             self.calibrator = VennAbersCalibrator(
                 estimator=self.model,
                 inductive=True,
+                cal_size=0.25,
                 random_state=self.random_state,
                 precision=2
             )
@@ -1016,11 +1015,11 @@ class ClassificationConformalPredictor:
             raise ValueError("'n_folds' cannot be negative or zero.")
 
         if self.use_valid_as_calib:
-            if self.calibration_method == "venn_abers":
-                self._apply_calibration(X_train, y_train)
-
             self.model.fit(X_train, y_train)
             self.classes_ = self.model.classes_
+
+            if self.calibration_method == "venn_abers":
+                self._apply_calibration(X_train, y_train)
         else:
             if self.use_cv:
                 kf = StratifiedKFold(
@@ -1057,12 +1056,13 @@ class ClassificationConformalPredictor:
                             ]
                         )
 
+                # Fit final model on all data
+                self.model.fit(X_train, y_train)
+
                 # Apply Venn-ABERS
                 if self.calibration_method == "venn_abers" and self.apply_calibs:
                     self._apply_calibration(X_train, y_train)
 
-                # Fit final model on all data
-                self.model.fit(X_train, y_train)
             else:
                 # Split data into proper training and calibration sets
                 X_proper_train, X_calib, y_proper_train, y_calib = stratified_train_test_split(
@@ -1091,13 +1091,13 @@ class ClassificationConformalPredictor:
                         cls_indices, np.where(self.classes_ == cls)[0][0]
                     ]
 
-                # Apply Venn-ABERS
-                if self.calibration_method == "venn_abers" and self.apply_calibs:
-                    self._apply_calibration(X_train, y_train)
-
                 if self.retrain:
                     # Fit final model on all data if needed
                     self.model.fit(X_train, y_train)
+
+                # Apply Venn-ABERS
+                if self.calibration_method == "venn_abers" and self.apply_calibs:
+                    self._apply_calibration(X_train, y_train)
 
         return self
 

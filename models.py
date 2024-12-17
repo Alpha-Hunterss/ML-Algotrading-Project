@@ -872,6 +872,7 @@ class ClassificationConformalPredictor:
         model=None,
         meta_model=None,
         meta_models_params=None,
+        n_top_features=50,
         use_valid_as_calib=False,
         prob_estimator=None,
         retrain=False,
@@ -891,6 +892,7 @@ class ClassificationConformalPredictor:
         self.model = model
         self.meta_model = meta_model
         self.meta_models_params = meta_models_params
+        self.n_top_features = n_top_features
         self.use_valid_as_calib = use_valid_as_calib
         self.prob_estimator = prob_estimator
         self.retrain = retrain
@@ -982,6 +984,7 @@ class ClassificationConformalPredictor:
             "model": self.model,
             "meta_model": self.meta_model,
             "meta_models_params": self.meta_models_params,
+            "n_top_features": self.n_top_features,
             "use_valid_as_calib": self.use_valid_as_calib,
             "prob_estimator": self.prob_estimator,
             "retrain": self.retrain,
@@ -1159,8 +1162,10 @@ class ClassificationConformalPredictor:
                 # Apply calibration
                 if self.calibration_method is not None:
                     if self.calibration_method == "venn_abers":
+                        base_prob_pred = prob_pred
                         prob_pred = self._calibrate_proba(X)
                     else:
+                        base_prob_pred = prob_pred
                         self._apply_calibration(prob_pred, y)
                         prob_pred = self._calibrate_proba(prob_pred)
 
@@ -1215,8 +1220,18 @@ class ClassificationConformalPredictor:
                     }
                     self.meta_model = model_class(**parameters)
 
-                    X_meta = X
-                    X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+                    feature_importances = self.model.feature_importances_
+                    sorted_idx = np.argsort(feature_importances)[::-1]
+                    top_features = X.columns[sorted_idx[:self.n_top_features]]
+
+                    X_meta = X[top_features]
+
+                    if self.calibration_method is not None:
+                        X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
+                        X_meta["base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                    else:
+                        X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+
                     self.meta_model.fit(X_meta, (predictions == y).astype(int))
                     del X_meta
 
@@ -1346,12 +1361,24 @@ class ClassificationConformalPredictor:
             # Apply calibration
             if self.calibration_method is not None:
                 if self.calibration_method == "venn_abers":
+                    base_prob_pred = prob_pred
                     prob_pred = self._calibrate_proba(X)
                 else:
+                    base_prob_pred = prob_pred
                     prob_pred = self._calibrate_proba(prob_pred)
 
-            X_meta = X
-            X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+            feature_importances = self.model.feature_importances_
+            sorted_idx = np.argsort(feature_importances)[::-1]
+            top_features = X.columns[sorted_idx[:self.n_top_features]]
+
+            X_meta = X[top_features]
+
+            if self.calibration_method is not None:
+                X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
+                X_meta["base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+            else:
+                X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+
             meta_pos_probs = self.meta_model.predict_proba(X_meta)[:, 1]
             del X_meta
 

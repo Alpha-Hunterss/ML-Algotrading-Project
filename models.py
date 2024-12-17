@@ -1265,10 +1265,10 @@ class ClassificationConformalPredictor:
                     y_meta = (predictions == y).astype(int)
 
                     if self.calibration_method is not None:
-                        X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                        X_meta["base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                        X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)
+                        X_meta.loc[:, "base_model's_calib_probs"] = np.max(prob_pred, axis=1)
                     else:
-                        X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+                        X_meta.loc[:, "base_model's_probs"] = np.max(prob_pred, axis=1)
 
                     self.meta_model.fit(X_meta, y_meta)
 
@@ -1416,10 +1416,10 @@ class ClassificationConformalPredictor:
             X_meta = X[top_features]
 
             if self.calibration_method is not None:
-                X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                X_meta["base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)
+                X_meta.loc[:, "base_model's_calib_probs"] = np.max(prob_pred, axis=1)
             else:
-                X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+                X_meta.loc[:, "base_model's_probs"] = np.max(prob_pred, axis=1)
 
             meta_probs = self.meta_model.predict_proba(X_meta)
 

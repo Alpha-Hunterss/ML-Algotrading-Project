@@ -8,7 +8,7 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.ensemble import RandomForestClassifier, BaseEnsemble
 from sklearn.utils._param_validation import Interval, RealNotInt
-from sklearn.utils.validation import _check_sample_weight, check_is_fitted
+from sklearn.utils.validation import _check_sample_weight, check_is_fitted, _get_feature_names
 from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils import check_random_state, compute_sample_weight
 from sklearn.utils.parallel import Parallel, delayed
@@ -527,6 +527,8 @@ class XGBForestClassifier(BaseEnsemble):
             X, y = self._validate_data(
                 X, y, multi_output=False, accept_sparse="csc", dtype=np.float32
             )
+        else:
+            self.feature_names_in_ = _get_feature_names(np_X)
 
         # Validate sample weights
         if sample_weight is not None:
@@ -671,6 +673,7 @@ class XGBForestClassifier(BaseEnsemble):
         if self.use_cudf:
             del np_X
             del np_y
+            del _
 
         # Decapsulate classes_ attributes
         if hasattr(self, "classes_"):

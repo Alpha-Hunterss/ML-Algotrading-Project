@@ -43,6 +43,7 @@ def main(
             confidence_levels = man_params["confidence_levels"]
             # Output Model:
             save_model_mode = man_params["save_model_mode"]
+            use_cudf = man_params["use_cudf"]
 
             n_rand_features = man_params['n_rand_features']
             # Split Data & Time Series Cross Validation:
@@ -74,6 +75,7 @@ def main(
                 "rstd_window_size",
                 "confidence_levels",
                 "save_model_mode",
+                "use_cudf",
                 "feature_set",
                 "imp_features",
                 "drop_features_conf",
@@ -106,6 +108,7 @@ def main(
             confidence_levels = wandb.config.confidence_levels
             # Output Model:
             save_model_mode = wandb.config.save_model_mode
+            use_cudf = wandb.config.use_cudf
             # Feature Selection & Transform:
             n_rand_features = wandb.config.n_rand_features
             # Split Data & Time Series Cross Validation:
@@ -181,6 +184,7 @@ def main(
             folds,
             model=clf,
             model_name=model_name,
+            use_cudf=use_cudf,
             cnf_levels=confidence_levels,
             early_stopping_rounds=early_stopping_rounds,
             df_raw_backtest=df_raw_backtest,

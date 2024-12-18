@@ -95,6 +95,9 @@ def quant_CV(
         import cudf
 
         cudf_df = cudf.from_pandas(df)
+        for col in cudf_df.columns:
+            if cudf_df[col].dtype == "bool":
+                cudf_df[col] = cudf_df[col].astype("int8")
 
     for i in list(folds.keys()):
         print(f"Fold {i}:")

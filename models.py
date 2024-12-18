@@ -502,6 +502,7 @@ class XGBForestClassifier(BaseEnsemble):
         self.gamma = gamma
         self.n_samples = None
         self.n_samples_bootstrap = None
+        self.use_cudf = False
 
     def fit(self, X, y, sample_weight=None):
         """
@@ -513,42 +514,70 @@ class XGBForestClassifier(BaseEnsemble):
         if issparse(y):
             raise ValueError("Sparse multilabel-indicator for y is not supported.")
 
+        if self.device == 'cuda':
+            import cudf
+
+            if isinstance(X, cudf.DataFrame):
+                self.use_cudf = True
+                np_X = X.to_numpy()
+                np_y = y.to_numpy()
+
         # Validate input data
-        X, y = self._validate_data(
-            X, y, multi_output=False, accept_sparse="csc", dtype=np.float32
-        )
+        if not self.use_cudf:
+            X, y = self._validate_data(
+                X, y, multi_output=False, accept_sparse="csc", dtype=np.float32
+            )
 
         # Validate sample weights
         if sample_weight is not None:
-            sample_weight = _check_sample_weight(sample_weight, X)
+            if self.use_cudf:
+                sample_weight = _check_sample_weight(sample_weight, np_X)
+            else:
+                sample_weight = _check_sample_weight(sample_weight, X)
 
         # Transform `y` appropriately
-        y = np.atleast_1d(y)
-        if y.ndim == 2:
-            if y.shape[1] > 1:
-                raise ValueError("XGBoost doesn't support multi-output target data.")
-            if y.shape[1] == 1:
-                y = np.ravel(y)  # Flatten to (n_samples,)
+        if not self.use_cudf:
+            y = np.atleast_1d(y)
+            if y.ndim == 2:
+                if y.shape[1] > 1:
+                    raise ValueError("XGBoost doesn't support multi-output target data.")
+                if y.shape[1] == 1:
+                    y = np.ravel(y)  # Flatten to (n_samples,)
 
         # Validate Poisson objective requirements
-        if self.objective == "count:poisson":
-            if np.any(y < 0):
-                raise ValueError(
-                    "y contains negative values, which are not allowed for Poisson regression."
-                )
-            if np.sum(y) <= 0:
-                raise ValueError(
-                    "Sum of y must be strictly positive for Poisson regression."
-                )
+        if self.use_cudf:
+            if self.objective == "count:poisson":
+                if np.any(np_y < 0):
+                    raise ValueError(
+                        "y contains negative values, which are not allowed for Poisson regression."
+                    )
+                if np.sum(np_y) <= 0:
+                    raise ValueError(
+                        "Sum of y must be strictly positive for Poisson regression."
+                    )
+        else:
+            if self.objective == "count:poisson":
+                if np.any(y < 0):
+                    raise ValueError(
+                        "y contains negative values, which are not allowed for Poisson regression."
+                    )
+                if np.sum(y) <= 0:
+                    raise ValueError(
+                        "Sum of y must be strictly positive for Poisson regression."
+                    )
 
         self.n_samples = y.shape[0]
 
         # Validate y data and class_weight
-        y, expanded_class_weight = self._validate_y_class_weight(y)
+        if self.use_cudf:
+            _, expanded_class_weight = self._validate_y_class_weight(np_y)
+        else:
+            y, expanded_class_weight = self._validate_y_class_weight(y)
 
         # Ensure `y` is contiguous and of correct dtype
-        if not y.flags.contiguous or y.dtype != np.float32:
-            y = np.ascontiguousarray(y, dtype=np.float32)
+        if not self.use_cudf:
+            if not y.flags.contiguous or y.dtype != np.float32:
+                y = np.ascontiguousarray(y, dtype=np.float32)
 
         if expanded_class_weight is not None:
             if sample_weight is not None:
@@ -597,9 +626,15 @@ class XGBForestClassifier(BaseEnsemble):
                 if self.class_weight == "subsample":
                     with catch_warnings():
                         simplefilter("ignore", DeprecationWarning)
-                        curr_sample_weight *= compute_sample_weight("auto", y, indices=indices)
+                        if self.use_cudf:
+                            curr_sample_weight *= compute_sample_weight("auto", np_y, indices=indices)
+                        else:
+                            curr_sample_weight *= compute_sample_weight("auto", y, indices=indices)
                 elif self.class_weight == "balanced_subsample":
-                    curr_sample_weight *= compute_sample_weight("balanced", y, indices=indices)
+                    if self.use_cudf:
+                        curr_sample_weight *= compute_sample_weight("balanced", np_y, indices=indices)
+                    else:
+                        curr_sample_weight *= compute_sample_weight("balanced", y, indices=indices)
 
                 estimator.fit(X, y, sample_weight=curr_sample_weight)
             else:
@@ -631,6 +666,11 @@ class XGBForestClassifier(BaseEnsemble):
             delayed(train_estimator)(rs, idx)
             for idx, rs in enumerate(random_states)
         )
+
+        # Delete intermediate arrays
+        if self.use_cudf:
+            del np_X
+            del np_y
 
         # Decapsulate classes_ attributes
         if hasattr(self, "classes_"):
@@ -787,7 +827,8 @@ class XGBForestClassifier(BaseEnsemble):
         """
         check_is_fitted(self)
         # Check data
-        X = self._validate_X_predict(X)
+        if not self.use_cudf:
+            X = self._validate_X_predict(X)
 
         # Assign chunk of trees to jobs
         n_jobs, _, _ = _partition_estimators(self.n_estimators, self.n_jobs)

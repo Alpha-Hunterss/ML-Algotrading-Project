@@ -8,7 +8,7 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.ensemble import RandomForestClassifier, BaseEnsemble
 from sklearn.utils._param_validation import Interval, RealNotInt
-from sklearn.utils.validation import _check_sample_weight, check_is_fitted, _get_feature_names
+from sklearn.utils.validation import _check_sample_weight, check_is_fitted
 from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils import check_random_state, compute_sample_weight
 from sklearn.utils.parallel import Parallel, delayed
@@ -211,6 +211,56 @@ def stratified_train_test_split(X, y, test_size=0.2, random_state=None):
         y_train, y_test = y[train_indices], y[test_indices]
 
     return X_train, X_test, y_train, y_test
+
+
+def _get_cudf_feature_names(X, cudf_type):
+    """
+    Get feature names from a CuDF DataFrame.
+
+    Parameters
+    ----------
+    X : cudf.DataFrame of shape (n_samples, n_features)
+        CuDF DataFrame to extract feature names.
+
+        - CuDF DataFrame: The columns will be considered to be feature
+          names. If the DataFrame contains non-string feature names, a `TypeError`
+          will be raised.
+        - All other input types will return `None`.
+
+    Returns
+    -------
+    feature_names : ndarray or None
+        Feature names of `X`. If input is not a CuDF DataFrame or feature names
+        are mixed types, `None` is returned or an error is raised.
+    """
+    feature_names = None
+
+    if isinstance(X, cudf_type):
+        # Extract column names
+        feature_names = np.asarray(X.columns, dtype=object)
+
+        if feature_names is None or len(feature_names) == 0:
+            return None
+
+        # Check types of feature names
+        types = sorted(t.__qualname__ for t in set(type(v) for v in feature_names))
+
+        # Mixed types of string and non-string are not supported
+        if len(types) > 1 and "str" in types:
+            raise TypeError(
+                "Feature names are only supported if all input features have string names, "
+                f"but your input has {types} as feature name / column name types. "
+                "If you want feature names to be stored and validated, you must convert "
+                "them all to strings, by using X.columns = X.columns.astype(str) for "
+                "example. Otherwise you can remove feature / column names from your input "
+                "data, or convert them all to a non-string data type."
+            )
+
+        # Only feature names of all strings are supported
+        if len(types) == 1 and types[0] == "str":
+            return feature_names
+
+    return None
 
 
 @runtime_checkable
@@ -503,6 +553,7 @@ class XGBForestClassifier(BaseEnsemble):
         self.n_samples = None
         self.n_samples_bootstrap = None
         self.use_cudf = False
+        self.feature_names_in_ = None
 
     def fit(self, X, y, sample_weight=None):
         """
@@ -528,7 +579,7 @@ class XGBForestClassifier(BaseEnsemble):
                 X, y, multi_output=False, accept_sparse="csc", dtype=np.float32
             )
         else:
-            self.feature_names_in_ = _get_feature_names(np_X)
+            self.feature_names_in_ = _get_cudf_feature_names(X, cudf.DataFrame)
 
         # Validate sample weights
         if sample_weight is not None:

@@ -68,7 +68,7 @@ def cal_aggregated_evals(evals_df: pd.DataFrame, set_name: str):
         set_eval_dict.update(
             {
                 f"train_duration_{set_name}": int(
-                    evals_df.train_duration.split('+').apply(
+                    evals_df.train_duration.str.split('+').apply(
                         lambda x: float(x[0]) + float(x[1])
                     ).mean()
                 )

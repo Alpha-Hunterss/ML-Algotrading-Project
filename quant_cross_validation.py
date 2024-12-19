@@ -253,12 +253,12 @@ def quant_CV(
                 "test_dates": "test"}
                 df.loc[folds[i][set_name], "K"] = i
                 df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] = y_pred
-                if use_cudf:
-                    proba_pred = model.predict_proba(
-                        cudf_df.loc[cudf_df.index.isin(folds[i][set_name].to_list())][input_cols]
-                    )
-                else:
-                    proba_pred = model.predict_proba(df.loc[folds[i][set_name]][input_cols])
+                # if use_cudf:
+                #     proba_pred = model.predict_proba(
+                #         cudf_df.loc[cudf_df.index.isin(folds[i][set_name].to_list())][input_cols]
+                #     )
+                # else:
+                #     proba_pred = model.predict_proba(df.loc[folds[i][set_name]][input_cols])
 
                 if use_cudf:
                     if is_cf_model:
@@ -314,13 +314,13 @@ def quant_CV(
                                 "confidence_levels"
                             ] = confidence_levels
 
-                if np.shape(proba_pred)[1] > 1:
-                    df.loc[
-                        folds[i][set_name], f"pred_{pred_name[set_name]}_proba"
-                    ] = proba_pred[:, 1]
-                else:
-                    print("Proba doesn't have class1")
-                    df.loc[folds[i][set_name], f"pred_{pred_name[set_name]}_proba"] = 0
+                # if np.shape(proba_pred)[1] > 1:
+                #     df.loc[
+                #         folds[i][set_name], f"pred_{pred_name[set_name]}_proba"
+                #     ] = proba_pred[:, 1]
+                # else:
+                #     print("Proba doesn't have class1")
+                #     df.loc[folds[i][set_name], f"pred_{pred_name[set_name]}_proba"] = 0
 
                 # Calculate n_unique days and max daily n_signals in each fold
                 fold_unique_days = pd.Series(df.loc[folds[i][set_name]].loc[
@@ -366,7 +366,6 @@ def quant_CV(
 
                 fold_profit_percent = bt_report['profit_percent']
                 fold_max_dd = bt_report['max_draw_down']
-
 
                 del bt_df, bt_report
                 gc.collect()

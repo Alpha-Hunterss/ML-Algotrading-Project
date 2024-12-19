@@ -4,7 +4,6 @@ import inspect
 import threading
 import wandb
 from sklearn import clone
-from sklearn.isotonic import IsotonicRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.ensemble import RandomForestClassifier, BaseEnsemble
 from sklearn.utils._param_validation import Interval, RealNotInt

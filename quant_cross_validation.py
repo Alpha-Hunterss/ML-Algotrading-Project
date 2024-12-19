@@ -210,6 +210,7 @@ def quant_CV(
         gc.collect()
         # repetetive part I can improve by a function
         for set_name in ["train_dates", "valid_dates", "test_dates"]:
+            ping = time.time()
             set_name_dict = {
                 "train_dates": "train",
                 "valid_dates": "valid",
@@ -362,7 +363,7 @@ def quant_CV(
                         bt_column_name = bt_column_name,
                         swap_rate= swap_rate,
                     )
-                
+
                 fold_profit_percent = bt_report['profit_percent']
                 fold_max_dd = bt_report['max_draw_down']
 
@@ -374,12 +375,18 @@ def quant_CV(
                 fold_max_dd = None
                 fold_unique_days = None
                 fold_max_daily_sig = None
-            
+
+            pong = time.time()
+
+            if set_name == "train_dates":
+                time_taken = f"{round(toc - tic, 1)} + {round(pong - ping, 1)}"
+            else:
+                time_taken = str(round(pong - ping, 1))
+
             eval_list = (
                 [set_name_dict[set_name], i]
                 + cal_eval(y_real=y_real, y_pred=y_pred)
-                + min_max_dates[set_name]
-                + [str(round(toc - tic, 1))]
+                + [min_max_dates[set_name], time_taken]
                 + [fold_profit_percent, fold_max_dd]
                 + [fold_unique_days,fold_max_daily_sig]
             )

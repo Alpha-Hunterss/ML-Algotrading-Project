@@ -5,7 +5,7 @@ from quant_cross_validation import split_time_series, quant_CV
 from ETL import ETL
 from save_model import train_model_to_save
 import matplotlib.pyplot as plt
-from utils.general_utils import eval_summerize_dict
+from utils.general_utils import eval_summerize_dict, process_train_duration
 from utils.wandb_utils import evals_logger
 from utils.evaluation_utils import cal_aggregated_evals
 from backtest_funcs import cal_backtest_on_raw_cndl
@@ -235,14 +235,14 @@ def main(
 
             "val_predictions": val_predictions,
             "test_predictions": test_predictions,
-            
+
             "evals": evals,
             "raw_agg_evals": raw_aggregated_evals,
 
             "input_cols": input_cols_and_type,
             "feature_importance_df": importance_df.sort_values("mean_importance", ascending=False),
 
-            "train_duration_mean_fold": evals["train_duration"].astype(float).mean(),
+            "train_duration_mean_fold": evals["train_duration"].apply(process_train_duration).mean(),
 
         }
         exp_metadata = {

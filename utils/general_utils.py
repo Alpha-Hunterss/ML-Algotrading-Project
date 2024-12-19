@@ -101,3 +101,10 @@ def cal_eval(y_real, y_pred):
         fn,
     ]
     return eval_list
+
+def process_train_duration(duration_str):
+    if '+' in duration_str:
+        parts = duration_str.split('+')
+        return float(parts[0]) + float(parts[1])
+    else:
+        return float(duration_str)

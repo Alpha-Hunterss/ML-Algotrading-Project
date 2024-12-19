@@ -386,7 +386,8 @@ def quant_CV(
             eval_list = (
                 [set_name_dict[set_name], i]
                 + cal_eval(y_real=y_real, y_pred=y_pred)
-                + [min_max_dates[set_name], time_taken]
+                + min_max_dates[set_name]
+                + [time_taken]
                 + [fold_profit_percent, fold_max_dd]
                 + [fold_unique_days,fold_max_daily_sig]
             )
@@ -411,7 +412,7 @@ def quant_CV(
             )
         general_backtest_report[f"profit_percent_{pred_name}"] = bt_report['profit_percent']
         general_backtest_report[f"max_dd_{pred_name}"] = bt_report['max_draw_down']
-    
+
     print('CV loop ends')
     print(general_backtest_report)
 
@@ -424,7 +425,7 @@ def quant_CV(
     importance_df['mean_importance'] = importance_df[imp_cols].mean(axis=1)
     importance_df['median_importance'] = importance_df[imp_cols].median(axis=1)
     importance_df['std_importance'] = importance_df[imp_cols].std(axis=1)
-    
+
     # Calculate coefficient of variation (CV)
     importance_df['cv'] = importance_df['std_importance'] / importance_df['mean_importance']
     importance_df.sort_values('mean_importance', ascending=False, inplace=True)

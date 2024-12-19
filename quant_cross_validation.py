@@ -216,34 +216,34 @@ def quant_CV(
                 "valid_dates": "valid",
                 "test_dates": "test",
             }
-            if use_cudf:
-                if is_cf_model:
-                    preds, _ = model.predict(
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i][set_name].to_list())
-                        ][input_cols],
-                        cudf_df.loc[cudf_df.index.isin(folds[i][set_name].to_list())]["target"],
-                        set_name_dict[set_name]
-                    )
-                    y_pred = preds.reshape(-1, 1)
-                else:
-                    y_pred = model.predict(cudf_df.loc[
-                        cudf_df.index.isin(folds[i][set_name].to_list())
-                    ][input_cols]).reshape(
-                        -1, 1
-                    )
+            # if use_cudf:
+            #     if is_cf_model:
+            #         preds, _ = model.predict(
+            #             cudf_df.loc[
+            #                 cudf_df.index.isin(folds[i][set_name].to_list())
+            #             ][input_cols],
+            #             cudf_df.loc[cudf_df.index.isin(folds[i][set_name].to_list())]["target"],
+            #             set_name_dict[set_name]
+            #         )
+            #         y_pred = preds.reshape(-1, 1)
+            #     else:
+            #         y_pred = model.predict(cudf_df.loc[
+            #             cudf_df.index.isin(folds[i][set_name].to_list())
+            #         ][input_cols]).reshape(
+            #             -1, 1
+            #         )
+            # else:
+            if is_cf_model:
+                preds, _ = model.predict(
+                    df.loc[folds[i][set_name]][input_cols],
+                    df.loc[folds[i][set_name]]["target"],
+                    set_name_dict[set_name]
+                )
+                y_pred = preds.reshape(-1, 1)
             else:
-                if is_cf_model:
-                    preds, _ = model.predict(
-                        df.loc[folds[i][set_name]][input_cols],
-                        df.loc[folds[i][set_name]]["target"],
-                        set_name_dict[set_name]
-                    )
-                    y_pred = preds.reshape(-1, 1)
-                else:
-                    y_pred = model.predict(df.loc[folds[i][set_name]][input_cols]).reshape(
-                        -1, 1
-                    )
+                y_pred = model.predict(df.loc[folds[i][set_name]][input_cols]).reshape(
+                    -1, 1
+                )
 
             y_real = df.loc[folds[i][set_name]][["target"]]
 

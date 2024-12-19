@@ -27,7 +27,7 @@ def cal_aggregated_evals(evals_df: pd.DataFrame, set_name: str):
     evals_df_ex0 = evals_df.loc[mask]
 
     set_eval_dict = {
-        
+
         f"signal_count_median_{set_name}" : evals_df.TP.median() + evals_df.FP.median(),
         f"signal_count_mean_{set_name}" : evals_df.TP.mean() + evals_df.FP.mean(),
         f"signal_count_min_{set_name}" : evals_df.TP.min() + evals_df.FP.min(),
@@ -65,6 +65,14 @@ def cal_aggregated_evals(evals_df: pd.DataFrame, set_name: str):
         set_eval_dict.update(backtest_eval_dict)
 
     elif set_name == 'train':
-        set_eval_dict.update({f"train_duration_{set_name}": int(evals_df.train_duration.astype("float").mean())})
+        set_eval_dict.update(
+            {
+                f"train_duration_{set_name}": int(
+                    evals_df.train_duration.split('+').apply(
+                        lambda x: float(x[0]) + float(x[1])
+                    ).mean()
+                )
+            }
+        )
 
     return set_eval_dict

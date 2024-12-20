@@ -141,16 +141,29 @@ def _partition_estimators(n_estimators, n_jobs):
     return n_jobs, n_estimators_per_job.tolist(), [0] + starts.tolist()
 
 
-def _accumulate_prediction(predict, X, out, lock):
+def _accumulate_prediction(predict, X, out, lock, stream=None):
     """
     This is a utility function for joblib's Parallel."""
-    prediction = predict(X)
-    with lock:
-        if len(out) == 1:
-            out[0] += prediction
-        else:
-            for i in range(len(out)):
-                out[i] += prediction[i]
+    if stream is not None:
+        with stream:
+            prediction = predict(X)
+
+            with lock:
+                if len(out) == 1:
+                    out[0] += prediction
+                else:
+                    for i in range(len(out)):
+                        out[i] += prediction[i]
+
+    else:
+        prediction = predict(X)
+
+        with lock:
+            if len(out) == 1:
+                out[0] += prediction
+            else:
+                for i in range(len(out)):
+                    out[i] += prediction[i]
 
 
 def stratified_train_test_split(X, y, test_size=0.2, random_state=None):
@@ -892,10 +905,33 @@ class XGBForestClassifier(BaseEnsemble):
             for j in np.atleast_1d(self.n_classes_)
         ]
         lock = threading.Lock()
-        Parallel(n_jobs=n_jobs, verbose=self.verbose, require="sharedmem")(
-            delayed(_accumulate_prediction)(e.predict_proba, X, all_proba, lock)
-            for e in self.estimators_
-        )
+
+        if self.use_cudf:
+            import cupy as cp
+
+            streams = [cp.cuda.Stream() for _ in self.estimators_]
+            threads = []
+
+            for e, stream in zip(self.estimators_, streams):
+                thread = threading.Thread(
+                    target=_accumulate_prediction,
+                    args=(e.predict_proba, X, all_proba, lock, stream),
+                )
+                threads.append(thread)
+                thread.start()
+
+            # Wait for all threads to complete
+            for thread in threads:
+                thread.join()
+
+            # Ensure all streams are synchronized
+            for stream in streams:
+                stream.synchronize()
+        else:
+            Parallel(n_jobs=n_jobs, verbose=self.verbose, require="sharedmem")(
+                delayed(_accumulate_prediction)(e.predict_proba, X, all_proba, lock)
+                for e in self.estimators_
+            )
 
         for proba in all_proba:
             proba /= len(self.estimators_)

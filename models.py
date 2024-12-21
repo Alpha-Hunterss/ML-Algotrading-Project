@@ -1431,7 +1431,7 @@ class ClassificationConformalPredictor:
                         y_meta = (predictions == y).astype(int)
                     y_temp = y_meta.copy()
 
-                    if self.classes_ == [0, 1]:
+                    if list(self.classes_) == [0, 1]:
                         self.meta_pos_label_perc = round((np.sum(y_meta) / y_meta.size) * 100, 2)
 
                     if self.use_cudf:

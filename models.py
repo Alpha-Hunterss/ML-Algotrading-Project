@@ -154,7 +154,7 @@ def _accumulate_prediction(predict, X, out, lock):
                 out[i] += prediction[i]
 
 
-def stratified_train_test_split(X, y, test_size=0.2, random_state=None):
+def stratified_train_test_split(X, y, addi_y=None, use_cudf=False, test_size=0.2, random_state=None):
     """
     Randomly splits data into train and test sets using stratified sampling 
     to preserve label distribution.
@@ -175,13 +175,16 @@ def stratified_train_test_split(X, y, test_size=0.2, random_state=None):
     rng = np.random.default_rng(seed=random_state)
 
     # Convert pandas objects to numpy if necessary
-    if isinstance(X, (pd.DataFrame, pd.Series)):
+    if isinstance(X, (pd.DataFrame, pd.Series)) or use_cudf:
         X = X.reset_index(drop=True)  # Reset indices for consistency
-    if isinstance(y, pd.Series):
+    if isinstance(y, pd.Series) or use_cudf:
         y = y.reset_index(drop=True)
 
     # Unique classes and their indices
-    unique_classes, class_indices = np.unique(y, return_inverse=True)
+    if use_cudf:
+        unique_classes, class_indices = np.unique(addi_y, return_inverse=True)
+    else:
+        unique_classes, class_indices = np.unique(y, return_inverse=True)
     test_indices = []
 
     # For each class, determine the test indices
@@ -203,9 +206,12 @@ def stratified_train_test_split(X, y, test_size=0.2, random_state=None):
     train_indices = np.setdiff1d(np.arange(len(X)), test_indices)
 
     # Use iloc for pandas and direct indexing for numpy
-    if isinstance(X, (pd.DataFrame, pd.Series)):
+    if isinstance(X, (pd.DataFrame, pd.Series)) or use_cudf:
         X_train, X_test = X.iloc[train_indices], X.iloc[test_indices]
-        y_train, y_test = y.iloc[train_indices], y.iloc[test_indices]
+        if use_cudf:
+            y_train, y_test = y.iloc[train_indices], test_indices
+        else:
+            y_train, y_test = y.iloc[train_indices], y.iloc[test_indices]
     else:
         X_train, X_test = X[train_indices], X[test_indices]
         y_train, y_test = y[train_indices], y[test_indices]
@@ -1002,9 +1008,11 @@ class ClassificationConformalPredictor:
         self.apply_calibs = apply_calibs
         self.random_state = random_state
         self.calibration_scores = {}
+        self.use_cudf = False
         self.classes_ = None
         self.calibrator = None
         self.meta_calibrator = None
+        self.meta_pos_label_perc = None
 
     def _apply_calibration(self, prob_pred, y_calib, model=None):
         """
@@ -1137,7 +1145,8 @@ class ClassificationConformalPredictor:
 
         return params
 
-    def fit(self, X_train, y_train):
+    def fit(self, X_train, y_train, addi_X=None, addi_y=None, use_cudf=False):
+        self.use_cudf = use_cudf
         if self.model is None:
             raise ValueError("Model cannot be None.")
 
@@ -1154,57 +1163,101 @@ class ClassificationConformalPredictor:
             self.model.fit(X_train, y_train)
             self.classes_ = self.model.classes_
 
-            if self.calibration_method == "venn_abers":
-                self._apply_calibration(X_train, y_train)
+            if use_cudf and (addi_X is not None and addi_y is not None):
+                if self.calibration_method == "venn_abers":
+                    self._apply_calibration(addi_X, addi_y)
+            else:
+                if self.calibration_method == "venn_abers":
+                    self._apply_calibration(X_train, y_train)
         else:
             if self.use_cv:
                 kf = StratifiedKFold(
                     n_splits=self.n_folds, shuffle=True, random_state=self.random_state
                 )
-                self.classes_ = np.unique(y_train)
-                self.calibration_scores = {cls: [] for cls in self.classes_}
 
-                for train_idx, calib_idx in kf.split(X_train, y_train):
-                    # Split data
-                    X_proper_train = X_train.iloc[train_idx]
-                    y_proper_train = y_train.iloc[train_idx]
-                    X_calib = X_train.iloc[calib_idx]
-                    y_calib = y_train.iloc[calib_idx]
+                if use_cudf and (addi_X is not None and addi_y is not None):
+                    self.classes_ = np.unique(addi_y)
+                    self.calibration_scores = {cls: [] for cls in self.classes_}
 
-                    # Train model
-                    model_clone = clone(self.model)
-                    model_clone.fit(X_proper_train, y_proper_train)
-                    self.classes_ = model_clone.classes_
+                    for train_idx, calib_idx in kf.split(addi_X, addi_y):
+                        # Split data
+                        X_proper_train = X_train.iloc[train_idx]
+                        y_proper_train = y_train.iloc[train_idx]
+                        X_calib = X_train.iloc[calib_idx]
+                        addi_y_calib = addi_y.iloc[calib_idx]
 
-                    # Get probability predictions of the calibration data
-                    prob_pred = model_clone.predict_proba(X_calib)
+                        # Train model
+                        model_clone = clone(self.model)
+                        model_clone.fit(X_proper_train, y_proper_train)
+                        self.classes_ = model_clone.classes_
 
-                    # Apply calibration
-                    if self.calibration_method is not None and self.calibration_method != "venn_abers":
-                        self._apply_calibration(prob_pred, y_calib)
-                        prob_pred = self._calibrate_proba(prob_pred)
+                        # Get probability predictions of the calibration data
+                        prob_pred = model_clone.predict_proba(X_calib)
 
-                    for cls in self.classes_:
-                        cls_indices = np.where(y_calib == cls)[0]
-                        self.calibration_scores[cls].extend(
-                            1 - prob_pred[
-                                cls_indices, np.where(self.classes_ == cls)[0][0]
-                            ]
-                        )
+                        # Apply calibration
+                        if self.calibration_method is not None and self.calibration_method != "venn_abers":
+                            self._apply_calibration(prob_pred, addi_y_calib)
+                            prob_pred = self._calibrate_proba(prob_pred)
+
+                        for cls in self.classes_:
+                            cls_indices = np.where(addi_y_calib == cls)[0]
+                            self.calibration_scores[cls].extend(
+                                1 - prob_pred[
+                                    cls_indices, np.where(self.classes_ == cls)[0][0]
+                                ]
+                            )
+                else:
+                    self.classes_ = np.unique(y_train)
+                    self.calibration_scores = {cls: [] for cls in self.classes_}
+
+                    for train_idx, calib_idx in kf.split(X_train, y_train):
+                        # Split data
+                        X_proper_train = X_train.iloc[train_idx]
+                        y_proper_train = y_train.iloc[train_idx]
+                        X_calib = X_train.iloc[calib_idx]
+                        y_calib = y_train.iloc[calib_idx]
+
+                        # Train model
+                        model_clone = clone(self.model)
+                        model_clone.fit(X_proper_train, y_proper_train)
+                        self.classes_ = model_clone.classes_
+
+                        # Get probability predictions of the calibration data
+                        prob_pred = model_clone.predict_proba(X_calib)
+
+                        # Apply calibration
+                        if self.calibration_method is not None and self.calibration_method != "venn_abers":
+                            self._apply_calibration(prob_pred, y_calib)
+                            prob_pred = self._calibrate_proba(prob_pred)
+
+                        for cls in self.classes_:
+                            cls_indices = np.where(y_calib == cls)[0]
+                            self.calibration_scores[cls].extend(
+                                1 - prob_pred[
+                                    cls_indices, np.where(self.classes_ == cls)[0][0]
+                                ]
+                            )
 
                 # Fit final model on all data
                 self.model.fit(X_train, y_train)
 
                 # Apply Venn-ABERS
-                if self.calibration_method == "venn_abers" and self.apply_calibs:
-                    self._apply_calibration(X_train, y_train)
+                if use_cudf and (addi_X is not None and addi_y is not None):
+                    if self.calibration_method == "venn_abers" and self.apply_calibs:
+                        self._apply_calibration(addi_X, addi_y)
+                else:
+                    if self.calibration_method == "venn_abers" and self.apply_calibs:
+                        self._apply_calibration(X_train, y_train)
 
             else:
                 # Split data into proper training and calibration sets
                 X_proper_train, X_calib, y_proper_train, y_calib = stratified_train_test_split(
-                    X_train, y_train, test_size=self.calibration_size,
+                    X_train, y_train, addi_y=addi_y, use_cudf=use_cudf, test_size=self.calibration_size,
                     random_state=self.random_state
                 )
+
+                if use_cudf:
+                    y_calib = addi_y.iloc[y_calib]
 
                 # Fit the model on proper training set
                 self.model.fit(X_proper_train, y_proper_train)
@@ -1232,13 +1285,17 @@ class ClassificationConformalPredictor:
                     self.model.fit(X_train, y_train)
 
                 # Apply Venn-ABERS
-                if self.calibration_method == "venn_abers" and self.apply_calibs:
-                    self._apply_calibration(X_train, y_train)
+                if use_cudf and (addi_X is not None and addi_y is not None):
+                    if self.calibration_method == "venn_abers" and self.apply_calibs:
+                        self._apply_calibration(addi_X, addi_y)
+                else:
+                    if self.calibration_method == "venn_abers" and self.apply_calibs:
+                        self._apply_calibration(X_train, y_train)
 
         return self
 
     def predict(
-        self, X, y, set_name, confidence_level=None
+        self, X, y, set_name, addi_X=None, addi_y=None, confidence_level=None
     ) -> Tuple[np.ndarray, List[set] | None]:
         """
         Returns:
@@ -1293,14 +1350,24 @@ class ClassificationConformalPredictor:
                 prediction_sets = None
 
                 # Apply calibration
-                if self.calibration_method is not None:
-                    if self.calibration_method == "venn_abers":
-                        base_prob_pred = prob_pred
-                        prob_pred = self._calibrate_proba(X)
-                    else:
-                        base_prob_pred = prob_pred
-                        self._apply_calibration(prob_pred, y)
-                        prob_pred = self._calibrate_proba(prob_pred)
+                if self.use_cudf:
+                    if self.calibration_method is not None:
+                        if self.calibration_method == "venn_abers":
+                            base_prob_pred = prob_pred
+                            prob_pred = self._calibrate_proba(addi_X)
+                        else:
+                            base_prob_pred = prob_pred
+                            self._apply_calibration(prob_pred, addi_y)
+                            prob_pred = self._calibrate_proba(prob_pred)
+                else:
+                    if self.calibration_method is not None:
+                        if self.calibration_method == "venn_abers":
+                            base_prob_pred = prob_pred
+                            prob_pred = self._calibrate_proba(X)
+                        else:
+                            base_prob_pred = prob_pred
+                            self._apply_calibration(prob_pred, y)
+                            prob_pred = self._calibrate_proba(prob_pred)
 
                 if self.prob_estimator == "meta":
                     if isinstance(self.meta_models_params, dict):
@@ -1358,30 +1425,60 @@ class ClassificationConformalPredictor:
                     top_features = X.columns[sorted_idx[:self.n_top_features]]
 
                     X_meta = X[top_features].copy()
-                    y_meta = (predictions == y).astype(int)
-
-                    if self.calibration_method is not None:
-                        X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                        X_meta.loc[:, "base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                    if self.use_cudf:
+                        y_meta = (predictions == addi_y).astype(int)
                     else:
-                        X_meta.loc[:, "base_model's_probs"] = np.max(prob_pred, axis=1)
+                        y_meta = (predictions == y).astype(int)
+                    y_temp = y_meta.copy()
+
+                    if self.classes_ == [0, 1]:
+                        self.meta_pos_label_perc = round((np.sum(y_meta) / y_meta.size) * 100, 2)
+
+                    if self.use_cudf:
+                        import cudf
+
+                        y_meta = cudf.Series(y_meta)
+
+                        if self.calibration_method is not None:
+                            X_meta.loc[:, "base_model's_probs"] = cudf.Series(np.max(base_prob_pred, axis=1))
+                            X_meta.loc[:, "base_model's_calib_probs"] = cudf.Series(np.max(prob_pred, axis=1))
+                        else:
+                            X_meta.loc[:, "base_model's_probs"] = cudf.Series(np.max(prob_pred, axis=1))
+                    else:
+                        if self.calibration_method is not None:
+                            X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)
+                            X_meta.loc[:, "base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                        else:
+                            X_meta.loc[:, "base_model's_probs"] = np.max(prob_pred, axis=1)
 
                     self.meta_model.fit(X_meta, y_meta)
 
-                    if self.calibrate_meta and self.calibration_method == "venn_abers":
-                        self._apply_calibration(X_meta, y_meta, model="meta")
+                    if self.use_cudf:
+                        if self.calibrate_meta and self.calibration_method == "venn_abers":
+                            self._apply_calibration(X_meta.to_pandas(), y_temp, model="meta")
+                    else:
+                        if self.calibrate_meta and self.calibration_method == "venn_abers":
+                            self._apply_calibration(X_meta, y_meta, model="meta")
 
                     del X_meta
                     del y_meta
+                    del y_temp
                 else:
                     # Calculate nonconformity scores per class
                     self.calibration_scores = {cls: [] for cls in self.classes_}
 
-                    for cls in self.classes_:
-                        cls_indices = np.where(y == cls)[0]
-                        self.calibration_scores[cls] = 1 - prob_pred[
-                            cls_indices, np.where(self.classes_ == cls)[0][0]
-                        ]
+                    if self.use_cudf:
+                        for cls in self.classes_:
+                            cls_indices = np.where(addi_y == cls)[0]
+                            self.calibration_scores[cls] = 1 - prob_pred[
+                                cls_indices, np.where(self.classes_ == cls)[0][0]
+                            ]
+                    else:
+                        for cls in self.classes_:
+                            cls_indices = np.where(y == cls)[0]
+                            self.calibration_scores[cls] = 1 - prob_pred[
+                                cls_indices, np.where(self.classes_ == cls)[0][0]
+                            ]
 
             else: # set_name == test
                 if confidence_level is not None:
@@ -1397,7 +1494,10 @@ class ClassificationConformalPredictor:
                 if self.apply_calibs:
                     # Get probability predictions
                     if self.calibration_method == "venn_abers":
-                        prob_pred = self._calibrate_proba(X)
+                        if self.use_cudf:
+                            prob_pred = self._calibrate_proba(addi_X)
+                        else:
+                            prob_pred = self._calibrate_proba(X)
                     else:
                         prob_pred = self._calibrate_proba(self.model.predict_proba(X))
 
@@ -1412,7 +1512,10 @@ class ClassificationConformalPredictor:
 
                     # Calibrate probabilities
                     if self.calibration_method == "venn_abers":
-                        prob_pred = self._calibrate_proba(X)
+                        if self.use_cudf:
+                            prob_pred = self._calibrate_proba(addi_X)
+                        else:
+                            prob_pred = self._calibrate_proba(X)
                     else:
                         prob_pred = self._calibrate_proba(prob_pred)
 
@@ -1442,7 +1545,10 @@ class ClassificationConformalPredictor:
             if self.apply_calibs:
                 # Get probability predictions
                 if self.calibration_method == "venn_abers":
-                    prob_pred = self._calibrate_proba(X)
+                    if self.use_cudf:
+                        prob_pred = self._calibrate_proba(addi_X)
+                    else:
+                        prob_pred = self._calibrate_proba(X)
                 else:
                     prob_pred = self._calibrate_proba(self.model.predict_proba(X))
 
@@ -1477,7 +1583,7 @@ class ClassificationConformalPredictor:
         return predictions, prediction_sets
 
     def categorize_proba(
-            self, X, y, confidence_levels: List[float]
+            self, X, y, confidence_levels: List[float], addi_X=None, addi_y=None
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Categorizes predictions based on the range of confidence levels at which they remain stable.
@@ -1500,7 +1606,10 @@ class ClassificationConformalPredictor:
             if self.calibration_method is not None:
                 if self.calibration_method == "venn_abers":
                     base_prob_pred = prob_pred
-                    prob_pred = self._calibrate_proba(X)
+                    if self.use_cudf:
+                        prob_pred = self._calibrate_proba(addi_X)
+                    else:
+                        prob_pred = self._calibrate_proba(X)
                 else:
                     base_prob_pred = prob_pred
                     prob_pred = self._calibrate_proba(prob_pred)
@@ -1511,11 +1620,20 @@ class ClassificationConformalPredictor:
 
             X_meta = X[top_features].copy()
 
-            if self.calibration_method is not None:
-                X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                X_meta.loc[:, "base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+            if self.use_cudf:
+                import cudf
+
+                if self.calibration_method is not None:
+                    X_meta.loc[:, "base_model's_probs"] = cudf.Series(np.max(base_prob_pred, axis=1))
+                    X_meta.loc[:, "base_model's_calib_probs"] = cudf.Series(np.max(prob_pred, axis=1))
+                else:
+                    X_meta.loc[:, "base_model's_probs"] = cudf.Series(np.max(prob_pred, axis=1))
             else:
-                X_meta.loc[:, "base_model's_probs"] = np.max(prob_pred, axis=1)
+                if self.calibration_method is not None:
+                    X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)
+                    X_meta.loc[:, "base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                else:
+                    X_meta.loc[:, "base_model's_probs"] = np.max(prob_pred, axis=1)
 
             meta_probs = self.meta_model.predict_proba(X_meta)
 
@@ -1524,9 +1642,15 @@ class ClassificationConformalPredictor:
                     raise ValueError("Input data y cannot be empty.")
 
                 if self.calibration_method == "venn_abers":
-                    meta_probs = self._calibrate_proba(X_meta, model="meta")
+                    if self.use_cudf:
+                        meta_probs = self._calibrate_proba(X_meta.to_pandas(), model="meta")
+                    else:
+                        meta_probs = self._calibrate_proba(X_meta, model="meta")
                 else:
-                    self._apply_calibration(meta_probs, (predictions == y).astype(int), model="meta")
+                    if self.use_cudf:
+                        self._apply_calibration(meta_probs, (predictions == addi_y).astype(int), model="meta")
+                    else:
+                        self._apply_calibration(meta_probs, (predictions == y).astype(int), model="meta")
                     meta_probs = self._calibrate_proba(meta_probs, model="meta")
 
             del X_meta
@@ -1549,7 +1673,9 @@ class ClassificationConformalPredictor:
             prediction_sets_per_level = []
 
             for cl in confidence_levels:
-                predictions, prediction_sets = self.predict(X, None, "test", confidence_level=cl)
+                predictions, prediction_sets = self.predict(
+                    X, None, "test", addi_X=addi_X, addi_y=addi_y, confidence_level=cl
+                )
                 prediction_sets_per_level.append(prediction_sets)
 
             # Determine confidence range for each prediction
@@ -1578,12 +1704,15 @@ class ClassificationConformalPredictor:
 
         return predictions, confidence_level_range
 
-    def predict_proba(self, X):
+    def predict_proba(self, X, addi_X=None):
         """
         Just for compatibility"""
         if self.apply_calibs:
             if self.calibration_method == "venn_abers":
-                prob_pred = self._calibrate_proba(X)
+                if self.use_cudf:
+                    prob_pred = self._calibrate_proba(addi_X)
+                else:
+                    prob_pred = self._calibrate_proba(X)
             else:
                 prob_pred = self._calibrate_proba(self.model.predict_proba(X))
         else:

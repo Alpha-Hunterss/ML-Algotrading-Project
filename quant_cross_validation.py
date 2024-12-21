@@ -71,6 +71,7 @@ def quant_CV(
             "max_dd",
             "n_unique_days",
             "n_max_daily_sig",
+            "meta_model_pos_label_perc",
         ]
     )
     df["pred_as_val"] = -1
@@ -134,29 +135,67 @@ def quant_CV(
                     )
                 ]
 
-                model.fit(
-                    cudf_df.loc[
-                        cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                    ].drop(
-                        columns=non_feature_columns
-                    ),
-                    cudf_df.loc[
-                        cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                    ]["target"],
-                    eval_set=eval_set,
-                    verbose = False,
-                )
+                if is_cf_model:
+                    model.fit(
+                        cudf_df.loc[
+                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                        ].drop(
+                            columns=non_feature_columns
+                        ),
+                        cudf_df.loc[
+                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                        ]["target"],
+                        addi_X=df.loc[folds[i]["train_dates"]].drop(
+                            columns=non_feature_columns
+                        ),
+                        addi_y=df.loc[folds[i]["train_dates"]]["target"],
+                        use_cudf=use_cudf,
+                        eval_set=eval_set,
+                        verbose = False,
+                    )
+                else:
+                    model.fit(
+                        cudf_df.loc[
+                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                        ].drop(
+                            columns=non_feature_columns
+                        ),
+                        cudf_df.loc[
+                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                        ]["target"],
+                        eval_set=eval_set,
+                        verbose = False,
+                    )
             else:
-                model.fit(
-                    cudf_df.loc[
-                        cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                    ].drop(
-                        columns=non_feature_columns
-                    ),
-                    cudf_df.loc[
-                        cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                    ]["target"],
-                )
+                if is_cf_model:
+                    model.fit(
+                        cudf_df.loc[
+                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                        ].drop(
+                            columns=non_feature_columns
+                        ),
+                        cudf_df.loc[
+                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                        ]["target"],
+                        addi_X=df.loc[folds[i]["train_dates"]].drop(
+                            columns=non_feature_columns
+                        ),
+                        addi_y=df.loc[folds[i]["train_dates"]]["target"],
+                        use_cudf=use_cudf,
+                        eval_set=eval_set,
+                        verbose = False,
+                    )
+                else:
+                    model.fit(
+                        cudf_df.loc[
+                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                        ].drop(
+                            columns=non_feature_columns
+                        ),
+                        cudf_df.loc[
+                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                        ]["target"],
+                    )
 
         else:
             if early_stopping_rounds is not None:
@@ -223,7 +262,9 @@ def quant_CV(
                             cudf_df.index.isin(folds[i][set_name].to_list())
                         ][input_cols],
                         cudf_df.loc[cudf_df.index.isin(folds[i][set_name].to_list())]["target"],
-                        set_name_dict[set_name]
+                        set_name_dict[set_name],
+                        addi_X=df.loc[folds[i][set_name]][input_cols],
+                        addi_y=df.loc[folds[i][set_name]]["target"]
                     )
                     y_pred = preds.reshape(-1, 1)
                 else:
@@ -271,7 +312,9 @@ def quant_CV(
                                     cudf_df.loc[
                                         cudf_df.index.isin(folds[i][set_name].to_list())
                                     ]["target"],
-                                    cnf_levels
+                                    cnf_levels,
+                                    addi_X=df.loc[folds[i][set_name]][input_cols],
+                                    addi_y=df.loc[folds[i][set_name]]["target"]
                                 )
                             else:
                                 confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
@@ -284,7 +327,8 @@ def quant_CV(
                                 cudf_df.loc[
                                     cudf_df.index.isin(folds[i][set_name].to_list())
                                 ][input_cols],
-                                cnf_levels
+                                cnf_levels,
+                                addi_X=df.loc[folds[i][set_name]][input_cols]
                             )
                             df.loc[
                                 folds[i][set_name],
@@ -379,8 +423,12 @@ def quant_CV(
 
             if set_name == "train_dates":
                 time_taken = f"{round(toc - tic, 1)} + {round(pong - ping, 1)}"
+                meta_model_pos_label_perc = None
             else:
                 time_taken = str(round(pong - ping, 1))
+                if is_cf_model:
+                    if model.prob_estimator == "meta":
+                        meta_model_pos_label_perc = model.meta_pos_label_perc
 
             eval_list = (
                 [set_name_dict[set_name], i]
@@ -389,6 +437,7 @@ def quant_CV(
                 + [time_taken]
                 + [fold_profit_percent, fold_max_dd]
                 + [fold_unique_days,fold_max_daily_sig]
+                + [meta_model_pos_label_perc]
             )
 
             evals.loc[len(evals)] = eval_list

@@ -86,8 +86,12 @@ def quant_CV(
     is_cf_model = model_name.startswith("CF-")
 
     if "XGB" in model_name:
-        if getattr(model, "device") != "cuda" and use_cudf:
-            raise ValueError("CuDF dataframes are useful only if `device='cuda'`.")
+        if is_cf_model:
+            if getattr(model.model, "device") != "cuda" and use_cudf:
+                raise ValueError("CuDF dataframes are useful only if `device='cuda'`.")
+        else:
+            if getattr(model, "device") != "cuda" and use_cudf:
+                raise ValueError("CuDF dataframes are useful only if `device='cuda'`.")
     else:
         if use_cudf:
             raise ValueError("Non-XGB models do not support CuDF dataframes.")

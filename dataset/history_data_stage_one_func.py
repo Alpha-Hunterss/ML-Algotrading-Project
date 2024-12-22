@@ -59,7 +59,6 @@ def history_data_stage_one(feature_config, logger=default_logger):
             .drop_duplicates("_time")
             )
 
-        
         logger.info(f"--> number of nulls before forward fill: {df.isnull().sum().sum()}")
         ##? fill time gaps for trade days in dataset.
         df = ffill_df_to_true_time_steps(df)

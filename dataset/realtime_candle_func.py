@@ -46,7 +46,10 @@ def read_and_prepeare_dataframe_polars(symbol):
     df = df.with_row_index().with_columns(
         pl.col("index").cast(pl.Int32, strict=False).alias("index")
     )  # add index col
+
     return df
+
+
 def make_realtime_candle(df, tf_list, symbol):
     # opt
     for tf_int in tf_list:
@@ -105,7 +108,10 @@ def make_realtime_candle(df, tf_list, symbol):
                 ]
             )
         )
+
     return df
+
+
 def historiy_realtime_candle(feature_config, logger=default_logger):
     logger.info("- " * 25)
     logger.info("--> start historiy_realtime_candle fumc:")
@@ -136,6 +142,7 @@ def historiy_realtime_candle(feature_config, logger=default_logger):
         logger.exception("--> historiy_realtime_candle error.")     
         logger.exception(f"--> error: {e}")     
         raise ValueError("!!!")
+
 
 if __name__ == "__main__":
     from configs.feature_configs_general import generate_general_config

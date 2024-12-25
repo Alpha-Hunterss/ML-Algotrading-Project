@@ -375,6 +375,9 @@ def cal_leg_base_func(
                             leg_ended = False
                             ups = 0
 
+                    pivot_points[i] = 2 # Mark as middle high pivot (the current end of the current leg)
+                    pivot_prices[i] = close_prices[i]
+
                     movement_pivot_idx = i
                     last_pivot_idx = i
                     last_pivot_idx_high = i
@@ -424,6 +427,9 @@ def cal_leg_base_func(
                             pivot_prices[last_pivot_idx] = close_prices[last_pivot_idx]
                             leg_ended = False
                             downs = 0
+
+                    pivot_points[i] = -2 # Mark as middle low pivot (the current end of the current leg)
+                    pivot_prices[i] = close_prices[i]
 
                     movement_pivot_idx = i
                     last_pivot_idx = i
@@ -492,6 +498,9 @@ def cal_leg_base_func(
                         leg_ended = False
                         ups = 0
 
+                    pivot_points[i] = 2 # Mark as middle high pivot (the current end of the current leg)
+                    pivot_prices[i] = close_prices[i]
+
                     movement_pivot_idx = i
                     last_pivot_idx = i
                     last_pivot_idx_high = i
@@ -516,6 +525,9 @@ def cal_leg_base_func(
                         pivot_prices[movement_pivot_idx] = close_prices[movement_pivot_idx]
                         leg_ended = False
                         downs = 0
+
+                    pivot_points[i] = -2 # Mark as middle low pivot (the current end of the current leg)
+                    pivot_prices[i] = close_prices[i]
 
                     movement_pivot_idx = i
                     last_pivot_idx = i
@@ -625,6 +637,10 @@ def cal_leg_base_func(
                     current_low_idx = i
                     pivot_status = -1
                     leg_counter += 1
+            elif pivot_points[i] == 2:  # Middle high pivot
+                current_high = close
+            elif pivot_points[i] == -2:  # Middle low pivot
+                current_low = close
 
     else:
         bullish_high_pivot_distances = np.full(len(df), 50/pip_size)
@@ -704,6 +720,10 @@ def cal_leg_base_func(
                     current_low_idx = i
                     pivot_status = -1
                     leg_counter += 1
+            elif pivot_points[i] == 2:  # Middle high pivot
+                current_high = close
+            elif pivot_points[i] == -2:  # Middle low pivot
+                current_low = close
 
     # Create leg columns in DataFrame
     df = df.with_columns([

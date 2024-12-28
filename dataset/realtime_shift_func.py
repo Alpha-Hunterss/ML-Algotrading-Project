@@ -74,7 +74,6 @@ def history_cndl_shift(feature_config, logger=default_logger):
         file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
         df = pl.read_parquet(file_name)
 
-
         df = df.sort("_time").drop("symbol")
         shift_columns = feature_config[symbol][fe_prefix]["columns"]
         shift_configs = feature_config[symbol][fe_prefix]["shift_configs"]
@@ -104,6 +103,7 @@ def history_cndl_shift(feature_config, logger=default_logger):
             raise ValueError("!!! nothing to save.")
 
         save_file_name_ = features_folder_path + f"/{fe_prefix}_{symbol}.parquet"
+        shift_df = shift_df.with_columns(pl.lit(symbol).alias("symbol"))
         shift_df.write_parquet(save_file_name_)
         logger.info(f"--> {fe_prefix} | {symbol} saved.")
 

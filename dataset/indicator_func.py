@@ -1277,7 +1277,6 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             logger.info("* " * 25)
             symbol_ratio_dfs = []
 
-
             for fe_prefix, func in modes.items():
                 if fe_prefix not in list(feature_config[symbol].keys()):
                     continue

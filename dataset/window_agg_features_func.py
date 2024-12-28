@@ -21,6 +21,7 @@ def cal_window_max(array, window_size):
             np.max(selected_slice),
             1 - (np.argmax(selected_slice) / (window_size - 1)),
         ]
+
     return res
 
 def add_win_fe_base_func(
@@ -42,11 +43,11 @@ def add_win_fe_base_func(
             array = df[raw_features].to_numpy()
             # logger.info(col_max, col_max)
             res = cal_window_max(array, w_size)
-            df[col_min] = (df[f"M5_CLOSE"] - res[:, 0]) / symbols_dict[symbol][
+            df[col_min] = (df["M5_CLOSE"] - res[:, 0]) / symbols_dict[symbol][
                 "pip_size"
             ]
             df[col_argmin] = np.round(res[:, 1], round_to)
-            df[col_max] = (res[:, 2] - df[f"M5_CLOSE"]) / symbols_dict[symbol][
+            df[col_max] = (res[:, 2] - df["M5_CLOSE"]) / symbols_dict[symbol][
                 "pip_size"
             ]
             df[col_argmax] = np.round(res[:, 3], round_to)
@@ -68,7 +69,6 @@ def history_fe_WIN_features(feature_config, logger=default_logger):
         for symbol in list(feature_config.keys()):
             logger.info(f"---> symbol: {symbol}")
             logger.info("= " * 40)
-            
 
             base_cols = feature_config[symbol][fe_prefix]["base_columns"]
             raw_features = [f"M5_{base_col}" for base_col in base_cols]
@@ -76,7 +76,7 @@ def history_fe_WIN_features(feature_config, logger=default_logger):
             file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
             df = pd.read_parquet(file_name, columns=needed_columns)
             df.sort_values("_time", inplace=True)
-     
+
             df["_time"] = df["_time"].dt.tz_localize(None)
             df.drop(columns=["symbol"])
             df.sort_values("_time", inplace=True)
@@ -90,8 +90,7 @@ def history_fe_WIN_features(feature_config, logger=default_logger):
                 round_to=round_to,
                 fe_prefix="fe_WIN",
             )
-            
-            # ??
+
             df.drop(columns=raw_features + ["minutesPassed"], inplace=True)
             df["symbol"] = symbol
             df.to_parquet(f"{features_folder_path}/{fe_prefix}_{symbol}.parquet")

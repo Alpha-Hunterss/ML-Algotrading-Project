@@ -13,7 +13,7 @@ from pathlib import Path
 from dataset.utils.reduce_memory import reduce_mem_usage
 
 
-# Define the prefixes - !!! order maters.
+# Define the prefixes - !!! order matters.
 prefixes = [
     "fe_cndl_shift",
     "fe_cndl",
@@ -33,6 +33,8 @@ prefixes = [
     "fe_EMA",
     "fe_SMA",
     "fe_ATR",
+    "fe_leg",
+    "fe_cndl_shape_n_cntxt",
     "fe_market_close",
 ]
 
@@ -80,7 +82,8 @@ def add_symbol_to_prefixes(df_cols, symbol, prefixes=prefixes):
 
 def group_by_symbol_and_rename(df, symbol_col="symbol"):
     """
-    Groups the DataFrame by the symbol column, removes the symbol column, and appends the symbol value to each feature column name.
+    Groups the DataFrame by the symbol column, removes the symbol column, and
+    appends the symbol value to each feature column name.
 
     Parameters:
     df (pl.DataFrame): The Polars DataFrame.
@@ -115,9 +118,9 @@ def group_by_symbol_and_rename(df, symbol_col="symbol"):
 
     return result_df
 
-def history_columns_merge(feature_config, logger=default_logger,general_mode=False):
+def history_columns_merge(feature_config, logger=default_logger, general_mode=False):
     logger.info("- " * 25)
-    logger.info("--> start history_columns_merge fumc:")
+    logger.info("--> start history_columns_merge func:")
 
     if not general_mode:
         feature_map_path = "data/models/jamesv01/tradeset_usdjpy_feature_map.json"
@@ -145,25 +148,25 @@ def history_columns_merge(feature_config, logger=default_logger,general_mode=Fal
     fe_list = list(set(fe_refrece_list) & set(fe_list))
 
     basic_sym = list(feature_config.keys())[0]
-    
+
     # try:
     feature_folder = f"{root_path}/data/features/"
     # base dataframe to merge data on it.
-    main_symbol_st_one_path = f"{root_path}/data/stage_one_data/{sym}_stage_one.parquet"
-    df_dataset = pl.read_parquet(main_symbol_st_one_path,columns=["_time"])
+    main_symbol_st_one_path = f"{root_path}/data/stage_one_data/{basic_sym}_stage_one.parquet"
+    df_dataset = pl.read_parquet(main_symbol_st_one_path, columns=["_time"])
     df_dataset = df_dataset.sort("_time")
 
     logger.info("--> add fe_time.")
 
     file_name = f"{feature_folder}/fe_time/fe_time.parquet"
     df_dataset = df_dataset.join(
-    pl.read_parquet(file_name).sort("_time").drop("symbol"),
-    left_on="_time", right_on="_time", how="left", coalesce=True
+        pl.read_parquet(file_name).sort("_time").drop("symbol"),
+        left_on="_time", right_on="_time", how="left", coalesce=True
     )
     gc.collect()
 
     for symbol in feature_config:
-        logger.info(f" ^ - ^ " * 10)
+        logger.info(" ^ - ^ " * 10)
         sy_fe = list(
             set(list(feature_config[symbol].keys())) & set(fe_refrece_list)
         )
@@ -171,13 +174,12 @@ def history_columns_merge(feature_config, logger=default_logger,general_mode=Fal
         sy_fe = list(set(sy_fe))
         for feture in sy_fe:
             try:
-            
                 logger.info(f"--> {symbol} | {feture}")
                 logger.info(f"--> {symbol} | -->{feture}<---- --------------------------")
                 df = pl.read_parquet(
                     f"{feature_folder}/{feture}/{feture}_{symbol}.parquet"
                 )
-                
+
                 df = df.sort("_time").drop("symbol")
                 df = df.rename(add_symbol_to_prefixes(df.columns, symbol))
             except Exception as e:
@@ -192,7 +194,6 @@ def history_columns_merge(feature_config, logger=default_logger,general_mode=Fal
             gc.collect()
 
     df_colls = list(df_dataset.columns)
-    gg = [f for f in df_colls if "fe_ratio" in f]
 
     if not general_mode:
         diff_cols = set(f_cols) - set(list(df_colls))
@@ -200,7 +201,6 @@ def history_columns_merge(feature_config, logger=default_logger,general_mode=Fal
         # logger.info(f"--> diff cols: {diff_cols}")
         # logger.info(gg)
         df_dataset = df_dataset[list(f_cols)]
-
 
     logger.info(f"--> {df_dataset.shape}")
     log = df_dataset.select(pl.all().is_null().sum()).to_dicts()[0]
@@ -233,7 +233,7 @@ def history_columns_merge(feature_config, logger=default_logger,general_mode=Fal
     logger.info(f"--> trg_cols:{len(trg_cols)} | fe_cols:{len(fe_cols)}")
 
     # save dataset
-    df_dataset = df_dataset.with_columns(pl.lit("dataset").alias("symbol"))
+    # df_dataset = df_dataset.with_columns(pl.lit("dataset").alias("symbol"))
     fe_prefix = "dataset"
     dataset_folder_path = f"{root_path}/data/{fe_prefix}/"
     Path(dataset_folder_path).mkdir(parents=True, exist_ok=True)

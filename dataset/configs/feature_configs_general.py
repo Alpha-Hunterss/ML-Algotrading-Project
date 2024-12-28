@@ -1,5 +1,4 @@
 
-
 # symbols = [
 #   "EURUSD", "USDCAD", "USDJPY", "EURJPY", "GBPUSD", "XAUUSD",
 #   "AUDUSD", "NZDUSD", "USDCHF", "CADJPY", "EURGBP",
@@ -7,8 +6,69 @@
 
 
 symbols = [
-  "EURUSD", 
+    "XAUUSD",
+    "USDJPY",
+    "US100"
 ]
+
+##? in EST time zone
+time_sessions = {
+    "US Indices": {
+        "New_York": {
+            "hour": 15,
+            "minute": 55
+        }
+    },
+    "XAUUSD": {
+        "New_York": {
+            "hour": 16,
+            "minute": 55
+        },
+        "London": {
+            "hour": 10,
+            "minute": 55,
+        },
+        "Asia": {
+            "hour": 2,
+            "minute": 55,
+        },
+    },
+    "FOREX": {
+        "New_York": {
+            "hour": 16,
+            "minute": 55,
+        },
+        "London": {
+            "hour": 11,
+            "minute": 55,
+        },
+        "Tokyo": {
+            "hour": 3,
+            "minute": 55,
+        },
+        "Sydney": {
+            "hour": 23,
+            "minute": 55,
+        },
+    }
+}
+
+sessions_trade_times = {
+    "US Indices": {
+        "New_York": (9.5, 16),
+    },
+    "XAUUSD": {
+        "New_York": (8, 17),
+        "London": (3, 11),
+        "Asia": (18, 3),
+    },
+    "FOREX": {
+        "New_York": (8, 17),
+        "London": (3, 12),
+        "Tokyo": (19, 4),
+        "Sydney": (15, 0),
+    }
+}
 
 general_config = {
     'base_candle_timeframe': [15, 30, 60, 120, 180, 240, 360, 720, 1440],

@@ -136,10 +136,9 @@ def historiy_realtime_candle(feature_config, logger=default_logger):
             df.write_parquet(file_name)
             logger.info(f"--> {symbol} saved.")
 
-  
         logger.info("--> historiy_realtime_candle run successfully.")
     except Exception as e:
-        logger.exception("--> historiy_realtime_candle error.")     
+        logger.exception("--> historiy_realtime_candle error.")
         logger.exception(f"--> error: {e}")     
         raise ValueError("!!!")
 

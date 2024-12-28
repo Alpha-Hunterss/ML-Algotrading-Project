@@ -1,6 +1,7 @@
 import polars as pl
 import pandas as pd
 from dataset.configs.history_data_crawlers_config import root_path, symbols_dict
+from dataset.configs.feature_configs_general import time_sessions, sessions_trade_times
 from datetime import timedelta
 from dataset.logging_tools import default_logger
 from pathlib import Path
@@ -88,19 +89,18 @@ def history_basic_features(feature_config, logger=default_logger):
         features_folder_path = f"{root_path}/data/features/{fe_prefix}/"
         Path(features_folder_path).mkdir(parents=True, exist_ok=True)
 
-
         for symbol in list(feature_config.keys()):
             if fe_prefix not in list(feature_config[symbol].keys()):
                 continue
             logger.info(f"- " * 30)
             logger.info(f"--> {fe_prefix}, {symbol}:")
-          
+
             tf_list = feature_config[symbol]["fe_cndl"]
             file_name = features_folder_path + f"/{fe_prefix}_{symbol}.parquet"
             df = pl.read_parquet(
                 f"{root_path}/data/realtime_candle/{symbol}_realtime_candle.parquet"
             )
-               
+
             df = df.sort("_time").drop("symbol")
             df = add_candle_features(
                 df, symbol, tf_list=tf_list, fe_prefix=fe_prefix
@@ -120,14 +120,14 @@ def history_basic_features(feature_config, logger=default_logger):
 
             logger.info(f"- " * 30)
             logger.info(f"--> {fe_prefix}, {symbol} :")
-            
+
             df_sh = pl.read_parquet(
                 f"{root_path}/data/features/fe_cndl_shift_raw/{fe_prefix}_{symbol}.parquet"
             )
 
             file_name = features_folder_path + f"/{fe_prefix}_{symbol}.parquet"
             shift_configs = feature_config[symbol]["fe_cndl_shift"]["shift_configs"]
-            
+
             df_sh = df_sh.sort("_time")
             df_all = df_sh[["_time"]]
 
@@ -143,7 +143,6 @@ def history_basic_features(feature_config, logger=default_logger):
                 )
                 df_all = df_all.join(df, on="_time", how="left", coalesce=True)
 
-            
             df_all = df_all.with_columns(pl.lit(symbol).alias("symbol"))
             df_all.write_parquet(file_name)
             logger.info(f"--> fe_cndl_shift_stage_2 {symbol} saved.")
@@ -162,56 +161,46 @@ def history_fe_market_close(feature_config, logger=default_logger):
         features_folder_path = f"{root_path}/data/features/{fe_prefix}/"
         Path(features_folder_path).mkdir(parents=True, exist_ok=True)
 
-        ##? in EST time zone
-        markets_trade_times = {
-            "New_York": {
-                "hour": 16,
-                "minute": 55,
-            },
-            "Tokyo": {
-                "hour": 3,
-                "minute": 55,
-            },
-            "Sydney": {
-                "hour": 23,
-                "minute": 55,
-            },
-            "London": {
-                "hour": 10,
-                "minute": 55,
-            },
-        }
-
         for symbol in list(feature_config.keys()):
             logger.info(f"-->{symbol}")
             logger.info("= " * 40)
 
             columns = ["_time", "close"]
-            df=pd.read_parquet(f"{root_path}/data/stage_one_data/{symbol}_stage_one.parquet",columns=columns)
+            df=pd.read_parquet(
+                f"{root_path}/data/stage_one_data/{symbol}_stage_one.parquet",
+                columns=columns
+            )
             df["_time"] = df["_time"].dt.tz_localize(None)
             df.sort_values("_time", inplace=True)
             df.reset_index(drop=True, inplace=True)
-            df["_time"] = df["_time"] - timedelta(hours=7)
+            df["_time"] = df["_time"] - timedelta(hours=6)
 
-            for market in markets_trade_times:
-                fiter = (
-                    df["_time"].dt.hour == markets_trade_times[market]["hour"]
-                ) & (df["_time"].dt.minute == markets_trade_times[market]["minute"])
+            if symbol in ["EURUSD", "GBPUSD", "USDJPY"]:
+                sessions = time_sessions.get("FOREX")
+            elif symbol in ["US30", "US100"]:
+                sessions = time_sessions.get("US Indices")
+            elif symbol == "XAUUSD":
+                sessions = time_sessions.get("XAUUSD")
+            else:
+                continue
 
+            for session, datetime in sessions.items():
+                filter = (
+                    df["_time"].dt.hour == datetime["hour"]
+                ) & (df["_time"].dt.minute == datetime["minute"])
 
                 df["last_close_price"] = None
-                df.loc[fiter, "last_close_price"] = df.loc[fiter, "close"]
+                df.loc[filter, "last_close_price"] = df.loc[filter, "close"]
 
                 df["last_close_time"] = None
-                df.loc[fiter, "last_close_time"] = df.loc[fiter, "_time"]
+                df.loc[filter, "last_close_time"] = df.loc[filter, "_time"]
                 with pd.option_context("future.no_silent_downcasting", True):
                     df = df.ffill(inplace=False).infer_objects(copy=False)
 
-                
-                df[f"{fe_prefix}_{market}"] = (
+                df[f"{fe_prefix}_{session}"] = (
                     df["close"] - df["last_close_price"]
                 ) / symbols_dict[symbol]["pip_size"]
-                df[f"{fe_prefix}_{market}_time"] = (
+                df[f"{fe_prefix}_{session}_time"] = (
                     df["_time"] - df["last_close_time"]
                 ).dt.seconds // 60
 
@@ -220,7 +209,7 @@ def history_fe_market_close(feature_config, logger=default_logger):
                 columns=["last_close_price", "close", "last_close_time"],
                 inplace=True,
             )
-            df["_time"] = df["_time"] + timedelta(hours=7)
+            df["_time"] = df["_time"] + timedelta(hours=6)
             df.dropna(inplace=True)
             df.reset_index(drop=True, inplace=True)
             df["symbol"] = symbol
@@ -239,7 +228,10 @@ def history_fe_time(feature_config, logger=default_logger):
     try:
         prefix = "fe_time"
         symbol = list(feature_config.keys())[0]
-        df= pd.read_parquet(f"{root_path}/data/stage_one_data/EURUSD_stage_one.parquet", columns=["_time"]).sort_values("_time").reset_index(drop=True)
+        df= pd.read_parquet(
+            f"{root_path}/data/stage_one_data/{symbol}_stage_one.parquet",
+            columns=["_time"]
+        ).sort_values("_time").reset_index(drop=True)
         df["_time"] = df["_time"].dt.tz_localize(None)
         df.sort_values("_time", inplace=True)
         df.reset_index(drop=True, inplace=True)
@@ -270,20 +262,20 @@ def history_fe_time(feature_config, logger=default_logger):
             columns={prefix: "_time"}
         )
 
-        markets_trade_times = {
-            "New_York": (8, 17),
-            "Tokyo": (19, 4),
-            "Sydney": (15, 0),
-            "London": (3, 11),
-        }
+        if symbol in ["EURUSD", "GBPUSD", "USDJPY"]:
+            trade_times = sessions_trade_times.get("FOREX")
+        elif symbol in ["US30", "US100"]:
+            trade_times = sessions_trade_times.get("US Indices")
+        elif symbol == "XAUUSD":
+            trade_times = sessions_trade_times.get("XAUUSD")
 
         fe_time["_time"] = fe_time["_time"] - timedelta(hours=6)
 
-        for market_name in markets_trade_times:
-            start_time = markets_trade_times[market_name][0]
-            stop_time = markets_trade_times[market_name][1]
+        for session, time_range in trade_times.items():
+            start_time = time_range[0]
+            stop_time = time_range[1]
 
-            col_name = f"{prefix}_isin_{market_name}"
+            col_name = f"{prefix}_isin_{session}"
             fe_time[col_name] = 0
 
             if stop_time > start_time:

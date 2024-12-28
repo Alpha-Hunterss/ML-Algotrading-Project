@@ -7,8 +7,8 @@
 
 symbols = [
     "XAUUSD",
-    "USDJPY",
-    "US100"
+    # "USDJPY",
+    # "US100"
 ]
 
 ##? in EST time zone

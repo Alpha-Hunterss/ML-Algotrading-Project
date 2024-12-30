@@ -1166,6 +1166,7 @@ class ClassificationConformalPredictor:
             null_counts = X_train[null_columns].isnull().sum()
             print(null_counts)
 
+            print(f"CuDF y_train set shape is: {y_train.shape}")
             if y_train.isnull().any():
                 print("The Series contains null values.")
                 null_count = y_train.isnull().sum()
@@ -1370,6 +1371,7 @@ class ClassificationConformalPredictor:
                     null_counts = X[null_columns].isnull().sum()
                     print(null_counts)
 
+                    print(f"CuDF valid y set shape is: {y.shape}")
                     if y.isnull().any():
                         print("The Series contains null values.")
                         null_count = y.isnull().sum()
@@ -1508,12 +1510,13 @@ class ClassificationConformalPredictor:
 
             else: # set_name == test
                 if self.use_cudf:
-                    print(f"CuDF valid X set shape is: {X.shape}")
+                    print(f"CuDF test X set shape is: {X.shape}")
                     null_columns = X.to_pandas().columns[X.isnull().to_pandas().any()]
                     print(f"Columns with null values: {null_columns}")
                     null_counts = X[null_columns].isnull().sum()
                     print(null_counts)
 
+                    print(f"CuDF test y set shape is: {y.shape}")
                     if y.isnull().any():
                         print("The Series contains null values.")
                         null_count = y.isnull().sum()

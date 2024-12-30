@@ -1160,6 +1160,18 @@ class ClassificationConformalPredictor:
             raise ValueError("'n_folds' cannot be negative or zero.")
 
         if self.use_valid_as_calib:
+            print(f"CuDF X_train set shape is: {X_train.shape}")
+            null_columns = X_train.to_pandas().columns[X_train.isnull().to_pandas().any()]
+            print(f"Columns with null values: {null_columns}")
+            null_counts = X_train[null_columns].isnull().sum()
+            print(null_counts)
+
+            print(f"CuDF y_train set shape is: {y_train.shape}")
+            null_columns = y_train.to_pandas().columns[y_train.isnull().to_pandas().any()]
+            print(f"Columns with null values: {null_columns}")
+            null_counts = y_train[null_columns].isnull().sum()
+            print(null_counts)
+
             self.model.fit(X_train, y_train)
             self.classes_ = self.model.classes_
 
@@ -1351,6 +1363,18 @@ class ClassificationConformalPredictor:
 
                 # Apply calibration
                 if self.use_cudf:
+                    print(f"CuDF valid X set shape is: {X.shape}")
+                    null_columns = X.to_pandas().columns[X.isnull().to_pandas().any()]
+                    print(f"Columns with null values: {null_columns}")
+                    null_counts = X[null_columns].isnull().sum()
+                    print(null_counts)
+
+                    print(f"CuDF valid y set shape is: {y.shape}")
+                    null_columns = y.to_pandas().columns[y.isnull().to_pandas().any()]
+                    print(f"Columns with null values: {null_columns}")
+                    null_counts = y[null_columns].isnull().sum()
+                    print(null_counts)
+
                     if self.calibration_method is not None:
                         if self.calibration_method == "venn_abers":
                             base_prob_pred = prob_pred
@@ -1481,6 +1505,19 @@ class ClassificationConformalPredictor:
                             ]
 
             else: # set_name == test
+                if self.use_cudf:
+                    print(f"CuDF valid X set shape is: {X.shape}")
+                    null_columns = X.to_pandas().columns[X.isnull().to_pandas().any()]
+                    print(f"Columns with null values: {null_columns}")
+                    null_counts = X[null_columns].isnull().sum()
+                    print(null_counts)
+
+                    print(f"CuDF valid y set shape is: {y.shape}")
+                    null_columns = y.to_pandas().columns[y.isnull().to_pandas().any()]
+                    print(f"Columns with null values: {null_columns}")
+                    null_counts = y[null_columns].isnull().sum()
+                    print(null_counts)
+
                 if confidence_level is not None:
                     # Calculate per-class thresholds
                     thresholds = {

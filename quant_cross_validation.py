@@ -154,8 +154,6 @@ def quant_CV(
                         ),
                         addi_y=df.loc[folds[i]["train_dates"]]["target"],
                         use_cudf=use_cudf,
-                        eval_set=eval_set,
-                        verbose = False,
                     )
                 else:
                     model.fit(
@@ -186,7 +184,6 @@ def quant_CV(
                         ),
                         addi_y=df.loc[folds[i]["train_dates"]]["target"],
                         use_cudf=use_cudf,
-                        verbose = False,
                     )
                 else:
                     model.fit(

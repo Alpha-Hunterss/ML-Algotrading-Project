@@ -5,6 +5,7 @@ from dataset.configs.history_data_crawlers_config import symbols_dict
 import os, glob
 from typing import Callable, Dict, List, Tuple, Union
 from dataset.configs.history_data_crawlers_config import root_path
+from dataset.configs.feature_configs_general import fe_leg_config
 import re
 from dataset.logging_tools import default_logger
 
@@ -293,9 +294,10 @@ def cal_leg_base_func(
     time_frame: int,
     features: List[str],
     pip_size: float,
+    exponents: dict[str, Tuple[int, int]],
     prefix: str = "fe_leg",
     percentage_feature: bool = True,
-    percentage: float = 0.001,  # This is compatible with EURUSD, change for other pairs
+    percentage: float = 0.001,
 ) -> pl.DataFrame:
     """
     This function calculates the distance of the current candle's close price from 
@@ -316,13 +318,12 @@ def cal_leg_base_func(
     th = w
 
     # Set percentages and thresholds for timeframes other than 5M
-    # This is compatible with EURUSD, change for other pairs
     if time_frame == 15:
-        percentage = 0.0015
-        th *= 1.75
+        percentage *= exponents.get('15')[0]
+        th *= exponents.get('15')[1]
     elif time_frame == 60:
-        percentage = 0.003
-        th *= 4.5
+        percentage *= exponents.get('60')[0]
+        th *= exponents.get('60')[1]
 
     # Initialize arrays for pivot points
     # pivot_indicators = np.zeros(len(df))
@@ -970,33 +971,65 @@ def add_candle_base_indicators_polars(
     features = opts["base_feature"]
     time_frames = opts["candle_timeframe"]
     window_sizes = opts["window_size"]
+    if prefix == "fe_leg":
+        exponents = opts["exponents"]
+        percentage = opts["percentage"]
 
-    for w in window_sizes:
-        for time_frame in time_frames:
-            df = df_base.filter(
-                pl.col("minutesPassed") % time_frame == (time_frame - 5)
-            )
+        for w in window_sizes:
+            for time_frame in time_frames:
+                df = df_base.filter(
+                    pl.col("minutesPassed") % time_frame == (time_frame - 5)
+                )
 
-            # Create a regex pattern to match 'M' followed by the time_frame number
-            pattern = re.compile(rf"M{time_frame}_")
+                # Create a regex pattern to match 'M' followed by the time_frame number
+                pattern = re.compile(rf"M{time_frame}_")
 
-            # Find items where the number after 'M' is not equal to time_frame
-            other_tf_features = [f for f in features if not pattern.match(f)]
-            df = df.drop(other_tf_features + ["minutesPassed"])
-            df = base_func(
-                df=df,
-                w=w,
-                time_frame=time_frame,
-                features=list(set(features) - set(other_tf_features)),
-                pip_size=pip_size,
-                prefix=prefix,
-            )
+                # Find items where the number after 'M' is not equal to time_frame
+                other_tf_features = [f for f in features if not pattern.match(f)]
+                df = df.drop(other_tf_features + ["minutesPassed"])
+                df = base_func(
+                    df=df,
+                    w=w,
+                    time_frame=time_frame,
+                    features=list(set(features) - set(other_tf_features)),
+                    pip_size=pip_size,
+                    exponents=exponents,
+                    prefix=prefix,
+                    percentage=percentage,
+                )
 
-            file_name = (
-                features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
-            )
+                file_name = (
+                    features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
+                )
 
-            df.write_parquet(file_name)
+                df.write_parquet(file_name)
+    else:
+        for w in window_sizes:
+            for time_frame in time_frames:
+                df = df_base.filter(
+                    pl.col("minutesPassed") % time_frame == (time_frame - 5)
+                )
+
+                # Create a regex pattern to match 'M' followed by the time_frame number
+                pattern = re.compile(rf"M{time_frame}_")
+
+                # Find items where the number after 'M' is not equal to time_frame
+                other_tf_features = [f for f in features if not pattern.match(f)]
+                df = df.drop(other_tf_features + ["minutesPassed"])
+                df = base_func(
+                    df=df,
+                    w=w,
+                    time_frame=time_frame,
+                    features=list(set(features) - set(other_tf_features)),
+                    pip_size=pip_size,
+                    prefix=prefix,
+                )
+
+                file_name = (
+                    features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
+                )
+
+                df.write_parquet(file_name)
 
     return
 
@@ -1287,12 +1320,23 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 Path(features_folder_path).mkdir(parents=True, exist_ok=True)
 
                 base_cols = feature_config[symbol][fe_prefix]["base_columns"]
-                opts = {
-                    "symbol": symbol,
-                    "candle_timeframe": feature_config[symbol][fe_prefix]["timeframe"],
-                    "window_size": feature_config[symbol][fe_prefix]["window_size"],
-                    "features_folder_path": features_folder_path,
-                }
+
+                if fe_prefix == "fe_leg":
+                    opts = {
+                        "symbol": symbol,
+                        "candle_timeframe": fe_leg_config[symbol]["timeframe"],
+                        "window_size": fe_leg_config[symbol]["window_size"],
+                        "exponents": fe_leg_config[symbol]["exponents"],
+                        "percentage": fe_leg_config[symbol]["percentage"],
+                        "features_folder_path": features_folder_path,
+                    }
+                else:
+                    opts = {
+                        "symbol": symbol,
+                        "candle_timeframe": feature_config[symbol][fe_prefix]["timeframe"],
+                        "window_size": feature_config[symbol][fe_prefix]["window_size"],
+                        "features_folder_path": features_folder_path,
+                    }
 
                 base_features = [
                     f"M{tf}_{col}"

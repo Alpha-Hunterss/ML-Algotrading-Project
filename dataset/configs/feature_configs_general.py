@@ -1,15 +1,6 @@
-
-# symbols = [
-#   "EURUSD", "USDCAD", "USDJPY", "EURJPY", "GBPUSD", "XAUUSD",
-#   "AUDUSD", "NZDUSD", "USDCHF", "CADJPY", "EURGBP",
-# ]
-
-
-symbols = [
-    "XAUUSD",
-    # "USDJPY",
-    # "US100"
-]
+##? asset classes
+US_INDICES = ["US30", "US100"]
+FOREX = ["EURUSD", "GBPUSD", "USDJPY"]
 
 ##? in EST time zone
 time_sessions = {
@@ -53,6 +44,7 @@ time_sessions = {
     }
 }
 
+##? in EST time zone
 sessions_trade_times = {
     "US Indices": {
         "New_York": (9.5, 16),
@@ -70,13 +62,76 @@ sessions_trade_times = {
     }
 }
 
+fe_leg_config = {
+    "XAUUSD": {
+        'percentage': 0.003,
+        'timeframe': [5, 15, 60],
+        'window_size': [19, 24, 30],
+        'exponents': {
+            '15': (2, 3),
+            '60': (4, 6)
+        }
+    },
+    "EURUSD": {
+        'percentage': 0.001,
+        'timeframe': [5, 15, 60],
+        'window_size': [800, 1100, 1400],
+        'exponents': {
+            '15': (1.5, 1.75),
+            '60': (3, 4.5)
+        }
+    },
+    "GBPUSD": {
+        'percentage': 0.0015,
+        'timeframe': [5, 15, 60],
+        'window_size': [1240, 1600, 2400],
+        'exponents': {
+            '15': (1, 1.5),
+            '60': (4, 7)
+        }
+    },
+    "USDJPY": {
+        'percentage': 0.0015,
+        'timeframe': [5, 15, 60],
+        'window_size': [13, 18, 28],
+        'exponents': {
+            '15': (2, 3),
+            '60': (3, 4.5)
+        }
+    },
+    "US100": {
+        'percentage': 0.0025,
+        'timeframe': [5, 15, 60],
+        'window_size': [19, 24, 34],
+        'exponents': {
+            '15': (2, 2.5),
+            '60': (4, 6)
+        }
+    },
+    "US30": {
+        'percentage': 0.0017,
+        'timeframe': [5, 15, 60],
+        'window_size': [16, 23, 40],
+        'exponents': {
+            '15': (2, 2.5),
+            '60': (5, 6)
+        }
+    },
+    "BTCUSD": {
+        'percentage': 0.01,
+        'timeframe': [5, 15],
+        'window_size': [49, 60, 80],
+        'exponents': {
+            '15': (2, 3)
+        }
+    },
+}
+
 general_config = {
     'base_candle_timeframe': [15, 30, 60, 120, 180, 240, 360, 720, 1440],
 
 
     'fe_leg': {
-        'timeframe': [5, 15, 60],
-        'window_size': [800, 1100, 1400],
         'base_columns': ['CLOSE']
     },
 
@@ -190,7 +245,7 @@ general_config = {
     },
 }
 
-def generate_general_config(symbols=symbols,general_config=general_config):
+def generate_general_config(symbols, general_config=general_config):
     config_dict = {}
     for sym in symbols:
         config_dict[sym] = general_config

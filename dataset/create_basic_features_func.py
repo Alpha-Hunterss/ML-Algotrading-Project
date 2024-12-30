@@ -1,7 +1,12 @@
 import polars as pl
 import pandas as pd
 from dataset.configs.history_data_crawlers_config import root_path, symbols_dict
-from dataset.configs.feature_configs_general import time_sessions, sessions_trade_times
+from dataset.configs.feature_configs_general import (
+    time_sessions,
+    sessions_trade_times,
+    US_INDICES,
+    FOREX
+)
 from datetime import timedelta
 from dataset.logging_tools import default_logger
 from pathlib import Path
@@ -175,9 +180,9 @@ def history_fe_market_close(feature_config, logger=default_logger):
             df.reset_index(drop=True, inplace=True)
             df["_time"] = df["_time"] - timedelta(hours=6)
 
-            if symbol in ["EURUSD", "GBPUSD", "USDJPY"]:
+            if symbol in FOREX:
                 sessions = time_sessions.get("FOREX")
-            elif symbol in ["US30", "US100"]:
+            elif symbol in US_INDICES:
                 sessions = time_sessions.get("US Indices")
             elif symbol == "XAUUSD":
                 sessions = time_sessions.get("XAUUSD")
@@ -185,15 +190,15 @@ def history_fe_market_close(feature_config, logger=default_logger):
                 continue
 
             for session, datetime in sessions.items():
-                filter = (
+                fiter = (
                     df["_time"].dt.hour == datetime["hour"]
                 ) & (df["_time"].dt.minute == datetime["minute"])
 
                 df["last_close_price"] = None
-                df.loc[filter, "last_close_price"] = df.loc[filter, "close"]
+                df.loc[fiter, "last_close_price"] = df.loc[fiter, "close"]
 
                 df["last_close_time"] = None
-                df.loc[filter, "last_close_time"] = df.loc[filter, "_time"]
+                df.loc[fiter, "last_close_time"] = df.loc[fiter, "_time"]
                 with pd.option_context("future.no_silent_downcasting", True):
                     df = df.ffill(inplace=False).infer_objects(copy=False)
 
@@ -261,38 +266,44 @@ def history_fe_time(feature_config, logger=default_logger):
         fe_time = dtf.transform(df.rename(columns={"_time": prefix})).rename(
             columns={prefix: "_time"}
         )
+        is_crypto = True
 
-        if symbol in ["EURUSD", "GBPUSD", "USDJPY"]:
+        if symbol in FOREX:
             trade_times = sessions_trade_times.get("FOREX")
-        elif symbol in ["US30", "US100"]:
+            is_crypto = False
+        elif symbol in US_INDICES:
             trade_times = sessions_trade_times.get("US Indices")
+            is_crypto = False
         elif symbol == "XAUUSD":
             trade_times = sessions_trade_times.get("XAUUSD")
+            is_crypto = False
 
-        fe_time["_time"] = fe_time["_time"] - timedelta(hours=6)
+        if not is_crypto:
+            fe_time["_time"] = fe_time["_time"] - timedelta(hours=6)
 
-        for session, time_range in trade_times.items():
-            start_time = time_range[0]
-            stop_time = time_range[1]
+            for session, time_range in trade_times.items():
+                start_time = time_range[0]
+                stop_time = time_range[1]
 
-            col_name = f"{prefix}_isin_{session}"
-            fe_time[col_name] = 0
+                col_name = f"{prefix}_isin_{session}"
+                fe_time[col_name] = 0
 
-            if stop_time > start_time:
-                fe_time.loc[
-                    (fe_time["_time"].dt.hour >= start_time)
-                    & (fe_time["_time"].dt.hour < stop_time),
-                    col_name,
-                ] = 1
+                if stop_time > start_time:
+                    fe_time.loc[
+                        (fe_time["_time"].dt.hour >= start_time)
+                        & (fe_time["_time"].dt.hour < stop_time),
+                        col_name,
+                    ] = 1
 
-            else:
-                fe_time.loc[
-                    (fe_time["_time"].dt.hour >= start_time)
-                    | (fe_time["_time"].dt.hour < stop_time),
-                    col_name,
-                ] = 1
+                else:
+                    fe_time.loc[
+                        (fe_time["_time"].dt.hour >= start_time)
+                        | (fe_time["_time"].dt.hour < stop_time),
+                        col_name,
+                    ] = 1
 
-        fe_time["_time"] = fe_time["_time"] + timedelta(hours=6)
+            fe_time["_time"] = fe_time["_time"] + timedelta(hours=6)
+
         fe_time["symbol"] = symbol
         features_folder_path = f"{root_path}/data/features/{prefix}/"
         Path(features_folder_path).mkdir(parents=True, exist_ok=True)

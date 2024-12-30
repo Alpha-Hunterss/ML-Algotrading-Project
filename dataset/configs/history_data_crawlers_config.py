@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 import os
 
-start_date_str = "2023/01/01"
+start_date_str = "2017/04/10"
 # stop_date_str = "2024/07/01"
 start_date = datetime.strptime(start_date_str, "%Y/%m/%d")
 # stop_date = datetime.strptime(stop_date_str, "%Y/%m/%d")
@@ -16,7 +16,7 @@ data_folder = f"{root_path}/data/raw_data/"
 Path(data_folder).mkdir(parents=True, exist_ok=True)
 
 symbols_dict = {
-    # ? Majers
+    # ? majors
     "EURUSD": {
         "decimal_divide": 1e5,
         "pip_size": 0.0001,
@@ -62,13 +62,13 @@ symbols_dict = {
     # ? metals
     # "XAGUSD":{"decimal_divide":1e+3,"pip_size":0.1,"metatrader_id":"XAGUSD","dukascopy_id":"XAGUSD"}, # Spot silver
     "XAUUSD": {
-        "decimal_divide": 1e3,
-        "pip_size": 0.1,
+        "decimal_divide": 1e2,
+        "pip_size": 0.01,
         "yahoo_finance": ["GC=F"],
         "metatrader_id": "XAUUSD",
         "dukascopy_id": "XAUUSD",
     },  # Spot gold
-    # ? Crosses
+    # ? crosses
     "EURJPY": {
         "decimal_divide": 1e3,
         "pip_size": 0.01,
@@ -94,7 +94,23 @@ symbols_dict = {
         "metatrader_id": "EURGBP",
         "dukascopy_id": "EURGBP",
     },
-    # #? indies:
+    # ? crypto:
+    "BTCUSD": {
+        "decimal_divide": 1e2,
+        "pip_size": 0.01,
+        "metatrader_id": "BTCUSD",
+    },
+    # ? indices:
+    "US30": {
+        "decimal_divide": 1e2,
+        "pip_size": 0.01,
+        "metatrader_id": "US30",
+    },
+    "US100": {
+        "decimal_divide": 1e2,
+        "pip_size": 0.01,
+        "metatrader_id": "USTEC",
+    },
     # "DOLLARIDXUSD":{"decimal_divide":1e+3,"pip_size":0.0001,"metatrader_id":"","dukascopy_id":"DOLLARIDXUSD"},
     # "USA30IDXUSD":{"decimal_divide":1e+3,"pip_size":0.0001,"metatrader_id":"","dukascopy_id":"USA30IDXUSD"},
     # "USATECHIDXUSD":{"decimal_divide":1e+3,"pip_size":0.0001,"metatrader_id":"","dukascopy_id":"USATECHIDXUSD"},

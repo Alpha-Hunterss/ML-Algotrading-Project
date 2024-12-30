@@ -186,7 +186,6 @@ def quant_CV(
                         ),
                         addi_y=df.loc[folds[i]["train_dates"]]["target"],
                         use_cudf=use_cudf,
-                        eval_set=eval_set,
                         verbose = False,
                     )
                 else:

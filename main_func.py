@@ -176,7 +176,7 @@ def main(
         )
 
         # ______________________________RUN Quant Cross-Validation and Backtest on Folds_____________________
-        non_feature_columns = ["target", "pred_as_val", "pred_val_proba", "pred_as_test", "pred_test_proba", "K","symbol"]
+        non_feature_columns = ["target", "pred_as_val", "pred_val_proba", "pred_as_test", "pred_test_proba", "K"]
         swap_rate = symbols_dict[target_symbol]["swap_rate"][trade_mode]
         the_config["swap_rate"] = symbols_dict[target_symbol]["swap_rate"]
         input_cols_and_type, input_cols, evals, val_predictions, test_predictions, general_backtest_report, importance_df = quant_CV(

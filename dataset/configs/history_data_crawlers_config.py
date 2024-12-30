@@ -8,8 +8,6 @@ start_date = datetime.strptime(start_date_str, "%Y/%m/%d")
 # stop_date = datetime.strptime(stop_date_str, "%Y/%m/%d")
 stop_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
-
-
 metatrader_number_of_days = 340
 root_path = str(os.path.dirname(os.path.abspath(__file__))).replace("configs", "")
 data_folder = f"{root_path}/data/raw_data/"

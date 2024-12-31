@@ -1450,25 +1450,12 @@ class ClassificationConformalPredictor:
                             X_meta["base_model's_probs"] = cudf.Series(
                                 np.max(prob_pred, axis=1), index=X_meta.index
                             )
-
-                        print(f"CuDF valid X_meta set shape is: {X_meta.shape}")
-                        null_columns = X_meta.to_pandas().columns[X_meta.isnull().to_pandas().any()]
-                        print(f"Columns with null values: {null_columns}")
-                        null_counts = X_meta[null_columns].isnull().sum()
-                        print(null_counts)
-
-                        print(f"Some base_prob_pred zero probs: {base_prob_pred[:10, 0]}")
-                        print(f"Some base_prob_pred one probs: {base_prob_pred[:10, 1]}")
-                        print("base_prob_pred_max:", np.max(base_prob_pred, axis=1)[:10])
-                        print(f"Some prob_pred zero probs: {prob_pred[:10, 0]}")
-                        print(f"Some prob_pred one probs: {prob_pred[:10, 1]}")
-                        print("prob_pred_max:", np.max(prob_pred, axis=1)[:10])
                     else:
                         if self.calibration_method is not None:
-                            X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                            X_meta.loc[:, "base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                            X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
+                            X_meta["base_model's_calib_probs"] = np.max(prob_pred, axis=1)
                         else:
-                            X_meta.loc[:, "base_model's_probs"] = np.max(prob_pred, axis=1)
+                            X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
 
                     self.meta_model.fit(X_meta, y_meta)
 

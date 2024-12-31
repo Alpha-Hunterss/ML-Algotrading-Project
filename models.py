@@ -1491,6 +1491,13 @@ class ClassificationConformalPredictor:
                         print(f"Shape of the array is: {base_prob_pred.shape}")
                         print(f"Number of prob_pred null values: {np.isnan(prob_pred).sum()}")
                         print(f"Shape of the array is: {prob_pred.shape}")
+
+                        print(f"Some base_prob_pred zero probs: {base_prob_pred[0, :10]}")
+                        print(f"Some base_prob_pred one probs: {base_prob_pred[1, :10]}")
+                        print("base_prob_pred_max:", np.max(base_prob_pred, axis=1)[:10])
+                        print(f"Some prob_pred zero probs: {prob_pred[0, :10]}")
+                        print(f"Some prob_pred one probs: {prob_pred[1, :10]}")
+                        print("prob_pred_max:", np.max(prob_pred, axis=1)[:10])
                     else:
                         if self.calibration_method is not None:
                             X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)

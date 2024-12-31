@@ -1486,6 +1486,11 @@ class ClassificationConformalPredictor:
                             print(f"Number of null values: {null_count}")
                         else:
                             print("The Series does not contain any null values.")
+
+                        print(f"Number of base_prob_pred null values: {np.isnan(base_prob_pred).sum()}")
+                        print(f"Shape of the array is: {base_prob_pred.shape}")
+                        print(f"Number of prob_pred null values: {np.isnan(prob_pred).sum()}")
+                        print(f"Shape of the array is: {prob_pred.shape}")
                     else:
                         if self.calibration_method is not None:
                             X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)

@@ -1160,20 +1160,6 @@ class ClassificationConformalPredictor:
             raise ValueError("'n_folds' cannot be negative or zero.")
 
         if self.use_valid_as_calib:
-            print(f"CuDF X_train set shape is: {X_train.shape}")
-            null_columns = X_train.to_pandas().columns[X_train.isnull().to_pandas().any()]
-            print(f"Columns with null values: {null_columns}")
-            null_counts = X_train[null_columns].isnull().sum()
-            print(null_counts)
-
-            print(f"CuDF y_train set shape is: {y_train.shape}")
-            if y_train.isnull().any():
-                print("The Series contains null values.")
-                null_count = y_train.isnull().sum()
-                print(f"Number of null values: {null_count}")
-            else:
-                print("The Series does not contain any null values.")
-
             self.model.fit(X_train, y_train)
             self.classes_ = self.model.classes_
 
@@ -1365,20 +1351,6 @@ class ClassificationConformalPredictor:
 
                 # Apply calibration
                 if self.use_cudf:
-                    print(f"CuDF valid X set shape is: {X.shape}")
-                    null_columns = X.to_pandas().columns[X.isnull().to_pandas().any()]
-                    print(f"Columns with null values: {null_columns}")
-                    null_counts = X[null_columns].isnull().sum()
-                    print(null_counts)
-
-                    print(f"CuDF valid y set shape is: {y.shape}")
-                    if y.isnull().any():
-                        print("The Series contains null values.")
-                        null_count = y.isnull().sum()
-                        print(f"Number of null values: {null_count}")
-                    else:
-                        print("The Series does not contain any null values.")
-
                     if self.calibration_method is not None:
                         if self.calibration_method == "venn_abers":
                             base_prob_pred = prob_pred
@@ -1468,10 +1440,10 @@ class ClassificationConformalPredictor:
                         y_meta = cudf.Series(y_meta)
 
                         if self.calibration_method is not None:
-                            X_meta.loc[:, "base_model's_probs"] = cudf.Series(np.max(base_prob_pred, axis=1))
-                            X_meta.loc[:, "base_model's_calib_probs"] = cudf.Series(np.max(prob_pred, axis=1))
+                            X_meta["base_model's_probs"] = cudf.Series(np.max(base_prob_pred, axis=1))
+                            X_meta["base_model's_calib_probs"] = cudf.Series(np.max(prob_pred, axis=1))
                         else:
-                            X_meta.loc[:, "base_model's_probs"] = cudf.Series(np.max(prob_pred, axis=1))
+                            X_meta["base_model's_probs"] = cudf.Series(np.max(prob_pred, axis=1))
 
                         print(f"CuDF valid X_meta set shape is: {X_meta.shape}")
                         null_columns = X_meta.to_pandas().columns[X_meta.isnull().to_pandas().any()]
@@ -1479,24 +1451,11 @@ class ClassificationConformalPredictor:
                         null_counts = X_meta[null_columns].isnull().sum()
                         print(null_counts)
 
-                        print(f"CuDF valid y_meta set shape is: {y_meta.shape}")
-                        if y_meta.isnull().any():
-                            print("The Series contains null values.")
-                            null_count = y_meta.isnull().sum()
-                            print(f"Number of null values: {null_count}")
-                        else:
-                            print("The Series does not contain any null values.")
-
-                        print(f"Number of base_prob_pred null values: {np.isnan(base_prob_pred).sum()}")
-                        print(f"Shape of the array is: {base_prob_pred.shape}")
-                        print(f"Number of prob_pred null values: {np.isnan(prob_pred).sum()}")
-                        print(f"Shape of the array is: {prob_pred.shape}")
-
-                        print(f"Some base_prob_pred zero probs: {base_prob_pred[0, :10]}")
-                        print(f"Some base_prob_pred one probs: {base_prob_pred[1, :10]}")
+                        print(f"Some base_prob_pred zero probs: {base_prob_pred[:10, 0]}")
+                        print(f"Some base_prob_pred one probs: {base_prob_pred[:10, 1]}")
                         print("base_prob_pred_max:", np.max(base_prob_pred, axis=1)[:10])
-                        print(f"Some prob_pred zero probs: {prob_pred[0, :10]}")
-                        print(f"Some prob_pred one probs: {prob_pred[1, :10]}")
+                        print(f"Some prob_pred zero probs: {prob_pred[:10, 0]}")
+                        print(f"Some prob_pred one probs: {prob_pred[:10, 1]}")
                         print("prob_pred_max:", np.max(prob_pred, axis=1)[:10])
                     else:
                         if self.calibration_method is not None:
@@ -1535,21 +1494,6 @@ class ClassificationConformalPredictor:
                             ]
 
             else: # set_name == test
-                if self.use_cudf:
-                    print(f"CuDF test X set shape is: {X.shape}")
-                    null_columns = X.to_pandas().columns[X.isnull().to_pandas().any()]
-                    print(f"Columns with null values: {null_columns}")
-                    null_counts = X[null_columns].isnull().sum()
-                    print(null_counts)
-
-                    print(f"CuDF test y set shape is: {y.shape}")
-                    if y.isnull().any():
-                        print("The Series contains null values.")
-                        null_count = y.isnull().sum()
-                        print(f"Number of null values: {null_count}")
-                    else:
-                        print("The Series does not contain any null values.")
-
                 if confidence_level is not None:
                     # Calculate per-class thresholds
                     thresholds = {

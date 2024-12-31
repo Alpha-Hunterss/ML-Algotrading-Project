@@ -1440,10 +1440,16 @@ class ClassificationConformalPredictor:
                         y_meta = cudf.Series(y_meta)
 
                         if self.calibration_method is not None:
-                            X_meta["base_model's_probs"] = cudf.Series(np.max(base_prob_pred, axis=1))
-                            X_meta["base_model's_calib_probs"] = cudf.Series(np.max(prob_pred, axis=1))
+                            X_meta["base_model's_probs"] = cudf.Series(
+                                np.max(base_prob_pred, axis=1), index=X_meta.index
+                            )
+                            X_meta["base_model's_calib_probs"] = cudf.Series(
+                                np.max(prob_pred, axis=1), index=X_meta.index
+                            )
                         else:
-                            X_meta["base_model's_probs"] = cudf.Series(np.max(prob_pred, axis=1))
+                            X_meta["base_model's_probs"] = cudf.Series(
+                                np.max(prob_pred, axis=1), index=X_meta.index
+                            )
 
                         print(f"CuDF valid X_meta set shape is: {X_meta.shape}")
                         null_columns = X_meta.to_pandas().columns[X_meta.isnull().to_pandas().any()]

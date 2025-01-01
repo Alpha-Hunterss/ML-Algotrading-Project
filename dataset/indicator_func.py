@@ -971,15 +971,16 @@ def add_candle_base_indicators_polars(
     features = opts["base_feature"]
     time_frames = opts["candle_timeframe"]
     window_sizes = opts["window_size"]
+
     if prefix == "fe_leg":
         exponents = opts["exponents"]
         percentage = opts["percentage"]
     elif prefix=='fe_GMA':
-        devs = opts['feature_confing']['devs']
+        devs = opts['feature_config']['devs']
     elif prefix=='fe_FFD':
-        n_splits = opts['feature_confing']['n_splits']
+        n_splits = opts['feature_config']['n_splits']
     elif prefix=='fe_OL':
-        w_sma = opts['feature_confing']['window_size_SMA'] 
+        w_sma = opts['feature_config']['window_size_SMA'] 
 
         for w in window_sizes:
             for time_frame in time_frames:

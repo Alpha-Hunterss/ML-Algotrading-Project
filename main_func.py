@@ -192,6 +192,7 @@ def main(
             non_feature_columns=non_feature_columns,
             swap_rate=swap_rate,
         )
+
         # ______________________________Retrain Last Model to Save___________________________________________
         if save_model_mode is not None:
             final_clf = model_func(
@@ -217,17 +218,13 @@ def main(
         selected_evals.update(eval_test)
         eval_valid_test = cal_aggregated_evals(evals[evals.dataset != "train"], set_name="valid&test")
         selected_evals.update(eval_valid_test)
-
         selected_evals.update(general_backtest_report)
-
         raw_aggregated_evals = eval_summerize_dict(evals, cal_mode="")
 
         # ______________________________Create Quant Experiment Tracker Object_______________________________
-
         exp_date = str(datetime.today().strftime("%Y-%m-%d_%H:%M"))
         # Experiment Name
         name = f"{model_name}_{target_col.replace('trg_clf_','')}_prof{selected_evals['profit_percent_test']:.2f}_max_dd{selected_evals['max_dd_test']:.2f}_median_sig{selected_evals['signal_count_median_test']:.2f}_date{exp_date}"
-
         QuantExpTracker_arguments = {
             "model": final_clf,
 
@@ -254,11 +251,11 @@ def main(
             "exp_date": exp_date,
             "max_CV_train_date": evals[evals.dataset == "train"]["Max_date"].max(),
         }
-
         QuantExpTracker_arguments.update(exp_metadata)
         exp_obj = QuantExpTracker(**QuantExpTracker_arguments)
         # Store Experiment Object in Pickle & Zip
         exp_obj.store_obj()
+
         if not manual:
         # ______________________________WandB Sweep Mode: Log & Return Artifact______________________________
             evals_logger(evals[evals.dataset == "train"],eval_train, name="train")
@@ -279,7 +276,6 @@ def main(
 
         if manual:
         # ______________________________Manual Mode: Return Experiment Tracker Object_________________________
-
             artifact_name = "manual" + target_col
             gc.collect()
             return exp_obj, exp_metadata, artifact_name

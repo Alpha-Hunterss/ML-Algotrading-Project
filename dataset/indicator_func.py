@@ -1790,6 +1790,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                         "candle_timeframe": feature_config[symbol][fe_prefix]["timeframe"],
                         "window_size": feature_config[symbol][fe_prefix]["window_size"],
                         "features_folder_path": features_folder_path,
+                        "feature_config": feature_config[symbol][fe_prefix],
                     }
 
                 base_features = [

@@ -1,6 +1,7 @@
 ##? asset classes
 US_INDICES = ["US30", "US100"]
 FOREX = ["EURUSD", "GBPUSD", "USDJPY"]
+CRYPTO = ["BTCUSD"]
 
 ##? in EST time zone
 time_sessions = {

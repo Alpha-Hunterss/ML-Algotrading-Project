@@ -9,6 +9,7 @@ from dataset.extract_config_from_features import (
     get_all_selected_features,
 )
 from dataset.configs.history_data_crawlers_config import root_path
+from dataset.configs.feature_configs_general import CRYPTO
 from pathlib import Path
 from dataset.utils.reduce_memory import reduce_mem_usage
 
@@ -170,7 +171,8 @@ def history_columns_merge(feature_config, logger=default_logger, general_mode=Fa
         sy_fe = list(
             set(list(feature_config[symbol].keys())) & set(fe_refrece_list)
         )
-        sy_fe.append("fe_market_close")
+        if symbol not in CRYPTO:
+            sy_fe.append("fe_market_close")
         sy_fe = list(set(sy_fe))
         for feture in sy_fe:
             try:

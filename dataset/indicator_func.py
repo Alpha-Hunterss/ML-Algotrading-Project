@@ -993,16 +993,45 @@ def add_candle_base_indicators_polars(
                 # Find items where the number after 'M' is not equal to time_frame
                 other_tf_features = [f for f in features if not pattern.match(f)]
                 df = df.drop(other_tf_features + ["minutesPassed"])
-                df = base_func(
-                    df=df,
-                    w=w,
-                    time_frame=time_frame,
-                    features=list(set(features) - set(other_tf_features)),
-                    pip_size=pip_size,
-                    exponents=exponents,
-                    prefix=prefix,
-                    percentage=percentage,
-                )
+                if prefix=='fe_GMA':
+                
+                    df = base_func(
+                        df=df,
+                        w=w,
+                        time_frame=time_frame,
+                        features=list(set(features) - set(other_tf_features)),
+                        pip_size=pip_size,
+                        prefix=prefix,
+                        devs = devs
+                    )
+                elif prefix=='fe_FFD':
+                    df = base_func(
+                        df=df,
+                        time_frame=time_frame,
+                        features=list(set(features) - set(other_tf_features)),
+                        prefix=prefix,
+                        n_splits = n_splits
+                    )
+                elif prefix=='fe_OL':
+
+                    df = base_func(
+                        df=df,
+                        w=w,
+                        w_sma=w_sma,
+                        time_frame=time_frame,
+                        features=list(set(features) - set(other_tf_features)),
+                        pip_size=pip_size,
+                        prefix=prefix,
+                    )
+                else:
+                    df = base_func(
+                        df=df,
+                        w=w,
+                        time_frame=time_frame,
+                        features=list(set(features) - set(other_tf_features)),
+                        pip_size=pip_size,
+                        prefix=prefix,
+                    )
 
                 file_name = (
                     features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"

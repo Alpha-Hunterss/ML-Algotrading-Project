@@ -28,9 +28,8 @@ def cal_window_max(array, window_size, sampling_rate):
 
     for i in range(window_size, array.shape[0]):
         selected_slice = array[i - window_size + 1: i + 1].flatten()  # Ensure 1D input
-        selected_slice = np.array(selected_slice)  # Ensure it's a numpy array
         selected_slice = selected_slice * hanning_window  # Apply Hanning window
-        
+
         # (1) FFT Features
         fft_values = np.fft.fft(selected_slice)
         fft_amplitude = np.abs(fft_values[:window_size // 2])

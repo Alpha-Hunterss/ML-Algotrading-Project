@@ -1283,6 +1283,421 @@ def cal_RSTD_func(
 
     return df
 
+def cal_GMAandGBB_func(
+    df: pl.DataFrame,
+    w: int,
+    time_frame: int,
+    features: List[str],
+    devs:List[int|float] ,
+    pip_size: float,
+    prefix: str = "fe_GMA",
+    
+) -> pl.DataFrame:
+    """
+    this function calculates Gaussian moving average And Weighted Bollinger Band.
+    inputs:
+    df: dataframe containing the raw feature
+    w: Gaussian Parameter 
+    time_frame: time_frame for calculations
+    devs: Parameter for calculations Bollinger Band,
+    pip size: pip size of the pair
+    prefix: prefix of feature name
+    normalize: if True the function returns pipsize difference between GMA and last close-high-low price.
+
+    """
+    # print('=================')
+    # print(features)
+    
+    # Assuming `df` is a polars DataFrame
+    df = df.sort("_time")
+    def gaussian_vectorized(source, bw):
+        return np.exp(-1 * ((source / bw) ** 2)) / np.sqrt(2 * np.pi)
+
+    i_values = np.arange(500)  
+    array_w = gaussian_vectorized(i_values, w)
+    array_w = array_w[array_w * 1e10 > 1]
+    Sum_w = np.sum(array_w)
+
+    base_features = features
+    array_price = df.select(base_features).to_numpy()
+    window_size = len(array_w)
+    devs = np.array(devs)
+
+    # Rolling calculations using convolution for weighted values
+    rolled_close = np.convolve(array_price[:, base_features.index(f"M{time_frame}_CLOSE")]**1, array_w, 'valid') / Sum_w
+    rolled_close_sq = np.convolve(array_price[:, base_features.index(f"M{time_frame}_CLOSE")]**2, array_w, 'valid') / Sum_w
+    rolled_high = np.convolve(array_price[:, base_features.index(f"M{time_frame}_HIGH")]**1, array_w, 'valid') / Sum_w
+    rolled_high_sq = np.convolve(array_price[:, base_features.index(f"M{time_frame}_HIGH")]**2, array_w, 'valid') / Sum_w
+    rolled_low = np.convolve(array_price[:, base_features.index(f"M{time_frame}_LOW")]**1, array_w, 'valid') / Sum_w
+    rolled_low_sq = np.convolve(array_price[:, base_features.index(f"M{time_frame}_LOW")]**2, array_w, 'valid') / Sum_w
+
+    # Calculate standard deviations
+    std_close = np.sqrt(np.maximum(0,rolled_close_sq - rolled_close**2))
+    std_high = np.sqrt(np.maximum(0,rolled_high_sq - rolled_high**2))
+    std_low = np.sqrt(np.maximum(0,rolled_low_sq - rolled_low**2))
+
+    df = df.slice(window_size - 1)
+    df = df.with_columns(
+        [
+            pl.lit(rolled_close).alias("close_GMA"),
+            pl.lit(rolled_high).alias("high_GMA"),
+            pl.lit(rolled_low).alias("low_GMA"),
+        ]
+    )
+
+
+
+
+
+    # Add Bollinger Bands for each deviation level
+    for dev in devs:
+            
+        df = df.with_columns([
+            (pl.col('close_GMA') + std_close * dev).alias(f'Close-GMA_UBB{dev}'),
+            (pl.col('close_GMA') - std_close * dev).alias(f'Close-GMA_LBB{dev}'),
+            (pl.col('high_GMA') + std_high * dev).alias(f'High-GMA_UBB{dev}'),
+            (pl.col('high_GMA') - std_high * dev).alias(f'High-GMA_LBB{dev}'),
+            (pl.col('low_GMA') + std_low * dev).alias(f'Low-GMA_UBB{dev}'),
+            (pl.col('low_GMA') - std_low * dev).alias(f'Low-GMA_LBB{dev}')
+        ]).lazy()
+
+    col_drop = list(set(df.collect_schema().names()) - set(['_time']))
+
+
+    df = df.with_columns((pl.col('close_GMA').diff()).alias(f"{prefix}_GMAClose_W{w}_diff_cndl_M{time_frame}")).lazy()
+    df = df.with_columns((pl.col('high_GMA').diff()).alias(f"{prefix}_GMAHigh_W{w}_diff_cndl_M{time_frame}")).lazy()
+    df = df.with_columns((pl.col('low_GMA').diff()).alias(f"{prefix}_GMALow_W{w}_diff_cndl_M{time_frame}")).lazy()
+
+    
+
+    for base_feature in base_features:
+        
+        df = df.with_columns(
+            (
+                (
+                    pl.col(base_feature) - pl.col('close_GMA')
+                )
+                / pip_size
+            ).alias(f"{prefix}_{base_feature}-GMAClose_W{w}_cndl_M{time_frame}_norm")
+        ).lazy()  
+
+                    
+        df = df.with_columns(
+            (
+                (
+                    pl.col(base_feature) - pl.col('high_GMA')
+                )
+                / pip_size
+            ).alias(f"{prefix}_{base_feature}-GMAHigh_W{w}_cndl_M{time_frame}_norm")
+        ).lazy()  
+
+                                
+        df = df.with_columns(
+            (
+                (
+                    pl.col(base_feature) - pl.col('low_GMA')
+                )
+                / pip_size
+            ).alias(f"{prefix}_{base_feature}-GMALow_W{w}_cndl_M{time_frame}_norm")
+        ).lazy() 
+
+        for dev in devs:
+            if base_feature == base_features[0]:
+
+                df = df.with_columns(
+                    (
+                        (
+                            pl.col(f'Close-GMA_UBB{dev}')- pl.col(f'Close-GMA_LBB{dev}')
+                        )/ pip_size
+                        
+                    ).alias(f"{prefix}_UGBBClose{dev}-LGBBClose{dev}_W{w}_cndl_M{time_frame}")
+                ).lazy() 
+
+                # df = df.with_columns(
+                #     (
+                #         (
+                #             pl.col(f'Close-GMA_UBB{dev}')/ pl.col(f'Close-GMA_LBB{dev}')
+                #         )
+                        
+                #     ).alias(f"{prefix}_UGBBClose{dev}/LGBBClose{dev}_W{w}_cndl_M{time_frame}")
+                # ).lazy() 
+
+                                
+                df = df.with_columns(
+                    (
+                        (
+                            pl.col(f'High-GMA_UBB{dev}')- pl.col(f'High-GMA_LBB{dev}')
+                        )/ pip_size
+                        
+                    ).alias(f"{prefix}_UGBBHigh{dev}-LGBBHigh{dev}_W{w}_cndl_M{time_frame}")
+                ).lazy() 
+
+                # df = df.with_columns(
+                #     (
+                #         (
+                #             pl.col(f'High-GMA_UBB{dev}')/ pl.col(f'High-GMA_LBB{dev}')
+                #         )
+                        
+                #     ).alias(f"{prefix}_UGBBHigh{dev}/LGBBHigh{dev}_W{w}_cndl_M{time_frame}")
+                # ).lazy() 
+
+
+                
+                                
+                df = df.with_columns(
+                    (
+                        (
+                            pl.col(f'Low-GMA_UBB{dev}')- pl.col(f'Low-GMA_LBB{dev}')
+                        )/ pip_size
+                        
+                    ).alias(f"{prefix}_UGBBLow{dev}-LGBBLow{dev}_W{w}_cndl_M{time_frame}")
+                ).lazy() 
+
+                # df = df.with_columns(
+                #     (
+                #         (
+                #             pl.col(f'Low-GMA_UBB{dev}')/ pl.col(f'Low-GMA_LBB{dev}')
+                #         )
+                        
+                #     ).alias(f"{prefix}_UGBBLow{dev}/LGBBLow{dev}_W{w}_cndl_M{time_frame}")
+                # ).lazy() 
+
+
+            df = df.with_columns(
+                (
+                    (
+                        pl.col(base_feature) - pl.col(f'Close-GMA_UBB{dev}') 
+                    )
+                    / pip_size
+                ).alias(f"{prefix}_{base_feature}-UGBBClose{dev}_W{w}_cndl_M{time_frame}_norm")
+            ).lazy()  
+
+            
+            df = df.with_columns(
+                (
+                    (
+                        pl.col(base_feature) - pl.col(f'Close-GMA_LBB{dev}') 
+                    )
+                    / pip_size
+                ).alias(f"{prefix}_{base_feature}-LGBBClose{dev}_W{w}_cndl_M{time_frame}_norm")
+            ).lazy() 
+
+            
+            df = df.with_columns(
+                (
+                    (
+                        pl.col(base_feature) - pl.col(f'High-GMA_UBB{dev}')
+                    )
+                    / pip_size
+                ).alias(f"{prefix}_{base_feature}-UGBBHigh{dev}_W{w}_cndl_M{time_frame}_norm")
+            ).lazy()  
+
+            
+            df = df.with_columns(
+                (
+                    (
+                        pl.col(base_feature) - pl.col(f'High-GMA_LBB{dev}')
+                    )
+                    / pip_size
+                ).alias(f"{prefix}_{base_feature}-LGBBHigh{dev}_W{w}_cndl_M{time_frame}_norm")
+            ).lazy() 
+
+
+                            
+            df = df.with_columns(
+                (
+                    (
+                        pl.col(base_feature) - pl.col(f'Low-GMA_UBB{dev}')
+                    )
+                    / pip_size
+                ).alias(f"{prefix}_{base_feature}-UGBBLow{dev}_W{w}_cndl_M{time_frame}_norm")
+            ).lazy()  
+
+            
+            df = df.with_columns(
+                (
+                    (
+                        pl.col(base_feature) - pl.col(f'Low-GMA_LBB{dev}')
+                    )
+                    / pip_size
+                ).alias(f"{prefix}_{base_feature}-LGBBLow{dev}_W{w}_cndl_M{time_frame}_norm")
+            ).lazy()
+    
+    
+    df =df.drop(col_drop)
+
+    return df.collect()
+
+
+def cal_FFD_func(
+    df: pl.DataFrame,
+    features: List[str],
+    time_frame: int,
+    n_splits: List[int],
+    Auto_optimaze_d : bool|List[int] = True,  
+    prefix: str = "fe_FFD",
+) -> pl.DataFrame:
+    
+    df = df.sort("_time")
+    col_drop = list(set(list(df.columns)) - set(['_time']))
+
+    def base_FFD(series, d, thres=1e-5):
+        def getWeights(d, size, thres=1e-5):
+            w = [1.0]
+            for k in range(1, size):
+                w_ = -w[-1] / k * (d - k + 1)
+                w.append(w_)
+            return np.array(w)[np.abs(w) > thres]
+
+        w = getWeights(d, size=10000, thres=thres)
+
+        result = np.convolve(series.to_numpy(), w, mode="valid")
+
+        final_result = np.full_like(series.to_numpy(), np.nan, dtype=np.float64)
+
+        final_result[len(w) - 1:] = result
+
+        return pl.Series(final_result)
+
+    def adf_test(series):
+        
+        result = ADF(series.drop_nulls().drop_nans().to_numpy()).pvalue
+
+        return result
+
+    def split_dataframe(df, n_splits):
+        indices = np.linspace(0, df.height, n_splits + 1, dtype=int)
+        splits = [df[indices[i]:indices[i + 1]] for i in range(n_splits)]
+        return splits + [df]
+
+    def Optimaze_d(list_df, base_feature, min_d=0, max_d=1, step=0.01):
+        list_d = [min_d]
+        for df in list_df:
+            for d in np.arange(list_d[-1], max_d + step, step):
+                ser = base_FFD(df[base_feature], d, 1e-5)
+                pval_adf = adf_test(ser)
+                if pval_adf < 0.05:
+                    list_d.append(d)
+                    break
+        return max(list_d)
+
+    @njit
+    def correlation(x, y):
+        x_mean, y_mean = np.mean(x), np.mean(y)
+        cov = np.mean((x - x_mean) * (y - y_mean))
+        corr = cov / (np.std(x) * np.std(y))
+        return corr
+    if type(Auto_optimaze_d) == bool and Auto_optimaze_d :
+        for ns in n_splits:
+            list_df = split_dataframe(df, ns)
+            fea = features[features.index(f"M{time_frame}_CLOSE")]
+
+            best_d = Optimaze_d(list_df, fea)
+            ser = base_FFD(df[fea], best_d)
+            best_d = round(best_d, 3)
+
+            df = df.with_columns(ser.alias(f"{prefix}-{fea}_{best_d}"))
+
+            corr = correlation(
+                df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[fea].to_numpy(),
+                df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[f"{prefix}-{fea}_{best_d}"].to_numpy(),
+            )
+            print(f"{fea}_{ns} : best_d = {best_d} | corr : {corr}")
+    else:
+        fea = features[features.index(f"M{time_frame}_CLOSE")]
+        for d in Auto_optimaze_d :
+            ser = base_FFD(df[fea], d)
+            df = df.with_columns(ser.alias(f"{prefix}-{fea}_{d}"))
+            corr = correlation(
+                    df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[fea].to_numpy(),
+                    df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[f"{prefix}-{fea}_{d}"].to_numpy(),
+                )
+            print(f"{fea} : d-value = {d} | corr : {corr}")
+            
+            # for feature in list(set(features) - set([fea])):
+            #     ser = base_FFD(df[feature], best_d)
+            #     df = df.with_columns(ser.alias(f"{prefix}-{feature}_{best_d}"))
+    df =df.drop(col_drop)
+    df = df.filter(
+        reduce(
+            lambda acc, col: acc & pl.col(col).is_not_nan() if col != '_time' else acc,
+                df.columns,
+                pl.lit(True)
+        )
+    )  
+    return df
+
+def cal_OverLap_func(
+    df: pl.DataFrame,
+    features: List[str],
+    w: int,
+    w_sma : List[int],
+    time_frame: int,
+    pip_size: float,  # only for compatibility
+    prefix: str = "fe_OL",
+    
+) -> pl.DataFrame:
+    
+    df = df.sort("_time")
+    
+    low = features[features.index(f'M{time_frame}_LOW')]
+    high = features[features.index(f'M{time_frame}_HIGH')]
+    df = df.with_columns(
+        [
+            pl.col(low).rolling_min(window_size=w).alias("Low_window"),
+            pl.col(high).rolling_max(window_size=w).alias("High_window"),
+        ]
+    ).lazy()
+
+    df = df.with_columns(
+        [
+            pl.col("Low_window").shift(w).alias("Low_shifted_window"),
+            pl.col("High_window").shift(w).alias("High_shifted_window"),
+        ]
+    ).lazy()
+
+    df = df.with_columns(
+        [
+            (pl.when(
+                pl.min_horizontal([pl.col("High_window"), pl.col("High_shifted_window")])
+                - pl.max_horizontal([pl.col("Low_window"), pl.col("Low_shifted_window")])
+                >= 0
+            ).then(
+                pl.min_horizontal([pl.col("High_window"), pl.col("High_shifted_window")])
+                - pl.max_horizontal([pl.col("Low_window"), pl.col("Low_shifted_window")])
+            ).otherwise(0)).alias("Overlap"),
+            (pl.col("High_window") - pl.col("Low_window")).alias("BarAmount"),
+        ]
+    ).lazy()
+
+    df = df.with_columns(
+        pl.when(pl.col("BarAmount") == 0).then(0.001).otherwise(pl.col("BarAmount")).alias("BarAmount")
+    ).lazy()
+
+
+    df = df.with_columns(
+        ((pl.col("Overlap") / pl.col("BarAmount")) * 100)
+        .alias(f"{prefix}_W{w}_cndl_M{time_frame}")
+    ).lazy()
+    
+
+
+    col_drop = list(set(df.collect_schema().names()) - set(['_time', f"{prefix}_W{w}_cndl_M{time_frame}"]))
+    for window in w_sma:
+
+        df = df.with_columns(
+            (pl.col(f"{prefix}_W{w}_cndl_M{time_frame}").rolling_mean(window_size=window)).alias(
+                f"{prefix}_W{w}_SMA{window}_cndl_M{time_frame}"
+            )
+        ).lazy()
+
+    
+    df = df.collect()
+      
+    df =df.drop(col_drop)
+
+    return df
+
 
 def history_indicator_calculator(feature_config, logger=default_logger):
     """
@@ -1297,12 +1712,15 @@ def history_indicator_calculator(feature_config, logger=default_logger):
         base_candle_folder_path = f"{root_path}/data/realtime_candle/"
 
         modes = {
+            "fe_GMA": {"func": cal_GMAandGBB_func},
+            "fe_leg": {"func": cal_leg_base_func},
+            "fe_OL": {"func": cal_OverLap_func},
+            "fe_FFD": {"func": cal_FFD_func},
             "fe_RSI": {"func": cal_RSI_base_func},
             "fe_EMA": {"func": cal_EMA_base_func},
             "fe_SMA": {"func": cal_SMA_base_func},
             "fe_ATR": {"func": cal_ATR_func},
             "fe_RSTD": {"func": cal_RSTD_func},
-            "fe_leg": {"func": cal_leg_base_func},
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
         }
 
@@ -1374,6 +1792,13 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
                 max_candle_timeframe = max(opts["candle_timeframe"])
                 max_window_size = max(opts["window_size"])
+                if fe_prefix == 'fe_GMA':
+                    def gaussian_vectorized(source, bw):
+                        return np.exp(-1 * ((source / bw) ** 2)) / np.sqrt(2 * np.pi)
+                    i_values = np.arange(500)  
+                    array_w = gaussian_vectorized(i_values, max_window_size)
+                    max_window_size = len(array_w[array_w * 1e10 > 1])
+
                 drop_rows = (max_window_size + 1) * (max_candle_timeframe / 5) - 1
 
                 logger.info(

@@ -151,7 +151,7 @@ general_config = {
         'window_size_SMA': [5,15,21,55],
         'base_columns': ['HIGH' , 'LOW']
     },
-    
+
     'fe_leg': {
         'base_columns': ['CLOSE']
     },
@@ -183,7 +183,12 @@ general_config = {
         'window_size': [5, 10, 48, 288, 480],
         'base_columns': ['CLOSE']
     },
-
+    
+    'fe_WIN_FREQ': {'timeframe': [5],
+        'window_size': [240, 480, 1440],
+        
+        'base_columns': ['CLOSE']
+    },
 
     'fe_cndl': [5, 15, 30, 60, 240, 1440],
 

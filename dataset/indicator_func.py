@@ -5,13 +5,13 @@ from dataset.configs.history_data_crawlers_config import symbols_dict
 import os, glob
 from typing import Callable, Dict, List, Tuple, Union
 from dataset.configs.history_data_crawlers_config import root_path
-from dataset.configs.feature_configs_general import fe_leg_config
 import re
 from dataset.logging_tools import default_logger
 
 from arch.unitroot import ADF
 from numba import njit
 from functools import reduce
+
 
 # ?? indicator ---------------------------------------------------
 
@@ -297,10 +297,9 @@ def cal_leg_base_func(
     time_frame: int,
     features: List[str],
     pip_size: float,
-    exponents: dict[str, Tuple[int, int]],
     prefix: str = "fe_leg",
     percentage_feature: bool = True,
-    percentage: float = 0.001,
+    percentage: float = 0.001,  # This is compatible with EURUSD, change for other pairs
 ) -> pl.DataFrame:
     """
     This function calculates the distance of the current candle's close price from 
@@ -321,12 +320,13 @@ def cal_leg_base_func(
     th = w
 
     # Set percentages and thresholds for timeframes other than 5M
+    # This is compatible with EURUSD, change for other pairs
     if time_frame == 15:
-        percentage *= exponents.get('15')[0]
-        th *= exponents.get('15')[1]
+        percentage = 0.0015
+        th *= 1.75
     elif time_frame == 60:
-        percentage *= exponents.get('60')[0]
-        th *= exponents.get('60')[1]
+        percentage = 0.003
+        th *= 4.5
 
     # Initialize arrays for pivot points
     # pivot_indicators = np.zeros(len(df))
@@ -975,86 +975,56 @@ def add_candle_base_indicators_polars(
     time_frames = opts["candle_timeframe"]
     window_sizes = opts["window_size"]
 
-    if prefix == "fe_leg":
-        exponents = opts["exponents"]
-        percentage = opts["percentage"]
-    elif prefix=='fe_GMA':
-        devs = opts['feature_config']['devs']
+    if prefix=='fe_GMA':
+        devs = opts['feature_confing']['devs']
     elif prefix=='fe_FFD':
-        n_splits = opts['feature_config']['n_splits']
+        n_splits = opts['feature_confing']['n_splits']
     elif prefix=='fe_OL':
-        w_sma = opts['feature_config']['window_size_SMA'] 
+        w_sma = opts['feature_confing']['window_size_SMA'] 
 
-        for w in window_sizes:
-            for time_frame in time_frames:
-                df = df_base.filter(
-                    pl.col("minutesPassed") % time_frame == (time_frame - 5)
-                )
+    for w in window_sizes:
+        for time_frame in time_frames:
+            df = df_base.filter(
+                pl.col("minutesPassed") % time_frame == (time_frame - 5)
+            )
 
-                # Create a regex pattern to match 'M' followed by the time_frame number
-                pattern = re.compile(rf"M{time_frame}_")
+            # Create a regex pattern to match 'M' followed by the time_frame number
+            pattern = re.compile(rf"M{time_frame}_")
 
-                # Find items where the number after 'M' is not equal to time_frame
-                other_tf_features = [f for f in features if not pattern.match(f)]
-                df = df.drop(other_tf_features + ["minutesPassed"])
-                if prefix=='fe_GMA':
+            # Find items where the number after 'M' is not equal to time_frame
+            other_tf_features = [f for f in features if not pattern.match(f)]
+            df = df.drop(other_tf_features + ["minutesPassed"])
+            if prefix=='fe_GMA':
                 
-                    df = base_func(
-                        df=df,
-                        w=w,
-                        time_frame=time_frame,
-                        features=list(set(features) - set(other_tf_features)),
-                        pip_size=pip_size,
-                        prefix=prefix,
-                        devs = devs
-                    )
-                elif prefix=='fe_FFD':
-                    df = base_func(
-                        df=df,
-                        time_frame=time_frame,
-                        features=list(set(features) - set(other_tf_features)),
-                        prefix=prefix,
-                        n_splits = n_splits
-                    )
-                elif prefix=='fe_OL':
-
-                    df = base_func(
-                        df=df,
-                        w=w,
-                        w_sma=w_sma,
-                        time_frame=time_frame,
-                        features=list(set(features) - set(other_tf_features)),
-                        pip_size=pip_size,
-                        prefix=prefix,
-                    )
-                else:
-                    df = base_func(
-                        df=df,
-                        w=w,
-                        time_frame=time_frame,
-                        features=list(set(features) - set(other_tf_features)),
-                        pip_size=pip_size,
-                        prefix=prefix,
-                    )
-
-                file_name = (
-                    features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
+                df = base_func(
+                    df=df,
+                    w=w,
+                    time_frame=time_frame,
+                    features=list(set(features) - set(other_tf_features)),
+                    pip_size=pip_size,
+                    prefix=prefix,
+                    devs = devs
                 )
-
-                df.write_parquet(file_name)
-    else:
-        for w in window_sizes:
-            for time_frame in time_frames:
-                df = df_base.filter(
-                    pl.col("minutesPassed") % time_frame == (time_frame - 5)
+            elif prefix=='fe_FFD':
+                df = base_func(
+                    df=df,
+                    time_frame=time_frame,
+                    features=list(set(features) - set(other_tf_features)),
+                    prefix=prefix,
+                    n_splits = n_splits
                 )
+            elif prefix=='fe_OL':
 
-                # Create a regex pattern to match 'M' followed by the time_frame number
-                pattern = re.compile(rf"M{time_frame}_")
-
-                # Find items where the number after 'M' is not equal to time_frame
-                other_tf_features = [f for f in features if not pattern.match(f)]
-                df = df.drop(other_tf_features + ["minutesPassed"])
+                df = base_func(
+                    df=df,
+                    w=w,
+                    w_sma=w_sma,
+                    time_frame=time_frame,
+                    features=list(set(features) - set(other_tf_features)),
+                    pip_size=pip_size,
+                    prefix=prefix,
+                )
+            else:
                 df = base_func(
                     df=df,
                     w=w,
@@ -1064,11 +1034,11 @@ def add_candle_base_indicators_polars(
                     prefix=prefix,
                 )
 
-                file_name = (
-                    features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
-                )
+            file_name = (
+                features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
+            )
 
-                df.write_parquet(file_name)
+            df.write_parquet(file_name)
 
     return
 
@@ -1321,7 +1291,6 @@ def cal_RSTD_func(
     df = df.drop([f"{feature}"])
 
     return df
-
 def cal_GMAandGBB_func(
     df: pl.DataFrame,
     w: int,
@@ -1637,6 +1606,7 @@ def cal_FFD_func(
 
             df = df.with_columns(ser.alias(f"{prefix}-{fea}_{best_d}"))
 
+
             corr = correlation(
                 df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[fea].to_numpy(),
                 df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[f"{prefix}-{fea}_{best_d}"].to_numpy(),
@@ -1766,7 +1736,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
         for symbol in list(feature_config.keys()):
             logger.info("* " * 25)
             symbol_ratio_dfs = []
-
+            
             for fe_prefix, func in modes.items():
                 if fe_prefix not in list(feature_config[symbol].keys()):
                     continue
@@ -1777,24 +1747,14 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 Path(features_folder_path).mkdir(parents=True, exist_ok=True)
 
                 base_cols = feature_config[symbol][fe_prefix]["base_columns"]
+                opts = {
+                    "symbol": symbol,
+                    "candle_timeframe": feature_config[symbol][fe_prefix]["timeframe"],
+                    "window_size": feature_config[symbol][fe_prefix]["window_size"],
+                    "features_folder_path": features_folder_path,
+                    "feature_confing": feature_config[symbol][fe_prefix],
 
-                if fe_prefix == "fe_leg":
-                    opts = {
-                        "symbol": symbol,
-                        "candle_timeframe": fe_leg_config[symbol]["timeframe"],
-                        "window_size": fe_leg_config[symbol]["window_size"],
-                        "exponents": fe_leg_config[symbol]["exponents"],
-                        "percentage": fe_leg_config[symbol]["percentage"],
-                        "features_folder_path": features_folder_path,
-                    }
-                else:
-                    opts = {
-                        "symbol": symbol,
-                        "candle_timeframe": feature_config[symbol][fe_prefix]["timeframe"],
-                        "window_size": feature_config[symbol][fe_prefix]["window_size"],
-                        "features_folder_path": features_folder_path,
-                        "feature_config": feature_config[symbol][fe_prefix],
-                    }
+                }
 
                 base_features = [
                     f"M{tf}_{col}"
@@ -1825,9 +1785,6 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 # Uncomment the for loop in order to plot legs (fe_leg feature) in Colab
                 for df_path in pathes:
                     df_loaded = pl.read_parquet(df_path)
-                    # for tf in [5, 15, 60]:
-                    #     if f"M{tf}_CLOSE_right" in df.columns:
-                    #         df = df.drop(f"M{tf}_CLOSE_right")
                     df = df.join(df_loaded, on="_time", how="left", coalesce=True)
 
                 max_candle_timeframe = max(opts["candle_timeframe"])
@@ -1920,3 +1877,4 @@ if __name__ == "__main__":
     config_general = generate_general_config()
     history_indicator_calculator(config_general)
     print("--> history_indicator_calculator DONE.")
+

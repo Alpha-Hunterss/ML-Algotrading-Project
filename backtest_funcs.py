@@ -569,6 +569,12 @@ def money_management(
         used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
         daily_dd_budget = (start_day_balance * max_daily_dd) + added_balance
 
+        remaining_pos = n_max_OP - cond_len
+        if remaining_pos == 0:
+            volumes.append(0)
+            array[i, 3] = volumes[i]
+            continue
+
         base_lot = (
             (daily_dd_budget - used_dd_budget) / remaining_pos
         ) / (pip_value[target_symbol] * pip_risk)

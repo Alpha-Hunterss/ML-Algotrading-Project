@@ -43,7 +43,10 @@ def quant_CV(
         model_name,
         use_cudf,
         cnf_levels,
-        early_stopping_rounds: int|None,
+        initial_balance: int,
+        default_volume: float,
+        default_spread: int,
+        early_stopping_rounds: int | None,
         df_raw_backtest: pd.DataFrame,
         bt_column_name: str,
         non_feature_columns: list[str],
@@ -385,9 +388,9 @@ def quant_CV(
                         ][[f"pred_as_{pred_name[set_name]}", "confidence_levels"]].rename(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),
-                        spread = 2,
-                        volume = 0.1,
-                        initial_balance= 1000,
+                        spread = default_spread,
+                        volume = default_volume,
+                        initial_balance= initial_balance,
                         df_raw_backtest  = df_raw_backtest,
                         bt_column_name = bt_column_name,
                         swap_rate= swap_rate,
@@ -400,9 +403,9 @@ def quant_CV(
                         ][[f"pred_as_{pred_name[set_name]}"]].rename(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),
-                        spread = 2,
-                        volume = 0.1,
-                        initial_balance= 1000,
+                        spread = default_spread,
+                        volume = default_volume,
+                        initial_balance= initial_balance,
                         df_raw_backtest  = df_raw_backtest,
                         bt_column_name = bt_column_name,
                         swap_rate= swap_rate,
@@ -451,9 +454,9 @@ def quant_CV(
         bt_report, bt_df = do_backtest(
             df_model_signal = df.loc[df[f"pred_as_{pred_name}"] == 1][[f"pred_as_{pred_name}"]].rename(
                     columns={f"pred_as_{pred_name}":"model_prediction"}),
-            spread = 2,
-            volume = 0.1,
-            initial_balance= 1000,
+            spread = default_spread,
+            volume = default_volume,
+            initial_balance= initial_balance,
             df_raw_backtest  = df_raw_backtest,
             bt_column_name = bt_column_name,
             swap_rate= swap_rate,

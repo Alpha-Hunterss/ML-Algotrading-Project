@@ -41,6 +41,9 @@ def main(
             dynamic_sl_scale_type = man_params["dynamic_sl_scale_type"]
             rstd_window_size = man_params["rstd_window_size"]
             confidence_levels = man_params["confidence_levels"]
+            initial_balance = man_params["initial_balance"]
+            default_volume = man_params["default_volume"]
+            default_spread = man_params["default_spread"]
             # Output Model:
             save_model_mode = man_params["save_model_mode"]
             use_cudf = man_params["use_cudf"]
@@ -74,6 +77,9 @@ def main(
                 "dynamic_sl_scale_type",
                 "rstd_window_size",
                 "confidence_levels",
+                "initial_balance",
+                "default_volume",
+                "default_spread",
                 "save_model_mode",
                 "use_cudf",
                 "feature_set",
@@ -106,6 +112,9 @@ def main(
             dynamic_sl_scale_type = wandb.config.dynamic_sl_scale_type
             rstd_window_size = wandb.config.rstd_window_size
             confidence_levels = wandb.config.confidence_levels
+            initial_balance = wandb.config.initial_balance
+            default_volume = wandb.config.default_volume
+            default_spread = wandb.config.default_spread
             # Output Model:
             save_model_mode = wandb.config.save_model_mode
             use_cudf = wandb.config.use_cudf
@@ -186,6 +195,9 @@ def main(
             model_name=model_name,
             use_cudf=use_cudf,
             cnf_levels=confidence_levels,
+            initial_balance=initial_balance,
+            default_volume=default_volume,
+            default_spread=default_spread,
             early_stopping_rounds=early_stopping_rounds,
             df_raw_backtest=df_raw_backtest,
             bt_column_name=bt_column_name,

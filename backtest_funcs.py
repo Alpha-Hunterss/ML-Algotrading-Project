@@ -315,6 +315,7 @@ def cal_backtest_on_raw_cndl(
 
 def do_backtest(
     df_model_signal: pd.DataFrame,
+    target_symbol: str,
     spread: float,
     volume: float,
     initial_balance: int,
@@ -322,6 +323,16 @@ def do_backtest(
     bt_column_name:   str,
     swap_rate: float,
 ):
+    pip_value = {
+        'EURUSD': 10,
+        'GBPUSD': 10,
+        'USDJPY': 6.68,
+        'XAUUSD': 1,
+        'US30': 0.01,
+        'US100': 0.01,
+        'SPX500': 0.01,
+        'BTCUSD': 0.01
+    }
 
     new_trg_df = df_model_signal.merge(df_raw_backtest, on="_time", how="inner")
     new_trg_df["net_profit"] = new_trg_df.pip_diff - spread
@@ -330,12 +341,12 @@ def do_backtest(
         ##? calculate balance
         new_trg_df["balance"] = new_trg_df["net_profit"] * volume * new_trg_df[
             "confidence_levels"
-        ] * 10 + new_trg_df["swap_days"] * volume * swap_rate
+        ] * pip_value[target_symbol] + new_trg_df["swap_days"] * volume * swap_rate
     else:
         ##? calculate balance
         new_trg_df["balance"] = new_trg_df[
             "net_profit"
-        ] * volume * 10 + new_trg_df["swap_days"] * volume * swap_rate
+        ] * volume * pip_value[target_symbol] + new_trg_df["swap_days"] * volume * swap_rate
 
     new_trg_df["balance"] = new_trg_df["balance"].cumsum()
     new_trg_df["balance"] += initial_balance

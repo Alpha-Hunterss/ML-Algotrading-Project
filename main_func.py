@@ -193,6 +193,7 @@ def main(
             folds,
             model=clf,
             model_name=model_name,
+            target_symbol=target_symbol,
             use_cudf=use_cudf,
             cnf_levels=confidence_levels,
             initial_balance=initial_balance,

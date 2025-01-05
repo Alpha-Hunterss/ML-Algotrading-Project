@@ -41,6 +41,7 @@ def quant_CV(
         folds: dict[int,pd.DatetimeIndex],
         model,
         model_name,
+        target_symbol,
         use_cudf,
         cnf_levels,
         initial_balance: int,
@@ -388,6 +389,7 @@ def quant_CV(
                         ][[f"pred_as_{pred_name[set_name]}", "confidence_levels"]].rename(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),
+                        target_symbol=target_symbol,
                         spread = default_spread,
                         volume = default_volume,
                         initial_balance= initial_balance,
@@ -403,6 +405,7 @@ def quant_CV(
                         ][[f"pred_as_{pred_name[set_name]}"]].rename(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),
+                        target_symbol=target_symbol,
                         spread = default_spread,
                         volume = default_volume,
                         initial_balance= initial_balance,
@@ -454,6 +457,7 @@ def quant_CV(
         bt_report, bt_df = do_backtest(
             df_model_signal = df.loc[df[f"pred_as_{pred_name}"] == 1][[f"pred_as_{pred_name}"]].rename(
                     columns={f"pred_as_{pred_name}":"model_prediction"}),
+            target_symbol=target_symbol,
             spread = default_spread,
             volume = default_volume,
             initial_balance= initial_balance,

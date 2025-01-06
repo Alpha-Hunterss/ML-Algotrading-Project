@@ -401,6 +401,7 @@ def do_backtest(
 
     swap_days_value_counts = new_trg_df["swap_days"].value_counts(normalize=True) * 100
     print(f"The swap days value counts:\n {swap_days_value_counts}")
+    print(f"The shape of the signal dataframe: {df_model_signal.shape}")
     print(f"The shape of the target dataframe: {new_trg_df.shape}")
 
     unique_values = new_trg_df['net_profit'].unique()

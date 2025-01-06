@@ -401,6 +401,12 @@ def do_backtest(
 
     swap_days_value_counts = new_trg_df["swap_days"].value_counts(normalize=True) * 100
     print(f"The swap days value counts:\n {swap_days_value_counts}")
+    print(f"The shape of the target dataframe: {new_trg_df.shape}")
+
+    unique_values = new_trg_df['net_profit'].unique()
+    if len(unique_values) == 2:
+        net_profit_value_counts = new_trg_df["net_profit"].value_counts(normalize=True) * 100
+        print(f"The net profit value counts:\n {net_profit_value_counts}")
 
     plot_profit_distribution(new_trg_df)
     plt.show()

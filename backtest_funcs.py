@@ -283,14 +283,15 @@ def cal_backtest_on_raw_cndl(
         f"trg_clf_{trade_mode}_{target_symbol}_M{look_ahead}_TP{take_profit}_SL{stop_loss}"
     )
 
-    df_raw_backtest = pd.read_parquet(df_raw_path,columns=["_time","open","high","low","close"])
-    df_raw_backtest.columns = [
-        "_time",
-        f"{target_symbol}_M5_OPEN",
-        f"{target_symbol}_M5_HIGH",
-        f"{target_symbol}_M5_LOW",
-        f"{target_symbol}_M5_CLOSE",  
-    ]
+    df_raw_backtest = pd.read_parquet(
+        f"{df_raw_path}/{target_symbol}_stage_one.parquet",
+        columns=["_time", "open", "high", "low", "close"]
+    ).rename(columns={
+        "open": f"{target_symbol}_M5_OPEN",
+        "high": f"{target_symbol}_M5_HIGH",
+        "low": f"{target_symbol}_M5_LOW",
+        "close": f"{target_symbol}_M5_CLOSE",  
+    })
 
     print(f"The size of the raw dataframe (1): {df_raw_backtest.shape}")
 

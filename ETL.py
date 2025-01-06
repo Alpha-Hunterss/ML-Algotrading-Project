@@ -50,7 +50,7 @@ def ETL(
     print("Calculating target --->")
     window_size = int(trg_look_ahead // base_time_frame)
 
-    df_raw = pd.read_parquet(f"{C5M_data_path}/{target_symbol}_stage_one.parquet", 
+    df_raw = pd.read_parquet(f"{C5M_data_path}/{target_symbol}_stage_one.parquet",
       columns = [
         '_time',
         "close",
@@ -58,9 +58,9 @@ def ETL(
         "low",
       ]
     ).rename(columns={
-        "close":f"{target_symbol}_M5_CLOSE",
-        "high":f"{target_symbol}_M5_HIGH",
-        "low":f"{target_symbol}_M5_LOW",
+        "close": f"{target_symbol}_M5_CLOSE",
+        "high": f"{target_symbol}_M5_HIGH",
+        "low": f"{target_symbol}_M5_LOW",
     })
 
     array = df.merge(df_raw, on = '_time', how = 'left')[

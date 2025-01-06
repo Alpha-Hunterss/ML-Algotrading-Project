@@ -392,6 +392,7 @@ def do_backtest(
         'BTCUSD': 0.01
     }
 
+    df_model_signal = df_model_signal.reset_index().rename(columns={'index': '_time'})
     new_trg_df = df_model_signal.merge(df_raw_backtest, on="_time", how="inner")
     new_trg_df["net_profit"] = new_trg_df.pip_diff - spread
 

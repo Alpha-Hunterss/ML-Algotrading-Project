@@ -386,7 +386,7 @@ def quant_CV(
                     bt_report, bt_df = do_backtest(
                         df_model_signal = df.loc[folds[i][set_name]].loc[
                                 df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
-                        ][[f"pred_as_{pred_name[set_name]}", "confidence_levels", "_time"]].rename(
+                        ][[f"pred_as_{pred_name[set_name]}", "confidence_levels"]].rename(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),
                         target_symbol=target_symbol,

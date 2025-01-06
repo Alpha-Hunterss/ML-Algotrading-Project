@@ -292,11 +292,15 @@ def cal_backtest_on_raw_cndl(
         f"{target_symbol}_M5_CLOSE",  
     ]
 
+    print(f"The size of the raw dataframe (1): {df_raw_backtest.shape}")
+
     df_raw_backtest.sort_values("_time", inplace=True)
     df_raw_backtest['days_diff'] = (df_raw_backtest['_time'].dt.date - df_raw_backtest['_time'].dt.date.shift()).bfill().dt.days
     array = df_raw_backtest[
         [f"{target_symbol}_M5_CLOSE", f"{target_symbol}_M5_HIGH", f"{target_symbol}_M5_LOW", "days_diff"]
     ].to_numpy()
+
+    print(f"The size of the raw dataframe (2): {df_raw_backtest.shape}")
 
     df_raw_backtest[bt_column_name], df_raw_backtest["pip_diff"], df_raw_backtest["swap_days"] = calculate_classification_target_backtest(
         array,
@@ -310,6 +314,8 @@ def cal_backtest_on_raw_cndl(
         mode=trade_mode,
     )
     df_raw_backtest.dropna(inplace=True)
+
+    print(f"The size of the raw dataframe (3): {df_raw_backtest.shape}")
 
     return df_raw_backtest, bt_column_name
 
@@ -404,7 +410,7 @@ def do_backtest(
     print(f"The swap days value counts:\n {swap_days_value_counts}")
     print(f"The shape of the signal dataframe: {df_model_signal.shape}")
     print(f"The number of duplicates of the signal dataframe: {df_model_signal.duplicated('_time').sum()}")
-    print(f"The shape of the target dataframe: {df_raw_backtest.shape}")
+    print(f"The shape of the raw dataframe: {df_raw_backtest.shape}")
     print(f"The number of duplicates of the raw dataframe: {df_raw_backtest.duplicated('_time').sum()}")
     print(f"The shape of the target dataframe: {new_trg_df.shape}")
 

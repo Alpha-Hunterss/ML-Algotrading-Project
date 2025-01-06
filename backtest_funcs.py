@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from configss.symbols_info import symbols_dict
+import matplotlib.pyplot as plt
 
 
 # Function to calculate the rolling standard deviation (RSTD)
@@ -313,6 +314,63 @@ def cal_backtest_on_raw_cndl(
     return df_raw_backtest, bt_column_name
 
 
+def plot_profit_distribution(df, bins=1000, figsize=(9, 7)):
+    """
+    Plot the distribution of net profits from trading data.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        DataFrame containing the trading data with 'net_profit' column
+    bins : int, optional
+        Number of bins for the histogram (default: 20)
+    figsize : tuple, optional
+        Figure size in inches (width, height) (default: (12, 6))
+    """
+
+    # Create figure and axis
+    plt.figure(figsize=figsize)
+
+    # Plot histogram
+    n, bins, patches = plt.hist(df['net_profit'], bins=bins, 
+                               edgecolor='black', alpha=0.7)
+
+    # Add mean and median lines
+    mean_profit = df['net_profit'].mean()
+    median_profit = df['net_profit'].median()
+
+    plt.axvline(mean_profit, color='red', linestyle='dashed', linewidth=2, 
+                label=f'Mean: {mean_profit:.1f} pips')
+    plt.axvline(median_profit, color='green', linestyle='dashed', linewidth=2, 
+                label=f'Median: {median_profit:.1f} pips')
+
+    # Customize plot
+    plt.title('Distribution of Trading Profits/Losses', fontsize=12, pad=15)
+    plt.xlabel('Profit/Loss (pips)', fontsize=10)
+    plt.ylabel('Frequency', fontsize=10)
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+
+    # Add statistics as text
+    stats_text = (
+        f'Statistics:\n'
+        f'Count: {len(df):,}\n'
+        f'Std Dev: {df["net_profit"].std():.1f} pips\n'
+        f'Min: {df["net_profit"].min():.1f} pips\n'
+        f'Max: {df["net_profit"].max():.1f} pips'
+    )
+
+    plt.text(0.95, 0.95, stats_text,
+             transform=plt.gca().transAxes,
+             verticalalignment='top',
+             horizontalalignment='right',
+             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    plt.tight_layout()
+
+    return plt.gcf()
+
+
 def do_backtest(
     df_model_signal: pd.DataFrame,
     target_symbol: str,
@@ -337,16 +395,37 @@ def do_backtest(
     new_trg_df = df_model_signal.merge(df_raw_backtest, on="_time", how="inner")
     new_trg_df["net_profit"] = new_trg_df.pip_diff - spread
 
+    print(f"The swap rate is: {swap_rate}")
+    print(f"The volume is: {volume}")
+    print(f"The pip value is: {pip_value[target_symbol]}")
+
+    swap_days_value_counts = new_trg_df["swap_days"].value_counts(normalize=True) * 100
+    print(f"The swap days value counts:\n {swap_days_value_counts}")
+
+    plot_profit_distribution(new_trg_df)
+    plt.show()
+
     if 'confidence_levels' in new_trg_df.columns:
+        positive_profits = new_trg_df[new_trg_df['net_profit'] > 0]
+        negative_profits = new_trg_df[new_trg_df['net_profit'] < 0]
+
+        result_positive = positive_profits['confidence_levels'].value_counts(normalize=True) * 100
+        result_negative = negative_profits['confidence_levels'].value_counts(normalize=True) * 100
+
+        print(f"win trade:\n {result_positive}")
+        print('**')
+        print(f"loss trade:\n {result_negative}")
+        print('==========')
+
         ##? calculate balance
         new_trg_df["balance"] = new_trg_df["net_profit"] * volume * new_trg_df[
             "confidence_levels"
-        ] * pip_value[target_symbol] + new_trg_df["swap_days"] * volume * swap_rate
+        ] * pip_value[target_symbol] + (new_trg_df["swap_days"] * volume * swap_rate)
     else:
         ##? calculate balance
         new_trg_df["balance"] = new_trg_df[
             "net_profit"
-        ] * volume * pip_value[target_symbol] + new_trg_df["swap_days"] * volume * swap_rate
+        ] * volume * pip_value[target_symbol] + (new_trg_df["swap_days"] * volume * swap_rate)
 
     new_trg_df["balance"] = new_trg_df["balance"].cumsum()
     new_trg_df["balance"] += initial_balance

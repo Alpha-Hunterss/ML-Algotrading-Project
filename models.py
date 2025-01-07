@@ -1630,16 +1630,22 @@ class ClassificationConformalPredictor:
                 import cudf
 
                 if self.calibration_method is not None:
-                    X_meta.loc[:, "base_model's_probs"] = cudf.Series(np.max(base_prob_pred, axis=1))
-                    X_meta.loc[:, "base_model's_calib_probs"] = cudf.Series(np.max(prob_pred, axis=1))
+                    X_meta["base_model's_probs"] = cudf.Series(
+                        np.max(base_prob_pred, axis=1), index=X_meta.index
+                    )
+                    X_meta["base_model's_calib_probs"] = cudf.Series(
+                        np.max(prob_pred, axis=1), index=X_meta.index
+                    )
                 else:
-                    X_meta.loc[:, "base_model's_probs"] = cudf.Series(np.max(prob_pred, axis=1))
+                    X_meta["base_model's_probs"] = cudf.Series(
+                        np.max(prob_pred, axis=1), index=X_meta.index
+                    )
             else:
                 if self.calibration_method is not None:
-                    X_meta.loc[:, "base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                    X_meta.loc[:, "base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                    X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
+                    X_meta["base_model's_calib_probs"] = np.max(prob_pred, axis=1)
                 else:
-                    X_meta.loc[:, "base_model's_probs"] = np.max(prob_pred, axis=1)
+                    X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
 
             meta_probs = self.meta_model.predict_proba(X_meta)
 

@@ -315,7 +315,7 @@ def cal_backtest_on_raw_cndl(
     return df_raw_backtest, bt_column_name
 
 
-def plot_profit_distribution(df, bins=1000, figsize=(9, 7)):
+def plot_profit_distribution(df, bins=100, figsize=(9, 7)):
     """
     Plot the distribution of net profits from trading data.
     

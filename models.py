@@ -1450,6 +1450,7 @@ class ClassificationConformalPredictor:
                             X_meta["base_model's_probs"] = cudf.Series(
                                 np.max(prob_pred, axis=1), index=X_meta.index
                             )
+                        print(f"The first 10 rows of X_meta (valid):\n {X_meta.head(10)}")
                     else:
                         if self.calibration_method is not None:
                             X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
@@ -1640,6 +1641,7 @@ class ClassificationConformalPredictor:
                     X_meta["base_model's_probs"] = cudf.Series(
                         np.max(prob_pred, axis=1), index=X_meta.index
                     )
+                print(f"The first 10 rows of X_meta (test):\n {X_meta.head(10)}")
             else:
                 if self.calibration_method is not None:
                     X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)

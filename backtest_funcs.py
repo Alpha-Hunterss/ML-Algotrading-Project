@@ -306,7 +306,7 @@ def calculate_max_drawdown(balance_series, init_balance):
     drawdowns = (balance_series - cum_max) / cum_max
 
     # Return the maximum drawdown
-    return drawdowns.min() * 100, (init_balance - balance_series.min()) * 100 / init_balance
+    return drawdowns.min() * 100, (balance_series.min() - init_balance) * 100 / init_balance
 
 
 def cal_backtest_on_raw_cndl(
@@ -481,11 +481,12 @@ def money_management(
         chunk = array[:i+1]
         dates = date_column[:i+1]
         cond = chunk[:-1, 2] > chunk[-1, 0]
-        cond_len = len(np.where(cond)[0])
+        open_cond = cond & (chunk[:-1, 3] != 0.0)
+        cond_len = len(np.where(open_cond)[0])
         n_open_position.append(cond_len)
         chunk[:-1, 5][~cond] = True
 
-        open_volumes = chunk[:-1, 3][cond]
+        open_volumes = chunk[:-1, 3][open_cond]
         total_open_volume.append(open_volumes.sum())
 
         closed_pos_cond = (chunk[:-1, 5] == True) & (dates[:-1] == prev_date)
@@ -574,6 +575,8 @@ def do_backtest(
     new_trg_df = df_model_signal.merge(df_raw_backtest, on="_time", how="inner")
     new_trg_df["net_profit"] = new_trg_df.pip_diff - spread
     new_trg_df["volume"] = volume
+    new_trg_df["n_open_position"] = 0
+    new_trg_df["volume_open_position"] = 0.0
     max_exp_daily_dd = 0.0
 
     plot_profit_distribution(new_trg_df)

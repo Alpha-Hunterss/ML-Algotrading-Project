@@ -122,7 +122,7 @@ def main(
             dynamic_sl_scale_type = wandb.config.dynamic_sl_scale_type
             rstd_window_size = wandb.config.rstd_window_size
             confidence_levels = wandb.config.confidence_levels
-            use_money_management wandb.config.use_money_management
+            use_money_management = wandb.config.use_money_management
             initial_balance = wandb.config.initial_balance
             default_volume = wandb.config.default_volume
             default_spread = wandb.config.default_spread

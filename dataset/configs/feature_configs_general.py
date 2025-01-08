@@ -1,3 +1,4 @@
+symbols = ["EURUSD"]
 ##? asset classes
 US_INDICES = ["US30", "US100"]
 FOREX = ["EURUSD", "GBPUSD", "USDJPY"]

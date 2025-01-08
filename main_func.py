@@ -41,9 +41,14 @@ def main(
             dynamic_sl_scale_type = man_params["dynamic_sl_scale_type"]
             rstd_window_size = man_params["rstd_window_size"]
             confidence_levels = man_params["confidence_levels"]
+            use_money_management = man_params["use_money_management"]
             initial_balance = man_params["initial_balance"]
             default_volume = man_params["default_volume"]
             default_spread = man_params["default_spread"]
+            n_max_OP = man_params["n_max_OP"]
+            max_floating_dd = man_params["max_floating_dd"]
+            max_daily_dd = man_params["max_daily_dd"]
+            use_floating_risk = man_params["use_floating_risk"]
             # Output Model:
             save_model_mode = man_params["save_model_mode"]
             use_cudf = man_params["use_cudf"]
@@ -77,9 +82,14 @@ def main(
                 "dynamic_sl_scale_type",
                 "rstd_window_size",
                 "confidence_levels",
+                "use_money_management",
                 "initial_balance",
                 "default_volume",
                 "default_spread",
+                "n_max_OP",
+                "max_floating_dd",
+                "max_daily_dd",
+                "use_floating_risk",
                 "save_model_mode",
                 "use_cudf",
                 "feature_set",
@@ -112,9 +122,14 @@ def main(
             dynamic_sl_scale_type = wandb.config.dynamic_sl_scale_type
             rstd_window_size = wandb.config.rstd_window_size
             confidence_levels = wandb.config.confidence_levels
+            use_money_management wandb.config.use_money_management
             initial_balance = wandb.config.initial_balance
             default_volume = wandb.config.default_volume
             default_spread = wandb.config.default_spread
+            n_max_OP = wandb.config.n_max_OP
+            max_floating_dd = wandb.config.max_floating_dd
+            max_daily_dd = wandb.config.max_daily_dd
+            use_floating_risk = wandb.config.use_floating_risk
             # Output Model:
             save_model_mode = wandb.config.save_model_mode
             use_cudf = wandb.config.use_cudf
@@ -204,6 +219,12 @@ def main(
             bt_column_name=bt_column_name,
             non_feature_columns=non_feature_columns,
             swap_rate=swap_rate,
+            stop_loss=strg_stop_loss,
+            use_money_management=use_money_management,
+            n_max_OP=n_max_OP,
+            max_floating_dd=max_floating_dd,
+            max_daily_dd=max_daily_dd,
+            use_floating_risk=use_floating_risk,
         )
 
         # ______________________________Retrain Last Model to Save___________________________________________

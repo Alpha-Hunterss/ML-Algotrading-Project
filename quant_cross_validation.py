@@ -52,6 +52,12 @@ def quant_CV(
         bt_column_name: str,
         non_feature_columns: list[str],
         swap_rate: float,
+        stop_loss: int,
+        use_money_management: bool,
+        n_max_OP: int,
+        max_floating_dd: float,
+        max_daily_dd: float,
+        use_floating_risk: bool,
         ):
     """
     This function runs Time Series CV with available embargo/purge 
@@ -73,6 +79,7 @@ def quant_CV(
             "train_duration",
             "profit_percent",
             "max_dd",
+            "max_exp_daily_dd",
             "n_unique_days",
             "n_max_daily_sig",
             "meta_model_pos_label_perc",
@@ -390,12 +397,18 @@ def quant_CV(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),
                         target_symbol=target_symbol,
-                        spread = default_spread,
-                        volume = default_volume,
-                        initial_balance= initial_balance,
-                        df_raw_backtest  = df_raw_backtest,
-                        bt_column_name = bt_column_name,
-                        swap_rate= swap_rate,
+                        spread=default_spread,
+                        volume=default_volume,
+                        initial_balance=initial_balance,
+                        df_raw_backtest=df_raw_backtest,
+                        bt_column_name=bt_column_name,
+                        swap_rate=swap_rate,
+                        stop_loss=stop_loss,
+                        use_money_management=use_money_management,
+                        n_max_OP=n_max_OP,
+                        max_floating_dd=max_floating_dd,
+                        max_daily_dd=max_daily_dd,
+                        use_floating_risk=use_floating_risk,
                     )
                 else:
                     #? Backtest
@@ -406,16 +419,23 @@ def quant_CV(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),
                         target_symbol=target_symbol,
-                        spread = default_spread,
-                        volume = default_volume,
-                        initial_balance= initial_balance,
-                        df_raw_backtest  = df_raw_backtest,
-                        bt_column_name = bt_column_name,
-                        swap_rate= swap_rate,
+                        spread=default_spread,
+                        volume=default_volume,
+                        initial_balance=initial_balance,
+                        df_raw_backtest=df_raw_backtest,
+                        bt_column_name=bt_column_name,
+                        swap_rate=swap_rate,
+                        stop_loss=stop_loss,
+                        use_money_management=use_money_management,
+                        n_max_OP=n_max_OP,
+                        max_floating_dd=max_floating_dd,
+                        max_daily_dd=max_daily_dd,
+                        use_floating_risk=use_floating_risk,
                     )
 
                 fold_profit_percent = bt_report['profit_percent']
                 fold_max_dd = bt_report['max_draw_down']
+                fold_max_exp_daily_dd = bt_report["max_exp_daily_dd"]
 
                 del bt_df, bt_report
                 gc.collect()
@@ -441,8 +461,8 @@ def quant_CV(
                 + cal_eval(y_real=y_real, y_pred=y_pred)
                 + min_max_dates[set_name]
                 + [time_taken]
-                + [fold_profit_percent, fold_max_dd]
-                + [fold_unique_days,fold_max_daily_sig]
+                + [fold_profit_percent, fold_max_dd, fold_max_exp_daily_dd]
+                + [fold_unique_days, fold_max_daily_sig]
                 + [meta_model_pos_label_perc]
             )
 
@@ -458,13 +478,19 @@ def quant_CV(
             df_model_signal = df.loc[df[f"pred_as_{pred_name}"] == 1][[f"pred_as_{pred_name}"]].rename(
                     columns={f"pred_as_{pred_name}":"model_prediction"}),
             target_symbol=target_symbol,
-            spread = default_spread,
-            volume = default_volume,
-            initial_balance= initial_balance,
-            df_raw_backtest  = df_raw_backtest,
-            bt_column_name = bt_column_name,
-            swap_rate= swap_rate,
-            )
+            spread=default_spread,
+            volume=default_volume,
+            initial_balance=initial_balance,
+            df_raw_backtest=df_raw_backtest,
+            bt_column_name=bt_column_name,
+            swap_rate=swap_rate,
+            stop_loss=stop_loss,
+            use_money_management=use_money_management,
+            n_max_OP=n_max_OP,
+            max_floating_dd=max_floating_dd,
+            max_daily_dd=max_daily_dd,
+            use_floating_risk=use_floating_risk,
+        )
         general_backtest_report[f"profit_percent_{pred_name}"] = bt_report['profit_percent']
         general_backtest_report[f"max_dd_{pred_name}"] = bt_report['max_draw_down']
 

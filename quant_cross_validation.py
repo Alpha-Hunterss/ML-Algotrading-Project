@@ -80,9 +80,12 @@ def quant_CV(
             "profit_percent",
             "max_dd",
             "max_exp_daily_dd",
+            "max_overall_dd",
             "n_unique_days",
             "n_max_daily_sig",
             "meta_model_pos_label_perc",
+            "max_n_open_position",
+            "max_vol_open_positions",
         ]
     )
     df["pred_as_val"] = -1
@@ -436,6 +439,9 @@ def quant_CV(
                 fold_profit_percent = bt_report['profit_percent']
                 fold_max_dd = bt_report['max_draw_down']
                 fold_max_exp_daily_dd = bt_report["max_exp_daily_dd"]
+                fold_max_overall_dd = bt_report["max_overall_dd"]
+                fold_max_n_open_position = bt_report["max_n_open_position"]
+                fold_max_vol_open_positions = bt_report["max_vol_open_positions"]
 
                 del bt_df, bt_report
                 gc.collect()
@@ -443,8 +449,11 @@ def quant_CV(
                 fold_profit_percent = None
                 fold_max_dd = None
                 fold_max_exp_daily_dd = None
+                fold_max_overall_dd = None
                 fold_unique_days = None
                 fold_max_daily_sig = None
+                fold_max_n_open_position = None
+                fold_max_vol_open_positions = None
 
             pong = time.time()
 
@@ -463,8 +472,9 @@ def quant_CV(
                 + min_max_dates[set_name]
                 + [time_taken]
                 + [fold_profit_percent, fold_max_dd, fold_max_exp_daily_dd]
-                + [fold_unique_days, fold_max_daily_sig]
-                + [meta_model_pos_label_perc]
+                + [fold_max_overall_dd, fold_unique_days, fold_max_daily_sig]
+                + [meta_model_pos_label_perc, fold_max_n_open_position]
+                + [fold_max_vol_open_positions]
             )
 
             evals.loc[len(evals)] = eval_list

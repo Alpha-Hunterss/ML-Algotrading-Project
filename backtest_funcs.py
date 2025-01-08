@@ -288,7 +288,7 @@ def calculate_classification_target_backtest(
     return target_list, exit_price_diff_list, swap_days_list, time_open_position_list
 
 
-def calculate_max_drawdown(balance_series):
+def calculate_max_drawdown(balance_series, init_balance):
     """
     Calculate the maximum drawdown from a balance column in a pandas DataFrame.
 
@@ -302,11 +302,11 @@ def calculate_max_drawdown(balance_series):
     # Get the cumulative maximum balance up to each point in time
     cum_max = balance_series.cummax()
 
-    # Calculate the drawdown at each point in time
+    # Calculate the drawdown ratio at each point in time
     drawdowns = (balance_series - cum_max) / cum_max
 
     # Return the maximum drawdown
-    return drawdowns.min() * 100
+    return drawdowns.min() * 100, (init_balance - balance_series.min()) * 100 / init_balance
 
 
 def cal_backtest_on_raw_cndl(
@@ -445,10 +445,10 @@ def money_management(
     }
     weights = {
         0: 0.0,
-        0.5: 0.25,
-        0.6: 0.5,
-        0.7: 0.75,
-        0.8: 1.0,
+        0.5: 1.0,
+        0.6: 1.0,
+        0.7: 1.0,
+        0.8: 1.25,
         0.9: 1.25,
         1: 1.0,
     }
@@ -612,7 +612,7 @@ def do_backtest(
     new_trg_df["balance"] += initial_balance
 
     ##? calculate max_drawdown
-    max_drawdown = calculate_max_drawdown(new_trg_df["balance"])
+    max_drawdown, max_overall_dd = calculate_max_drawdown(new_trg_df["balance"], initial_balance)
 
     ##? calculate duration:
     if new_trg_df.shape[0] == 0:
@@ -622,6 +622,9 @@ def do_backtest(
             "max_draw_down": 0,
             "profit_percent": 0,
             "max_exp_daily_dd": 0.0,
+            "max_overall_dd": 0.0,
+            "max_n_open_position": 0,
+            "max_vol_open_positions": 0.0,
         }
     else:
         backtest_report = {
@@ -633,7 +636,10 @@ def do_backtest(
                 * 100,
                 2,
             ),
-            "max_exp_daily_dd": max_exp_daily_dd,
+            "max_exp_daily_dd": round(max_exp_daily_dd*100, 2),
+            "max_overall_dd": round(max_overall_dd, 2),
+            "max_n_open_position": new_trg_df["n_open_position"].max(),
+            "max_vol_open_positions": new_trg_df["volume_open_position"].max(),
         }
 
     return (

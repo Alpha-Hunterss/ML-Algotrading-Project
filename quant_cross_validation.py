@@ -442,6 +442,7 @@ def quant_CV(
             else:
                 fold_profit_percent = None
                 fold_max_dd = None
+                fold_max_exp_daily_dd = None
                 fold_unique_days = None
                 fold_max_daily_sig = None
 

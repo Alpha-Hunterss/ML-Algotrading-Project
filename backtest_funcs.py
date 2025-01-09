@@ -318,6 +318,7 @@ def calculate_classification_target_backtest(
         target_list.append(None)
         exit_price_diff_list.append(None)
         time_open_position_list.append(None)
+        stop_losses_list.append(None)
 
     return target_list, exit_price_diff_list, swap_days_list, time_open_position_list, stop_losses_list
 

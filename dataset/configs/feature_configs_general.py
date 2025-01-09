@@ -129,8 +129,8 @@ fe_leg_config = {
 }
 
 general_config = {
-    'base_candle_timeframe': [15, 30, 60, 120, 180, 240, 360, 720, 1440],
-  
+    'base_candle_timeframe': [15, 30, 60, 240, 720, 1440],
+
     'fe_GMA': {
         'timeframe': [5 , 240],
         'window_size': [5, 7, 9],
@@ -142,14 +142,14 @@ general_config = {
     'fe_FFD': {
         'timeframe': [5],  #always 5
         'window_size': [0], #In order not to bug the framework
-        'base_columns': ['CLOSE' , 'HIGH' , 'LOW' , 'OPEN'],
-        'n_splits': [5,10]
+        'base_columns': ['CLOSE'],
+        'n_splits': [5,10,20]
     },
 
     'fe_OL': {
-        'timeframe': [15,30,60,240,1440],
-        'window_size': [1 , 2 , 3 , 5 , 7 , 11 , 13 , 21 , 33],
-        'window_size_SMA': [5,10,15,20],
+        'timeframe': [5,60,240,1440],
+        'window_size': [1 , 7 , 21 , 33],
+        'window_size_SMA': [5,15,21,55],
         'base_columns': ['HIGH' , 'LOW']
     },
 

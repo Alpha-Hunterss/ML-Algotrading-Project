@@ -54,6 +54,9 @@ def main(
             max_floating_dd = man_params["max_floating_dd"]
             max_daily_dd = man_params["max_daily_dd"]
             use_floating_risk = man_params["use_floating_risk"]
+            close_positions_at_midnight = man_params["close_positions_at_midnight"]
+
+            
             # Output Model:
             save_model_mode = man_params["save_model_mode"]
             use_cudf = man_params["use_cudf"]
@@ -145,6 +148,7 @@ def main(
             max_floating_dd = wandb.config.max_floating_dd
             max_daily_dd = wandb.config.max_daily_dd
             use_floating_risk = wandb.config.use_floating_risk
+            close_positions_at_midnight = wandb.config.close_positions_at_midnight
             # Output Model:
             save_model_mode = wandb.config.save_model_mode
             use_cudf = wandb.config.use_cudf
@@ -242,7 +246,12 @@ def main(
             non_feature_columns=non_feature_columns,
             swap_rate=swap_rate,
             use_money_management = use_money_management,
-            stop_loss= strg_stop_loss,            
+            stop_loss= strg_stop_loss,
+            n_max_OP = n_max_OP,
+            max_floating_dd = max_floating_dd,
+            max_daily_dd = max_daily_dd,
+            use_floating_risk = use_floating_risk,
+            use_perc_levels = use_perc_levels,          
         )
 
         # ______________________________Retrain Last Model to Save___________________________________________

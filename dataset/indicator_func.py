@@ -1771,14 +1771,23 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 Path(features_folder_path).mkdir(parents=True, exist_ok=True)
 
                 base_cols = feature_config[symbol][fe_prefix]["base_columns"]
-                opts = {
-                    "symbol": symbol,
-                    "candle_timeframe": feature_config[symbol][fe_prefix]["timeframe"],
-                    "window_size": feature_config[symbol][fe_prefix]["window_size"],
-                    "features_folder_path": features_folder_path,
-                    "feature_confing": feature_config[symbol][fe_prefix],
-
-                }
+                if fe_prefix == "fe_leg":
+                    opts = {
+                        "symbol": symbol,
+                        "candle_timeframe": fe_leg_config[symbol]["timeframe"],
+                        "window_size": fe_leg_config[symbol]["window_size"],
+                        "exponents": fe_leg_config[symbol]["exponents"],
+                        "percentage": fe_leg_config[symbol]["percentage"],
+                        "features_folder_path": features_folder_path,
+                    }
+                else:
+                    opts = {
+                        "symbol": symbol,
+                        "candle_timeframe": feature_config[symbol][fe_prefix]["timeframe"],
+                        "window_size": feature_config[symbol][fe_prefix]["window_size"],
+                        "features_folder_path": features_folder_path,
+                        "feature_confing": feature_config[symbol][fe_prefix],
+                    }
 
                 base_features = [
                     f"M{tf}_{col}"

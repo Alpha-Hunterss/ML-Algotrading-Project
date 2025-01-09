@@ -58,7 +58,7 @@ def quant_CV(
     max_floating_dd: float,
     max_daily_dd: float,
     use_floating_risk: bool,
-    use_perc_levels: bool,
+    use_perc_levels: bool = False,
 ):
     """
     This function runs Time Series CV with available embargo/purge 

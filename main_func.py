@@ -217,7 +217,8 @@ def main(
             trade_mode= trade_mode,
             use_dynamic_sl=use_dynamic_sl,
             dynamic_sl_scale_type=dynamic_sl_scale_type,
-            rstd_window_size=rstd_window_size
+            rstd_window_size=rstd_window_size,
+            close_positions_at_midnight=close_positions_at_midnight,
         )
 
         # ______________________________RUN Quant Cross-Validation and Backtest on Folds_____________________
@@ -240,13 +241,8 @@ def main(
             bt_column_name=bt_column_name,
             non_feature_columns=non_feature_columns,
             swap_rate=swap_rate,
-            stop_loss=strg_stop_loss,
-            use_money_management=use_money_management,
-            n_max_OP=n_max_OP,
-            max_floating_dd=max_floating_dd,
-            max_daily_dd=max_daily_dd,
-            use_floating_risk=use_floating_risk,
-            use_perc_levels=use_perc_levels,
+            use_money_management = use_money_management,
+            stop_loss= strg_stop_loss,            
         )
 
         # ______________________________Retrain Last Model to Save___________________________________________

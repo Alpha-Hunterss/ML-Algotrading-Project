@@ -1,108 +1,106 @@
 import pandas as pd
 import numpy as np
-import pywt  # Add wavelet transform support
-from scipy.signal import hilbert
 from pathlib import Path
 from dataset.logging_tools import default_logger
 from dataset.configs.history_data_crawlers_config import root_path, symbols_dict
+import pywt  # Add wavelet transform support
+from scipy.signal import hilbert
+
+
+def apply_hanning_window(array, window_size):
+    """Apply a Hanning window to the data."""
+    hanning_window = np.hanning(window_size)
+    return array.flatten() * hanning_window
+
+def compute_fft_features(selected_slice, window_size, sampling_rate):
+    """Compute FFT features."""
+    fft_values = np.fft.fft(selected_slice)
+    fft_amplitude = np.abs(fft_values[:window_size // 2])
+    fft_amplitude[1:] = 2 * fft_amplitude[1:]
+    frequencies = np.fft.fftfreq(len(fft_amplitude), d=1 / sampling_rate)
+    positive_frequencies = frequencies[:window_size // 2]
+    fft_phase = np.angle(fft_values)
+    return fft_amplitude, positive_frequencies, fft_phase
+
+
+def compute_wavelet_features(selected_slice, window_size, sampling_rate):
+    """Compute Wavelet features."""
+    coeffs = pywt.wavedec(selected_slice, "bior4.4", level=3)
+    coeff_array, coeff_slices = pywt.coeffs_to_array(coeffs)
+    threshold = np.std(coeff_array) * np.sqrt(2 * np.log(len(coeff_array)))
+    coeff_array[np.abs(coeff_array) < threshold] = 0
+    filtered_coeffs = pywt.array_to_coeffs(coeff_array, coeff_slices, output_format="wavedec")
+    reconstructed_signal = pywt.waverec(filtered_coeffs, "bior4.4")
+    return compute_fft_features(reconstructed_signal, window_size, sampling_rate)
+
+def compute_envelope_features(selected_slice, window_size, sampling_rate):
+    """Compute Envelope features."""
+    analytic_signal = hilbert(selected_slice)
+    envelope = np.abs(analytic_signal)
+    instantaneous_phase = np.unwrap(np.angle(analytic_signal))
+    instantaneous_frequency = np.diff(instantaneous_phase) * sampling_rate / (2.0 * np.pi)
+    envelope_fft_values = np.fft.fft(envelope)
+    envelope_fft_amplitude = np.abs(envelope_fft_values[:window_size // 2])
+    envelope_fft_amplitude[1:] = 2 * envelope_fft_amplitude[1:]
+    envelope_frequencies = np.fft.fftfreq(len(envelope_fft_amplitude), d=1 / sampling_rate)
+    positive_envelope_frequencies = envelope_frequencies[:window_size // 2]
+    envelope_fft_phase = np.angle(envelope_fft_values)
+    return envelope_fft_amplitude, positive_envelope_frequencies, envelope_fft_phase, instantaneous_frequency
+
+def compute_cepstrum_features(selected_slice, window_size, sampling_rate):
+    """Compute Cepstrum features."""
+    fft_values = np.fft.fft(selected_slice)
+    log_spectrum = np.log(np.abs(fft_values) + 1e-10)
+    cepstrum = np.fft.ifft(log_spectrum).real
+    return cepstrum
 
 def cal_window_max(array, window_size, sampling_rate):
-    num_features_fft = 30  # 10 magnitudes, 10 frequencies, 10 phases
-    num_features_wavelet = 30  # 10 magnitudes, 10 frequencies, 10 phases
-    num_features_envelope = 40  # 10 magnitudes, 10 frequencies, 10 phases
-    num_features_cepstrum = 20  # 10 amplitudes, 10 quefrency values
-    num_features_stats = 6  # Mean and std for FFT, Wavelet, Envelope
-    total_features = (
-        num_features_fft
-        + num_features_wavelet
-        + num_features_envelope
-        + num_features_cepstrum
-        + num_features_stats   
-    )
-    # Initialize result array
-    res = np.zeros([array.shape[0], total_features])
-    res[:window_size, :] = np.nan  # Fill initial rows with NaN since no window can be computed
-
-    hanning_window = np.hanning(window_size)  # Create Hanning window
-
+    """
+    Compute various features (FFT, Wavelet, Envelope, Cepstrum) for different windows.
+    """
+    num_features_fft = 30
+    num_features_wavelet = 30
+    num_features_envelope = 40
+    num_features_cepstrum = 20
+    num_features_stats = 6
+    total_features = num_features_fft + num_features_wavelet + num_features_envelope + num_features_cepstrum + num_features_stats
+    
+    res = np.zeros([array.shape[0], total_features])  # result array
+    res[:window_size, :] = np.nan  # fill initial rows with NaN
 
     for i in range(window_size, array.shape[0]):
-        selected_slice = array[i - window_size + 1: i + 1].flatten()  # Ensure 1D input
-        selected_slice = selected_slice * hanning_window  # Apply Hanning window
+        selected_slice = apply_hanning_window(array[i - window_size + 1: i + 1], window_size)
 
-        # (1) FFT Features
-        fft_values = np.fft.fft(selected_slice)
-        fft_amplitude = np.abs(fft_values[:window_size // 2])
-        # fft_amplitude = fft_amplitude * (1 / window_size)
-        fft_amplitude[1:] = 2 * fft_amplitude[1:]
-        frequencies = np.fft.fftfreq(len(fft_amplitude), d=1 / sampling_rate)
-        positive_frequencies = frequencies[:window_size // 2]
-        fft_phase = np.angle(fft_values)
-        
-
-        # Extract top 10 components for FFT
-        sorted_indices_fft = np.argsort(fft_amplitude[1:])[::-1][:10] + 1  # Ignore DC component (index 0)
+        # Compute FFT features
+        fft_amplitude, positive_frequencies, fft_phase = compute_fft_features(selected_slice, window_size, sampling_rate)
+        sorted_indices_fft = np.argsort(fft_amplitude[1:])[::-1][:10] + 1
         res[i, 0:10] = fft_amplitude[sorted_indices_fft]
         res[i, 10:20] = positive_frequencies[sorted_indices_fft]
         res[i, 20:30] = fft_phase[sorted_indices_fft]
 
-        # (2) Wavelet Features
-        coeffs = pywt.wavedec(selected_slice, "bior4.4", level=3)
-        coeff_array, coeff_slices = pywt.coeffs_to_array(coeffs)
-        threshold = np.std(coeff_array) * np.sqrt(2 * np.log(len(coeff_array)))
-        coeff_array[np.abs(coeff_array) < threshold] = 0  # Apply thresholding for denoising
-
-        filtered_coeffs = pywt.array_to_coeffs(coeff_array, coeff_slices, output_format="wavedec")
-        reconstructed_signal = pywt.waverec(filtered_coeffs, "bior4.4")
-
-        # FFT of reconstructed wavelet signal
-        fft_values_wavelet = np.fft.fft(reconstructed_signal)
-        fft_amplitude_wavelet = np.abs(fft_values_wavelet[:window_size // 2])
-        # fft_amplitude_wavelet = fft_amplitude_wavelet * (1 / window_size)
-        fft_amplitude_wavelet[1:] = 2 * fft_amplitude_wavelet[1:] 
-        frequencies_wavelet = np.fft.fftfreq(len(fft_amplitude_wavelet), d=1 / sampling_rate)
-        positive_frequencies_wavelet = frequencies_wavelet[:window_size // 2]
-        fft_phase_wavelet = np.angle(fft_values_wavelet)
-        
-        # Extract top 10 components for Wavelet FFT
+        # Compute Wavelet features
+        fft_amplitude_wavelet, positive_frequencies_wavelet, fft_phase_wavelet = compute_wavelet_features(selected_slice, window_size, sampling_rate)
         sorted_indices_wavelet_fft = np.argsort(fft_amplitude_wavelet[1:])[::-1][:10] + 1
         res[i, 30:40] = fft_amplitude_wavelet[sorted_indices_wavelet_fft]
         res[i, 40:50] = positive_frequencies_wavelet[sorted_indices_wavelet_fft]
         res[i, 50:60] = fft_phase_wavelet[sorted_indices_wavelet_fft]
 
-        # (3) Envelope Detection and FFT
-        analytic_signal = hilbert(selected_slice)
-        envelope = np.abs(analytic_signal)
-        instantaneous_phase = np.unwrap(np.angle(analytic_signal))
-        instantaneous_frequency = np.diff(instantaneous_phase) * sampling_rate / (2.0 * np.pi)
-        sorted_indices_if = np.argsort(np.abs(instantaneous_frequency))[::-1][:10]
-
-
-        envelope_fft_values = np.fft.fft(envelope)
-        envelope_fft_amplitude = np.abs(envelope_fft_values[:window_size // 2])
-        # envelope_fft_amplitude = envelope_fft_amplitude * (1 / window_size)
-        envelope_fft_amplitude[1:] = 2 * envelope_fft_amplitude[1:]
-        envelope_frequencies = np.fft.fftfreq(len(envelope_fft_amplitude), d=1 / sampling_rate)
-        positive_envelope_frequencies = envelope_frequencies[:window_size // 2]
-        envelope_fft_phase = np.angle(envelope_fft_values)
-        
-
-        # Extract top 10 components for Envelope FFT
+        # Compute Envelope features
+        envelope_fft_amplitude, positive_envelope_frequencies, envelope_fft_phase, instantaneous_frequency = compute_envelope_features(selected_slice, window_size, sampling_rate)
         sorted_indices_envelope = np.argsort(envelope_fft_amplitude[1:])[::-1][:10] + 1
+        sorted_indices_if = np.argsort(np.abs(instantaneous_frequency))[::-1][:10]
         res[i, 60:70] = envelope_fft_amplitude[sorted_indices_envelope]
         res[i, 70:80] = positive_envelope_frequencies[sorted_indices_envelope]
         res[i, 80:90] = envelope_fft_phase[sorted_indices_envelope]
         res[i, 90:100] = instantaneous_frequency[sorted_indices_if]
-        # (4) Cepstrum Features
-        log_spectrum = np.log(np.abs(fft_values) + 1e-10)  # Avoid log(0)
-        cepstrum = np.fft.ifft(log_spectrum).real
 
-        # Extract top 10 cepstral coefficients and their corresponding quefrency values
-        sorted_indices_cepstrum = np.argsort(np.abs(cepstrum[1:]))[::-1][:10] + 1  # Ignore DC component (index 0)
-        res[i, 100:110] = cepstrum[sorted_indices_cepstrum]  # Amplitudes of top 10 cepstral coefficients
-        res[i, 110:120] = sorted_indices_cepstrum / sampling_rate  # Corresponding quefrency values
+        # Compute Cepstrum features
+        cepstrum = compute_cepstrum_features(selected_slice, window_size, sampling_rate)
+        sorted_indices_cepstrum = np.argsort(np.abs(cepstrum[1:]))[::-1][:10] + 1
+        res[i, 100:110] = cepstrum[sorted_indices_cepstrum]
+        res[i, 110:120] = sorted_indices_cepstrum / sampling_rate
 
-        # (5) Spectrum Statistical Features
+        # Compute statistical features
         res[i, 120] = np.mean(positive_frequencies[sorted_indices_fft])
         res[i, 121] = np.std(positive_frequencies[sorted_indices_fft])
         res[i, 122] = np.mean(positive_frequencies_wavelet[sorted_indices_wavelet_fft])
@@ -111,7 +109,6 @@ def cal_window_max(array, window_size, sampling_rate):
         res[i, 125] = np.std(positive_envelope_frequencies[sorted_indices_envelope])
 
     return res
-
 
 def add_win_fe_base_func(
     df, symbol, raw_features, timeframes, window_sizes, sampling_rate, round_to=4, fe_prefix="fe_WIN_FREQ"
@@ -190,8 +187,8 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
         
         round_to = 6
-        # sampling_rate = 1 / 300  # Assumed sampling rate in Hz; adjust if necessary
-        sampling_rate = 1  # Assumed sampling rate in Hz; adjust if necessary
+        sampling_rate = 1 / 300  # Assumed sampling rate in Hz; adjust if necessary
+        
 
         for symbol in feature_config.keys():
             logger.info(f"---> Symbol: {symbol}")

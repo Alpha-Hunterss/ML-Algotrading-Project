@@ -37,6 +37,11 @@ prefixes = [
     "fe_leg",
     "fe_cndl_shape_n_cntxt",
     "fe_market_close",
+
+    "fe_GMA",
+    "fe_FFD",
+    "fe_OL",
+
 ]
 
 

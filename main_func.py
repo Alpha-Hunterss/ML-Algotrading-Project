@@ -33,10 +33,15 @@ def main(
             trg_look_ahead = man_params["trg_look_ahead"]
             trg_take_profit = man_params["trg_take_profit"]
             trg_stop_loss = man_params["trg_stop_loss"]
+            trg_take_profit_perc = man_params["trg_take_profit_perc"]
+            trg_stop_loss_perc = man_params["trg_stop_loss_perc"]
             # Strategy:
             strg_look_ahead = man_params["strg_look_ahead"]
             strg_take_profit = man_params["strg_take_profit"]
             strg_stop_loss = man_params["strg_stop_loss"]
+            strg_take_profit_perc = man_params["strg_take_profit_perc"]
+            strg_stop_loss_perc = man_params["strg_stop_loss_perc"]
+            use_perc_levels = man_params["use_perc_levels"]
             use_dynamic_sl = man_params["use_dynamic_sl"]
             dynamic_sl_scale_type = man_params["dynamic_sl_scale_type"]
             rstd_window_size = man_params["rstd_window_size"]
@@ -75,9 +80,14 @@ def main(
                 "trg_look_ahead",
                 "trg_take_profit",
                 "trg_stop_loss",
+                "trg_take_profit_perc",
+                "trg_stop_loss_perc",
                 "strg_look_ahead",
                 "strg_take_profit",
                 "strg_stop_loss",
+                "strg_take_profit_perc",
+                "strg_stop_loss_perc",
+                "use_perc_levels",
                 "use_dynamic_sl",
                 "dynamic_sl_scale_type",
                 "rstd_window_size",
@@ -114,10 +124,15 @@ def main(
             trg_look_ahead = wandb.config.trg_look_ahead
             trg_take_profit = wandb.config.trg_take_profit
             trg_stop_loss = wandb.config.trg_stop_loss
+            trg_take_profit_perc = wandb.config.trg_take_profit_perc
+            trg_stop_loss_perc = wandb.config.trg_stop_loss_perc
             # Strategy:
             strg_look_ahead = wandb.config.strg_look_ahead
             strg_take_profit = wandb.config.strg_take_profit
             strg_stop_loss = wandb.config.strg_stop_loss
+            strg_take_profit_perc = wandb.config.strg_take_profit_perc
+            strg_stop_loss_perc = wandb.config.strg_stop_loss_perc
+            use_perc_levels = wandb.config.use_perc_levels
             use_dynamic_sl = wandb.config.use_dynamic_sl
             dynamic_sl_scale_type = wandb.config.dynamic_sl_scale_type
             rstd_window_size = wandb.config.rstd_window_size
@@ -165,6 +180,9 @@ def main(
             trg_look_ahead=trg_look_ahead,
             trg_take_profit=trg_take_profit,
             trg_stop_loss=trg_stop_loss,
+            trg_take_profit_perc=trg_take_profit_perc,
+            trg_stop_loss_perc=trg_stop_loss_perc,
+            use_perc_levels=use_perc_levels,
             n_rand_features=n_rand_features,
             target_col=target_col,
             base_time_frame=5,
@@ -193,6 +211,9 @@ def main(
             look_ahead= strg_look_ahead,
             take_profit= strg_take_profit,
             stop_loss= strg_stop_loss,
+            take_profit_perc= strg_take_profit_perc,
+            stop_loss_perc= strg_stop_loss_perc,
+            use_perc_levels= use_perc_levels,
             trade_mode= trade_mode,
             use_dynamic_sl=use_dynamic_sl,
             dynamic_sl_scale_type=dynamic_sl_scale_type,
@@ -225,6 +246,7 @@ def main(
             max_floating_dd=max_floating_dd,
             max_daily_dd=max_daily_dd,
             use_floating_risk=use_floating_risk,
+            use_perc_levels=use_perc_levels,
         )
 
         # ______________________________Retrain Last Model to Save___________________________________________

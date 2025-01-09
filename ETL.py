@@ -39,9 +39,12 @@ def ETL(
     trg_look_ahead,
     trg_take_profit,
     trg_stop_loss,
+    trg_take_profit_perc,
+    trg_stop_loss_perc,
+    use_perc_levels,
     n_rand_features,
     target_col, # name of target column
-    base_time_frame, # for calculating targerts
+    base_time_frame, # for calculating targets
 ):
     raw_columns = [f.name for f in ParquetFile(path).schema]
     print(f'Len all columns in dataframe is {len(raw_columns)}')
@@ -73,6 +76,9 @@ def ETL(
             symbol_decimal_multiply = symbols_dict[target_symbol]["pip_size"],
             take_profit = trg_take_profit,
             stop_loss = trg_stop_loss,
+            take_profit_perc = trg_take_profit_perc,
+            stop_loss_perc = trg_stop_loss_perc,
+            use_perc_levels = use_perc_levels,
             mode = trade_mode,
         )
     toc = time.time()

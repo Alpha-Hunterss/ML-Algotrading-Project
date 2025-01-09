@@ -37,28 +37,29 @@ def split_time_series(
     return folds
 
 def quant_CV(
-        df: pd.DataFrame,
-        folds: dict[int,pd.DatetimeIndex],
-        model,
-        model_name,
-        target_symbol,
-        use_cudf,
-        cnf_levels,
-        initial_balance: int,
-        default_volume: float,
-        default_spread: int,
-        early_stopping_rounds: int | None,
-        df_raw_backtest: pd.DataFrame,
-        bt_column_name: str,
-        non_feature_columns: list[str],
-        swap_rate: float,
-        stop_loss: int,
-        use_money_management: bool,
-        n_max_OP: int,
-        max_floating_dd: float,
-        max_daily_dd: float,
-        use_floating_risk: bool,
-        ):
+    df: pd.DataFrame,
+    folds: dict[int,pd.DatetimeIndex],
+    model,
+    model_name,
+    target_symbol,
+    use_cudf,
+    cnf_levels,
+    initial_balance: int,
+    default_volume: float,
+    default_spread: int,
+    early_stopping_rounds: int | None,
+    df_raw_backtest: pd.DataFrame,
+    bt_column_name: str,
+    non_feature_columns: list[str],
+    swap_rate: float,
+    stop_loss: int,
+    use_money_management: bool,
+    n_max_OP: int,
+    max_floating_dd: float,
+    max_daily_dd: float,
+    use_floating_risk: bool,
+    use_perc_levels: bool,
+):
     """
     This function runs Time Series CV with available embargo/purge 
     It also backtest model signals on each fold and the whole test and valid sets 
@@ -412,6 +413,7 @@ def quant_CV(
                         max_floating_dd=max_floating_dd,
                         max_daily_dd=max_daily_dd,
                         use_floating_risk=use_floating_risk,
+                        use_perc_levels=use_perc_levels,
                     )
                 else:
                     #? Backtest
@@ -434,6 +436,7 @@ def quant_CV(
                         max_floating_dd=max_floating_dd,
                         max_daily_dd=max_daily_dd,
                         use_floating_risk=use_floating_risk,
+                        use_perc_levels=use_perc_levels,
                     )
 
                 fold_profit_percent = bt_report['profit_percent']
@@ -501,6 +504,7 @@ def quant_CV(
             max_floating_dd=max_floating_dd,
             max_daily_dd=max_daily_dd,
             use_floating_risk=use_floating_risk,
+            use_perc_levels=use_perc_levels,
         )
         general_backtest_report[f"profit_percent_{pred_name}"] = bt_report['profit_percent']
         general_backtest_report[f"max_dd_{pred_name}"] = bt_report['max_draw_down']

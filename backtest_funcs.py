@@ -35,6 +35,9 @@ def calculate_classification_target_backtest(
     symbol_decimal_multiply: float = 0.0001,
     take_profit: int = 70,
     stop_loss: int = 30,
+    take_profit_perc: float = 0.1,
+    stop_loss_perc: float = 0.033,
+    use_perc_levels: bool = False,
     mode: str = "long",
 ):
     """
@@ -47,9 +50,12 @@ def calculate_classification_target_backtest(
     target_list = []
     exit_price_diff_list = []
     time_open_position_list = []
+    stop_losses_list = []
     date_column = np.array(
         [np.datetime64(datetime, 'D') for datetime in array[:, 4]]
     )
+    take_profit_ratio = take_profit_perc / 100
+    stop_loss_ratio = stop_loss_perc / 100
 
     if use_dynamic_sl:
         rstds = [
@@ -70,11 +76,20 @@ def calculate_classification_target_backtest(
             raise ValueError("The scale type should be either `third_quartile`, `second_tercile` or `median`")
 
         rstds_norm = np.array(rstds) * rstd_exponent
-        reward = take_profit/stop_loss
+
+        if use_perc_levels:
+            reward = take_profit_perc/stop_loss_perc
+        else:
+            reward = take_profit/stop_loss
 
         if mode == "long":
             for i in range(array.shape[0] - window_size):
                 selected_chunk = array[i : i + window_size]
+
+                if use_perc_levels:
+                    curr_close = selected_chunk[0, 0]
+                    take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
+                    stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
                 if close_positions_at_midnight:
                     dates = date_column[i: i + window_size]
@@ -127,10 +142,16 @@ def calculate_classification_target_backtest(
                 swap_days_list.append(swap_days)
                 exit_price_diff_list.append(exit_price_diff)
                 time_open_position_list.append(index_open_position)
+                stop_losses_list.append(stop_loss)
 
         elif mode == "short":
             for i in range(array.shape[0] - window_size):
                 selected_chunk = array[i : i + window_size]
+
+                if use_perc_levels:
+                    curr_close = selected_chunk[0, 0]
+                    take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
+                    stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
                 if close_positions_at_midnight:
                     dates = date_column[i: i + window_size]
@@ -182,6 +203,7 @@ def calculate_classification_target_backtest(
                 swap_days_list.append(swap_days)
                 exit_price_diff_list.append(exit_price_diff)
                 time_open_position_list.append(index_open_position)
+                stop_losses_list.append(stop_loss)
 
     else:
         if mode == "long":
@@ -196,6 +218,11 @@ def calculate_classification_target_backtest(
                 # Calculate pip differences
                 pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
                 pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
+
+                if use_perc_levels:
+                    curr_close = selected_chunk[0, 0]
+                    take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
+                    stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
                 buy_tp_cond = pip_diff_high >= take_profit
                 buy_sl_cond = pip_diff_low <= -stop_loss
@@ -231,6 +258,7 @@ def calculate_classification_target_backtest(
                 swap_days_list.append(swap_days)
                 exit_price_diff_list.append(exit_price_diff)
                 time_open_position_list.append(index_open_position)
+                stop_losses_list.append(stop_loss)
 
         elif mode == "short":
             for i in range(array.shape[0] - window_size):
@@ -243,6 +271,11 @@ def calculate_classification_target_backtest(
 
                 pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
                 pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
+
+                if use_perc_levels:
+                    curr_close = selected_chunk[0, 0]
+                    take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
+                    stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
                 sell_tp_cond = pip_diff_low <= -take_profit
                 sell_sl_cond = pip_diff_high >= stop_loss
@@ -278,6 +311,7 @@ def calculate_classification_target_backtest(
                 swap_days_list.append(swap_days)
                 exit_price_diff_list.append(exit_price_diff)
                 time_open_position_list.append(index_open_position)
+                stop_losses_list.append(stop_loss)
 
     for _ in range(window_size):
         swap_days_list.append(None)
@@ -285,7 +319,7 @@ def calculate_classification_target_backtest(
         exit_price_diff_list.append(None)
         time_open_position_list.append(None)
 
-    return target_list, exit_price_diff_list, swap_days_list, time_open_position_list
+    return target_list, exit_price_diff_list, swap_days_list, time_open_position_list, stop_losses_list
 
 
 def calculate_max_drawdown(balance_series, init_balance):
@@ -315,6 +349,9 @@ def cal_backtest_on_raw_cndl(
     look_ahead: int,
     take_profit: int,
     stop_loss: int,
+    take_profit_perc: float,
+    stop_loss_perc: float,
+    use_perc_levels: bool,
     trade_mode: str,
     use_dynamic_sl: bool,
     dynamic_sl_scale_type: str,
@@ -325,7 +362,6 @@ def cal_backtest_on_raw_cndl(
     This function assumes we trade on each and every time step and calculates the backtest result for each time.
     The result can be merged with actual model signals to reach final backtest 
     """
-
     base_time_frame = 5
     window_size = int(look_ahead // base_time_frame)
     bt_column_name = (
@@ -348,7 +384,7 @@ def cal_backtest_on_raw_cndl(
         [f"{target_symbol}_M5_CLOSE", f"{target_symbol}_M5_HIGH", f"{target_symbol}_M5_LOW", "days_diff", "_time"]
     ].to_numpy()
 
-    df_raw_backtest[bt_column_name], df_raw_backtest["pip_diff"], df_raw_backtest["swap_days"], df_raw_backtest["time_open_position"] = calculate_classification_target_backtest(
+    df_raw_backtest[bt_column_name], df_raw_backtest["pip_diff"], df_raw_backtest["swap_days"], df_raw_backtest["time_open_position"], df_raw_backtest["stop_losses"] = calculate_classification_target_backtest(
         array,
         window_size,
         use_dynamic_sl=use_dynamic_sl,
@@ -357,6 +393,9 @@ def cal_backtest_on_raw_cndl(
         symbol_decimal_multiply=symbols_dict[target_symbol]["pip_size"],
         take_profit=take_profit,
         stop_loss=stop_loss,
+        take_profit_perc=take_profit_perc,
+        stop_loss_perc=stop_loss_perc,
+        use_perc_levels=use_perc_levels,
         mode=trade_mode,
     )
     df_raw_backtest.dropna(inplace=True)
@@ -432,6 +471,7 @@ def money_management(
     max_floating_dd: float,
     max_daily_dd: float,
     use_floating_risk: bool,
+    use_perc_levels: bool,
 ):
     symbols_base_lot = {
         'EURUSD': 0.01,
@@ -460,7 +500,7 @@ def money_management(
     array = df[
         [
             'index', '_time', 'close_position', 'volume', 'net_profit',
-            'position_closed', 'confidence_levels'
+            'position_closed', 'confidence_levels', 'stop_losses'
         ]
     ].to_numpy()
 
@@ -514,6 +554,9 @@ def money_management(
             array[i, 3] = volumes[i]
             continue
 
+        if use_perc_levels:
+            pip_risk = chunk[-1, 7] + spread
+
         used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
         daily_dd_budget = (start_day_balance * max_daily_dd) + added_balance
 
@@ -559,6 +602,7 @@ def do_backtest(
     max_floating_dd: float,
     max_daily_dd: float,
     use_floating_risk: bool,
+    use_perc_levels: bool,
 ):
     pip_value = {
         'EURUSD': 10,
@@ -598,7 +642,7 @@ def do_backtest(
             max_exp_daily_dd, new_trg_df = money_management(
                 new_trg_df, stop_loss, spread, initial_balance,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
-                max_daily_dd, use_floating_risk
+                max_daily_dd, use_floating_risk, use_perc_levels
             )
 
         ##? calculate balance

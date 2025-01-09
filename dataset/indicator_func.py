@@ -1050,11 +1050,11 @@ def add_candle_base_indicators_polars(
                     prefix=prefix,
                 )
 
-                file_name = (
-                    features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
-                )
+            file_name = (
+                features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
+            )
 
-                df.write_parquet(file_name)
+            df.write_parquet(file_name)
 
     return
 

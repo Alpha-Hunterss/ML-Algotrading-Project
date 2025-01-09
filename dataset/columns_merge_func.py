@@ -130,7 +130,7 @@ def group_by_symbol_and_rename(df, symbol_col="symbol"):
 
     return result_df
 
-def history_columns_merge(feature_config, logger=default_logger, general_mode=False):
+def history_columns_merge(feature_config, logger=default_logger, general_mode=False, pca=True):
     logger.info("- " * 25)
     logger.info("--> start history_columns_merge func:")
 

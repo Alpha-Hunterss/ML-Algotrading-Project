@@ -221,8 +221,7 @@ def main(
             trade_mode= trade_mode,
             use_dynamic_sl=use_dynamic_sl,
             dynamic_sl_scale_type=dynamic_sl_scale_type,
-            rstd_window_size=rstd_window_size,
-            close_positions_at_midnight=close_positions_at_midnight,
+            rstd_window_size=rstd_window_size
         )
 
         # ______________________________RUN Quant Cross-Validation and Backtest on Folds_____________________

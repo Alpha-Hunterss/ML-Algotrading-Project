@@ -642,6 +642,7 @@ def do_backtest(
     plt.show()
 
     if 'confidence_levels' in new_trg_df.columns:
+        new_trg_df['confidence_levels'] = round(new_trg_df['confidence_levels'] , 2)
         positive_profits = new_trg_df[new_trg_df['net_profit'] > 0]
         negative_profits = new_trg_df[new_trg_df['net_profit'] < 0]
 
@@ -652,7 +653,7 @@ def do_backtest(
         print('**')
         print(f"loss trade:\n {result_negative}")
         print('==========')
-
+        
         if use_money_management:
             max_exp_daily_dd, new_trg_df = money_management(
                 new_trg_df, stop_loss, spread, initial_balance,

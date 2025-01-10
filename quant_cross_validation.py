@@ -87,6 +87,14 @@ def quant_CV(
             "meta_model_pos_label_perc",
             "max_n_open_position",
             "max_vol_open_positions",
+            'max_consecutive_loss',
+            "WinRate(%)",
+            "Tp(%)" ,
+            "Sl(%)" ,
+            'q1_cons_loss',
+            'q2_cons_loss',
+            'q3_cons_loss',
+            'mean_cons_loss',
         ]
     )
     df["pred_as_val"] = -1
@@ -445,7 +453,14 @@ def quant_CV(
                 fold_max_overall_dd = bt_report["max_overall_dd"]
                 fold_max_n_open_position = bt_report["max_n_open_position"]
                 fold_max_vol_open_positions = bt_report["max_vol_open_positions"]
-
+                fold_tp = bt_report["Tp(%)"]
+                fold_sl = bt_report["Sl(%)"]
+                fold_WR = bt_report["WinRate(%)"]
+                fold_max_consecutive_loss = bt_report["max_consecutive_loss"]
+                fold_q1_cons_loss = bt_report["q1_cons_loss"]
+                fold_q2_cons_loss = bt_report["q2_cons_loss"]
+                fold_q3_cons_loss = bt_report["q3_cons_loss"]
+                fold_mean_cons_loss = bt_report["mean_cons_loss"]
                 del bt_df, bt_report
                 gc.collect()
             else:
@@ -457,6 +472,14 @@ def quant_CV(
                 fold_max_daily_sig = None
                 fold_max_n_open_position = None
                 fold_max_vol_open_positions = None
+                fold_tp = None
+                fold_sl = None
+                fold_WR = None
+                fold_max_consecutive_loss = None
+                fold_q1_cons_loss = None
+                fold_q2_cons_loss = None
+                fold_q3_cons_loss = None
+                fold_mean_cons_loss = None
 
             pong = time.time()
 
@@ -478,11 +501,14 @@ def quant_CV(
                 + [fold_max_overall_dd, fold_unique_days, fold_max_daily_sig]
                 + [meta_model_pos_label_perc, fold_max_n_open_position]
                 + [fold_max_vol_open_positions]
+                + [fold_max_consecutive_loss , fold_WR , fold_sl , fold_tp]
+                + [fold_q1_cons_loss , fold_q2_cons_loss , fold_q3_cons_loss , fold_mean_cons_loss]
+
             )
 
             evals.loc[len(evals)] = eval_list
-
-        print(evals.iloc[-3:])
+        with pd.option_context('display.max_columns', None):
+            print(evals.iloc[-3:])
         input_cols_and_type = dict(df[input_cols].dtypes)
 
     # Backtest on the whole test & valid set

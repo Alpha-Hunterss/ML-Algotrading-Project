@@ -600,7 +600,22 @@ def money_management(
     df["volume_open_position"] = np.array(total_open_volume)
 
     return max_exp_daily_dd, df
-
+def cal_n_open_position(df:pd.DataFrame):
+    df['index'] = df.index
+    df = df.sort_values(by="_time")
+    df['close_position'] = df['index'] + df['time_open_position']
+    array = df[['index' , 'close_position' , 'volume']].to_numpy()
+    n_open_position = []
+    total_open_volume = []
+    for i in range(array.shape[0]):
+        chunk = array[:i+1]
+        cond = chunk[:-1 , 1] > chunk[-1 , 0]
+        cond_len = len(np.where(cond)[0]) +1 
+        n_open_position.append(cond_len)
+        open_volumes = chunk[:-1, 2][cond]
+        total_volume = open_volumes.sum() + chunk[-1, 2]
+        total_open_volume.append(total_volume)
+    return n_open_position , total_open_volume
 
 def do_backtest(
     df_model_signal: pd.DataFrame,
@@ -660,6 +675,8 @@ def do_backtest(
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
                 max_daily_dd, use_floating_risk, use_perc_levels
             )
+        else:
+            new_trg_df["n_open_position"] , new_trg_df["volume_open_position"] = cal_n_open_position(new_trg_df)
 
         ##? calculate balance
         new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * new_trg_df[
@@ -670,12 +687,21 @@ def do_backtest(
         new_trg_df["balance"] = new_trg_df[
             "net_profit"
         ] * volume * pip_value[target_symbol] + (new_trg_df["swap_days"] * volume * swap_rate)
+        new_trg_df["n_open_position"] , new_trg_df["volume_open_position"] = cal_n_open_position(new_trg_df)
+
 
     new_trg_df["balance"] = new_trg_df["balance"].cumsum()
     new_trg_df["balance"] += initial_balance
 
     ##? calculate max_drawdown
     max_drawdown, max_overall_dd = calculate_max_drawdown(new_trg_df["balance"], initial_balance)
+    loss_streaks = (new_trg_df['balance'].diff() < 0).astype(int).groupby((new_trg_df['balance'].diff() > 0).cumsum()).cumsum().loc[lambda x: x > 0]    
+    q1_cons_loss = q2_cons_loss = q3_cons_loss = mean_cons_loss = 0
+    if not loss_streaks.empty:
+        q1_cons_loss = round(np.quantile(loss_streaks, 0.25), 2)
+        q2_cons_loss = round(np.quantile(loss_streaks, 0.5), 2)
+        q3_cons_loss = round(np.quantile(loss_streaks, 0.75), 2)
+        mean_cons_loss = round(loss_streaks.mean(), 2)
 
     ##? calculate duration:
     if new_trg_df.shape[0] == 0:
@@ -688,6 +714,13 @@ def do_backtest(
             "max_overall_dd": 0.0,
             "max_n_open_position": 0,
             "max_vol_open_positions": 0.0,
+            "q1_cons_loss": 0.0,
+            "q2_cons_loss": 0.0,
+            "q3_cons_loss": 0.0,
+            "mean_cons_loss": 0.0,
+            "Tp(%)": 0.0,
+            "Sl(%)": 0.0,
+            "WinRate(%)" : 0.0,
         }
     else:
         backtest_report = {
@@ -703,6 +736,16 @@ def do_backtest(
             "max_overall_dd": round(max_overall_dd, 2),
             "max_n_open_position": new_trg_df["n_open_position"].max(),
             "max_vol_open_positions": new_trg_df["volume_open_position"].max(),
+
+            "max_consecutive_loss" : loss_streaks.max(),
+            "q1_cons_loss": q1_cons_loss,
+            "q2_cons_loss": q2_cons_loss,
+            "q3_cons_loss": q3_cons_loss,
+            "mean_cons_loss": mean_cons_loss,
+
+            "Tp(%)": round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df[bt_column_name] == 1)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
+            "Sl(%)": round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df[bt_column_name] == -1)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
+            "WinRate(%)" : round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df['net_profit'] > 0)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
         }
 
     return (

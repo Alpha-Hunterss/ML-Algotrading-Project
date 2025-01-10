@@ -736,13 +736,11 @@ def do_backtest(
             "max_overall_dd": round(max_overall_dd, 2),
             "max_n_open_position": new_trg_df["n_open_position"].max(),
             "max_vol_open_positions": new_trg_df["volume_open_position"].max(),
-
             "max_consecutive_loss" : loss_streaks.max(),
             "q1_cons_loss": q1_cons_loss,
             "q2_cons_loss": q2_cons_loss,
             "q3_cons_loss": q3_cons_loss,
             "mean_cons_loss": mean_cons_loss,
-
             "Tp(%)": round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df[bt_column_name] == 1)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
             "Sl(%)": round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df[bt_column_name] == -1)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
             "WinRate(%)" : round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df['net_profit'] > 0)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
@@ -758,6 +756,7 @@ def do_backtest(
                 "pip_diff",
                 "net_profit",
                 "balance",
+                "volume",
             ]
         ],
     )

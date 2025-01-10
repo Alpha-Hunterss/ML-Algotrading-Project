@@ -126,7 +126,7 @@ def quant_CV(
         for col in cudf_df.columns:
             if cudf_df[col].dtype == "bool":
                 cudf_df[col] = cudf_df[col].astype("int8")
-
+    general_backtest_df = {}
     for i in list(folds.keys()):
         print(f"Fold {i}:")
         tic = time.time()
@@ -461,6 +461,7 @@ def quant_CV(
                 fold_q2_cons_loss = bt_report["q2_cons_loss"]
                 fold_q3_cons_loss = bt_report["q3_cons_loss"]
                 fold_mean_cons_loss = bt_report["mean_cons_loss"]
+                general_backtest_df.update({f"bt_df_fold{i}_{set_name}" : bt_df})
                 del bt_df, bt_report
                 gc.collect()
             else:
@@ -559,5 +560,6 @@ def quant_CV(
         df[df.pred_as_val != -1][["K", "pred_as_val", "pred_val_proba", "target"]],
         df[df.pred_as_test != -1][["K", "pred_as_test", "pred_test_proba", "target"]],
         general_backtest_report,
-        importance_df
+        importance_df,
+        general_backtest_df
     )

@@ -606,6 +606,7 @@ def do_backtest(
     use_perc_levels: bool,
     confidence_levels: np.ndarray,
     model,
+    is_final_bt: bool,
 ):
     pip_value = {
         'EURUSD': 10,
@@ -629,7 +630,7 @@ def do_backtest(
     plot_profit_distribution(new_trg_df)
     plt.show()
 
-    if model.use_meta_labeling:
+    if model.use_meta_labeling and not is_final_bt:
         new_trg_df["confidence_levels"] = confidence_levels
 
     if 'confidence_levels' in new_trg_df.columns:

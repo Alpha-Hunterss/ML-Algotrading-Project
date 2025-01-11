@@ -88,7 +88,7 @@ def ETL(
     df.set_index(["_time"], inplace=True, drop=True)
     df["target"] = df["target"].astype(int)
 
-    ##? set targets to 0 in bad hours 
+    ##? set targets to 0 in bad hours
     df.loc[(df.index.get_level_values('_time').time>=datetime.time(0, 0))&(df.index.get_level_values('_time').time<=datetime.time(1, 0)),'target'] = 0
     df = remove_future_redundendat_columns(df)
 

@@ -340,11 +340,16 @@ def quant_CV(
                                     addi_y=df.loc[folds[i][set_name]]["target"]
                                 )
                             else:
-                                confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
-                            df.loc[
-                                folds[i][set_name],
-                                "confidence_levels"
-                            ] = confidence_levels
+                                if model.use_meta_labeling:
+                                    confidence_levels = np.ones((len(y_pred[y_pred == 1]),), dtype=np.float16)
+                                else:
+                                    confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
+
+                            if not model.use_meta_labeling:
+                                df.loc[
+                                    folds[i][set_name],
+                                    "confidence_levels"
+                                ] = confidence_levels
                         else:
                             _, confidence_levels = model.categorize_proba(
                                 cudf_df.loc[
@@ -353,10 +358,12 @@ def quant_CV(
                                 cnf_levels,
                                 addi_X=df.loc[folds[i][set_name]][input_cols]
                             )
-                            df.loc[
-                                folds[i][set_name],
-                                "confidence_levels"
-                            ] = confidence_levels
+
+                            if not model.use_meta_labeling:
+                                df.loc[
+                                    folds[i][set_name],
+                                    "confidence_levels"
+                                ] = confidence_levels
                 else:
                     if is_cf_model:
                         if model.use_valid_as_calib:
@@ -367,19 +374,26 @@ def quant_CV(
                                     cnf_levels
                                 )
                             else:
-                                confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
-                            df.loc[
-                                folds[i][set_name],
-                                "confidence_levels"
-                            ] = confidence_levels
+                                if model.use_meta_labeling:
+                                    confidence_levels = np.ones((len(y_pred[y_pred == 1]),), dtype=np.float16)
+                                else:
+                                    confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
+
+                            if not model.use_meta_labeling:
+                                df.loc[
+                                    folds[i][set_name],
+                                    "confidence_levels"
+                                ] = confidence_levels
                         else:
                             _, confidence_levels = model.categorize_proba(
                                 df.loc[folds[i][set_name]][input_cols], cnf_levels
                             )
-                            df.loc[
-                                folds[i][set_name],
-                                "confidence_levels"
-                            ] = confidence_levels
+
+                            if not model.use_meta_labeling:
+                                df.loc[
+                                    folds[i][set_name],
+                                    "confidence_levels"
+                                ] = confidence_levels
 
                 # if np.shape(proba_pred)[1] > 1:
                 #     df.loc[
@@ -422,6 +436,9 @@ def quant_CV(
                         max_daily_dd=max_daily_dd,
                         use_floating_risk=use_floating_risk,
                         use_perc_levels=use_perc_levels,
+                        confidence_levels=confidence_levels,
+                        model=model,
+                        is_final_bt=False,
                     )
                 else:
                     #? Backtest
@@ -445,6 +462,9 @@ def quant_CV(
                         max_daily_dd=max_daily_dd,
                         use_floating_risk=use_floating_risk,
                         use_perc_levels=use_perc_levels,
+                        confidence_levels=confidence_levels,
+                        model=model,
+                        is_final_bt=False,
                     )
 
                 fold_profit_percent = bt_report['profit_percent']
@@ -532,6 +552,9 @@ def quant_CV(
             max_daily_dd=max_daily_dd,
             use_floating_risk=use_floating_risk,
             use_perc_levels=use_perc_levels,
+            confidence_levels=confidence_levels,
+            model=model,
+            is_final_bt=True,
         )
         general_backtest_report[f"profit_percent_{pred_name}"] = bt_report['profit_percent']
         general_backtest_report[f"max_dd_{pred_name}"] = bt_report['max_draw_down']

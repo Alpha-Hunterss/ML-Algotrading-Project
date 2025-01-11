@@ -986,6 +986,7 @@ class ClassificationConformalPredictor:
         zero_cls_scale=1,
         apply_calibs=False,
         random_state=42,
+        use_meta_labeling=False,
     ):
         """
         Parameters:
@@ -1007,6 +1008,7 @@ class ClassificationConformalPredictor:
         self.zero_cls_scale = zero_cls_scale
         self.apply_calibs = apply_calibs
         self.random_state = random_state
+        self.use_meta_labeling = use_meta_labeling
         self.calibration_scores = {}
         self.use_cudf = False
         self.classes_ = None
@@ -1136,6 +1138,7 @@ class ClassificationConformalPredictor:
             "zero_cls_scale": self.zero_cls_scale,
             "apply_calibs": self.apply_calibs,
             "random_state": self.random_state,
+            "use_meta_labeling": self.use_meta_labeling,
         }
 
         if deep and self.model is not None and hasattr(self.model, "get_params"):
@@ -1431,6 +1434,15 @@ class ClassificationConformalPredictor:
                         y_meta = (predictions == y).astype(int)
                     y_temp = y_meta.copy()
 
+                    if self.use_meta_labeling:
+                        X_meta = X_meta.loc[predictions == 1]
+                        y_meta = y_meta[predictions == 1]
+                        y_temp = y_temp[predictions == 1]
+                        prob_pred = prob_pred[predictions == 1]
+
+                        if self.calibration_method is not None:
+                            base_prob_pred = base_prob_pred[predictions == 1]
+
                     if list(self.classes_) == [0, 1]:
                         self.meta_pos_label_perc = round((np.sum(y_meta) / y_meta.size) * 100, 2)
 
@@ -1625,6 +1637,13 @@ class ClassificationConformalPredictor:
             top_features = X.columns[sorted_idx[:self.n_top_features]]
 
             X_meta = X[top_features].copy()
+
+            if self.use_meta_labeling:
+                X_meta = X_meta.loc[predictions == 1]
+                prob_pred = prob_pred[predictions == 1]
+
+                if self.calibration_method is not None:
+                    base_prob_pred = base_prob_pred[predictions == 1]
 
             if self.use_cudf:
                 import cudf

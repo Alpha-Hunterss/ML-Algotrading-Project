@@ -16,7 +16,9 @@ def history_data_stage_one(feature_config, logger=default_logger):
     """
     logger.info("= " * 25)
     logger.info("--> start history_data_stage_one fumc:")
-    data_sources = ["metatrader", "dukascopy"]
+    # data_sources = ["metatrader", "dukascopy"]
+    data_sources = ["dukascopy"]
+
 
     for symbol in list(feature_config.keys()):
         logger.info("-" * 25)
@@ -29,6 +31,15 @@ def history_data_stage_one(feature_config, logger=default_logger):
             file_name,
             columns=columns,
         )
+        if len(data_sources) == 1 :
+            df["_time"] = (
+                df["_time"].dt.tz_localize(None).dt.tz_localize("UTC").dt.tz_convert("US/Eastern")
+                + pd.offsets.Hour(7)
+            ).dt.tz_localize(None)
+
+            df = remove_weekends(
+                df, weekends_day=["Saturday", "Sunday"], convert_tz=False
+            )
         # Note: metatrader data naturaly does not have weekends. if the main data source is not metatrader:
         # df = remove_weekends(df, weekends_day=["Saturday", "Sunday"], convert_tz=False)
 

@@ -710,7 +710,7 @@ def do_backtest(
         mean_cons_loss = round(loss_streaks.mean(), 2)
 
     ##? calculate duration:
-    if new_trg_df.shape[0] == 0:
+    if new_trg_df[new_trg_df['volume'] > 0].shape[0]==0:
         backtest_report = {
             "balance_cash": initial_balance,
             "profit_pips": 0,
@@ -720,6 +720,7 @@ def do_backtest(
             "max_overall_dd": 0.0,
             "max_n_open_position": 0,
             "max_vol_open_positions": 0.0,
+            "max_consecutive_loss" : 0.0,
             "q1_cons_loss": 0.0,
             "q2_cons_loss": 0.0,
             "q3_cons_loss": 0.0,

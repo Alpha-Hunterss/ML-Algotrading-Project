@@ -941,6 +941,189 @@ class XGBForestClassifier(BaseEnsemble):
         return self.classes_.take(np.argmax(proba, axis=1), axis=0)
 
 
+def _accumulate_prediction_stacked(predict, X, out, idx, lock):
+    """
+    Utility function for collecting predictions from each estimator into a 3D array.
+
+    Parameters
+    ----------
+    predict : callable
+        The prediction function of the estimator
+    X : array-like
+        Input data
+    out : list of numpy.ndarray
+        List containing the 3D array to store all predictions
+    idx : int
+        The index of the current estimator
+    lock : threading.Lock
+        Lock for thread-safe operations
+    """
+    prediction = predict(X)
+
+    with lock:
+        out[idx] = prediction
+
+
+class StackedXGBForestClassifier(XGBForestClassifier):
+    """
+    A stacking variant of XGBForestClassifier that uses a meta-model to combine
+    predictions from all base estimators.
+
+    Parameters
+    ----------
+    stacked_model : estimator object, default=None
+        The meta-model to be trained on the predictions of base estimators.
+        Must implement fit and predict_proba methods.
+
+    All other parameters are inherited from XGBForestClassifier.
+
+    Attributes
+    ----------
+    All attributes from XGBForestClassifier plus:
+
+    stacked_model_ : estimator object
+        The fitted meta-model
+    """
+
+    def __init__(
+        self,
+        stacked_model=None,
+        stacked_models_params=None,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.stacked_model = stacked_model
+        self.stacked_models_params = stacked_models_params
+
+    def predict_proba(self, X, y=None, stacked_model_trained=True):
+        """
+        Predict class probabilities for X.
+
+        The predicted class probabilities of an input sample are computed using
+        the estimations derived from the stacked model that is trained on the
+        output probabilities of the estimators, alongside the input X data.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            The input samples. Internally, its dtype will be converted to
+            ``dtype=np.float32``. If a sparse matrix is provided, it will be
+            converted into a sparse ``csr_matrix``.
+
+        Returns
+        -------
+        p : ndarray of shape (n_samples, n_classes), or a list of such arrays
+            The class probabilities of the input samples. The order of the
+            classes corresponds to that in the attribute :term:`classes_`.
+        """
+        check_is_fitted(self)
+        # Check data
+        if not self.use_cudf:
+            X = self._validate_X_predict(X)
+
+        # Assign chunk of trees to jobs
+        n_jobs, _, _ = _partition_estimators(self.n_estimators, self.n_jobs)
+
+        # avoid storing the output of every estimator by summing them here
+        all_proba = [
+            np.zeros((X.shape[0], j), dtype=np.float64)
+            for j in np.atleast_1d(self.n_classes_*len(self.estimators_))
+        ]
+        lock = threading.Lock()
+
+        Parallel(n_jobs=n_jobs, verbose=self.verbose, require="sharedmem")(
+            delayed(_accumulate_prediction_stacked)(e.predict_proba, X, all_proba, i, lock)
+            for i, e in enumerate(self.estimators_)
+        )
+
+        if not stacked_model_trained:
+            if y is None:
+                raise ValueError(
+                    "When the stacked model is not trained yet,"
+                    " y must be set."
+                )
+
+            if self.use_cudf:
+                import cudf
+
+                for idx, est_proba in enumerate(all_proba):
+                    X[f"{idx}th_est_pos_label_proba"] = cudf.Series(
+                        est_proba[:, 1],
+                        index=X.index
+                    )
+            else:
+                for idx, est_proba in enumerate(all_proba):
+                    X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
+
+            if isinstance(self.stacked_models_params, dict):
+                for key in self.stacked_models_params.keys():
+                    if not isinstance(key, str):
+                        raise ValueError(
+                            "All of the keys of the 'stacked_models_params' "
+                            "dictionary must be of type string."
+                        )
+            else:
+                raise ValueError(
+                    "'stacked_models_params' should be a dictionary "
+                    "containing the stacked model's parameters. "
+                    f"Given {self.stacked_models_params}."
+                )
+
+            if isinstance(self.stacked_model, str):
+                if self.stacked_model not in ["RF", "XGB", "XGBF", "LGBM"]:
+                    raise ValueError(
+                        "Currently, the stacked model should either be one of "
+                        f"'RF', 'XGB', 'XGBF' or 'LGBM'. Given {self.stacked_model}."
+                    )
+
+                if self.stacked_model == "RF":
+                    model_class = RandomForestClassifier
+                elif self.stacked_model == "XGB":
+                    model_class = XGBClassifier
+                elif self.stacked_model == "XGBF":
+                    model_class = XGBForestClassifier
+                else: # self.stacked_model == "LGBM"
+                    model_class = LGBMClassifier
+
+            elif isinstance(self.stacked_model, RandomForestClassifier):
+                model_class = RandomForestClassifier
+
+            elif isinstance(self.stacked_model, XGBClassifier):
+                model_class = XGBClassifier
+
+            elif isinstance(self.stacked_model, XGBForestClassifier):
+                model_class = XGBForestClassifier
+
+            elif isinstance(self.stacked_model, LGBMClassifier):
+                model_class = LGBMClassifier
+
+            model_instance = model_class()
+            valid_params = model_instance.get_params()
+            parameters = {
+                param: value for param, value in self.stacked_models_params.items()
+                if param in valid_params
+            }
+            self.stacked_model = model_class(**parameters)
+
+            self.stacked_model.fit(X, y)
+
+            return
+        else:
+            if self.use_cudf:
+                import cudf
+
+                for idx, est_proba in enumerate(all_proba):
+                    X[f"{idx}th_est_pos_label_proba"] = cudf.Series(
+                        est_proba[:, 1],
+                        index=X.index
+                    )
+            else:
+                for idx, est_proba in enumerate(all_proba):
+                    X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
+
+            return self.stacked_model.predict_proba(X)
+
+
 # Temperature Scaling calibration
 class TemperatureScalingCalibrator:
 
@@ -1457,7 +1640,7 @@ class ClassificationConformalPredictor:
                             if not isinstance(key, str):
                                 raise ValueError(
                                     "All of the keys of the 'meta_models_params' "
-                                    "dictionary must be non-string keys."
+                                    "dictionary must be of type string."
                                 )
                     else:
                         raise ValueError(
@@ -1532,49 +1715,49 @@ class ClassificationConformalPredictor:
 
                         if self.calibration_method == 'beta_temp':
                             X_meta["base_model's_probs"] = cudf.Series(
-                                np.max(base_prob_pred, axis=1), index=X_meta.index
+                                base_prob_pred[:, 1], index=X_meta.index
                             )
                             X_meta["base_model's_beta_probs"] = cudf.Series(
-                                np.max(prob_pred, axis=1), index=X_meta.index
+                                prob_pred[:, 1], index=X_meta.index
                             )
                             X_meta["base_model's_temp_probs"] = cudf.Series(
-                                np.max(temp_prob_pred, axis=1), index=X_meta.index
+                                temp_prob_pred[:, 1], index=X_meta.index
                             )
                         elif self.calibration_method == 'temp_beta':
                             X_meta["base_model's_probs"] = cudf.Series(
-                                np.max(base_prob_pred, axis=1), index=X_meta.index
+                                base_prob_pred[:, 1], index=X_meta.index
                             )
                             X_meta["base_model's_beta_probs"] = cudf.Series(
-                                np.max(beta_prob_pred, axis=1), index=X_meta.index
+                                beta_prob_pred[:, 1], index=X_meta.index
                             )
                             X_meta["base_model's_temp_probs"] = cudf.Series(
-                                np.max(prob_pred, axis=1), index=X_meta.index
+                                prob_pred[:, 1], index=X_meta.index
                             )
                         elif self.calibration_method is not None:
                             X_meta["base_model's_probs"] = cudf.Series(
-                                np.max(base_prob_pred, axis=1), index=X_meta.index
+                                base_prob_pred[:, 1], index=X_meta.index
                             )
                             X_meta["base_model's_calib_probs"] = cudf.Series(
-                                np.max(prob_pred, axis=1), index=X_meta.index
+                                prob_pred[:, 1], index=X_meta.index
                             )
                         else:
                             X_meta["base_model's_probs"] = cudf.Series(
-                                np.max(prob_pred, axis=1), index=X_meta.index
+                                prob_pred[:, 1], index=X_meta.index
                             )
                     else:
                         if self.calibration_method == 'beta_temp':
-                            X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                            X_meta["base_model's_beta_probs"] = np.max(prob_pred, axis=1)
-                            X_meta["base_model's_temp_probs"] = np.max(temp_prob_pred, axis=1)
+                            X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                            X_meta["base_model's_beta_probs"] = prob_pred[:, 1]
+                            X_meta["base_model's_temp_probs"] = temp_prob_pred[:, 1]
                         elif self.calibration_method == 'temp_beta':
-                            X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                            X_meta["base_model's_beta_probs"] = np.max(beta_prob_pred, axis=1)
-                            X_meta["base_model's_temp_probs"] = np.max(prob_pred, axis=1)
+                            X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                            X_meta["base_model's_beta_probs"] = beta_prob_pred[:, 1]
+                            X_meta["base_model's_temp_probs"] = prob_pred[:, 1]
                         elif self.calibration_method is not None:
-                            X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                            X_meta["base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                            X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                            X_meta["base_model's_calib_probs"] = prob_pred[:, 1]
                         else:
-                            X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+                            X_meta["base_model's_probs"] = prob_pred[:, 1]
 
                     self.meta_model.fit(X_meta, y_meta)
 
@@ -1786,49 +1969,49 @@ class ClassificationConformalPredictor:
 
                 if self.calibration_method == 'beta_temp':
                     X_meta["base_model's_probs"] = cudf.Series(
-                        np.max(base_prob_pred, axis=1), index=X_meta.index
+                        base_prob_pred[:, 1], index=X_meta.index
                     )
                     X_meta["base_model's_beta_probs"] = cudf.Series(
-                        np.max(prob_pred, axis=1), index=X_meta.index
+                        prob_pred[:, 1], index=X_meta.index
                     )
                     X_meta["base_model's_temp_probs"] = cudf.Series(
-                        np.max(temp_prob_pred, axis=1), index=X_meta.index
+                        temp_prob_pred[:, 1], index=X_meta.index
                     )
                 elif self.calibration_method == 'temp_beta':
                     X_meta["base_model's_probs"] = cudf.Series(
-                        np.max(base_prob_pred, axis=1), index=X_meta.index
+                        base_prob_pred[:, 1], index=X_meta.index
                     )
                     X_meta["base_model's_beta_probs"] = cudf.Series(
-                        np.max(beta_prob_pred, axis=1), index=X_meta.index
+                        beta_prob_pred[:, 1], index=X_meta.index
                     )
                     X_meta["base_model's_temp_probs"] = cudf.Series(
-                        np.max(prob_pred, axis=1), index=X_meta.index
+                        prob_pred[:, 1], index=X_meta.index
                     )
                 elif self.calibration_method is not None:
                     X_meta["base_model's_probs"] = cudf.Series(
-                        np.max(base_prob_pred, axis=1), index=X_meta.index
+                        base_prob_pred[:, 1], index=X_meta.index
                     )
                     X_meta["base_model's_calib_probs"] = cudf.Series(
-                        np.max(prob_pred, axis=1), index=X_meta.index
+                        prob_pred[:, 1], index=X_meta.index
                     )
                 else:
                     X_meta["base_model's_probs"] = cudf.Series(
-                        np.max(prob_pred, axis=1), index=X_meta.index
+                        prob_pred[:, 1], index=X_meta.index
                     )
             else:
                 if self.calibration_method == 'beta_temp':
-                    X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                    X_meta["base_model's_beta_probs"] = np.max(prob_pred, axis=1)
-                    X_meta["base_model's_temp_probs"] = np.max(temp_prob_pred, axis=1)
+                    X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                    X_meta["base_model's_beta_probs"] = prob_pred[:, 1]
+                    X_meta["base_model's_temp_probs"] = temp_prob_pred[:, 1]
                 elif self.calibration_method == 'temp_beta':
-                    X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                    X_meta["base_model's_beta_probs"] = np.max(beta_prob_pred, axis=1)
-                    X_meta["base_model's_temp_probs"] = np.max(prob_pred, axis=1)
+                    X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                    X_meta["base_model's_beta_probs"] = beta_prob_pred[:, 1]
+                    X_meta["base_model's_temp_probs"] = prob_pred[:, 1]
                 elif self.calibration_method is not None:
-                    X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                    X_meta["base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                    X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                    X_meta["base_model's_calib_probs"] = prob_pred[:, 1]
                 else:
-                    X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+                    X_meta["base_model's_probs"] = prob_pred[:, 1]
 
             meta_probs = self.meta_model.predict_proba(X_meta)
 
@@ -1955,10 +2138,12 @@ def model_func(
             "RF": RandomForestClassifier,
             "XGB" : XGBClassifier,
             "XGBF": XGBForestClassifier,
+            "XGBF+": StackedXGBForestClassifier,
             "LGBM": LGBMClassifier,
             "CF-RF": ClassificationConformalPredictor,
             "CF-XGB": ClassificationConformalPredictor,
             "CF-XGBF": ClassificationConformalPredictor,
+            "CF-XGBF+": ClassificationConformalPredictor,
             "CF-LGBM": ClassificationConformalPredictor,
         }
 

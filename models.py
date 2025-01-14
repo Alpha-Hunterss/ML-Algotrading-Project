@@ -941,6 +941,189 @@ class XGBForestClassifier(BaseEnsemble):
         return self.classes_.take(np.argmax(proba, axis=1), axis=0)
 
 
+def _accumulate_prediction_stacked(predict, X, out, idx, lock):
+    """
+    Utility function for collecting predictions from each estimator into a 3D array.
+
+    Parameters
+    ----------
+    predict : callable
+        The prediction function of the estimator
+    X : array-like
+        Input data
+    out : list of numpy.ndarray
+        List containing the 3D array to store all predictions
+    idx : int
+        The index of the current estimator
+    lock : threading.Lock
+        Lock for thread-safe operations
+    """
+    prediction = predict(X)
+
+    with lock:
+        out[idx] = prediction
+
+
+class StackedXGBForestClassifier(XGBForestClassifier):
+    """
+    A stacking variant of XGBForestClassifier that uses a meta-model to combine
+    predictions from all base estimators.
+
+    Parameters
+    ----------
+    stacked_model : estimator object, default=None
+        The meta-model to be trained on the predictions of base estimators.
+        Must implement fit and predict_proba methods.
+
+    All other parameters are inherited from XGBForestClassifier.
+
+    Attributes
+    ----------
+    All attributes from XGBForestClassifier plus:
+
+    stacked_model_ : estimator object
+        The fitted meta-model
+    """
+
+    def __init__(
+        self,
+        stacked_model=None,
+        stacked_models_params=None,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.stacked_model = stacked_model
+        self.stacked_models_params = stacked_models_params
+
+    def predict_proba(self, X, y=None, stacked_model_trained=True):
+        """
+        Predict class probabilities for X.
+
+        The predicted class probabilities of an input sample are computed using
+        the estimations derived from the stacked model that is trained on the
+        output probabilities of the estimators, alongside the input X data.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            The input samples. Internally, its dtype will be converted to
+            ``dtype=np.float32``. If a sparse matrix is provided, it will be
+            converted into a sparse ``csr_matrix``.
+
+        Returns
+        -------
+        p : ndarray of shape (n_samples, n_classes), or a list of such arrays
+            The class probabilities of the input samples. The order of the
+            classes corresponds to that in the attribute :term:`classes_`.
+        """
+        check_is_fitted(self)
+        # Check data
+        if not self.use_cudf:
+            X = self._validate_X_predict(X)
+
+        # Assign chunk of trees to jobs
+        n_jobs, _, _ = _partition_estimators(self.n_estimators, self.n_jobs)
+
+        # avoid storing the output of every estimator by summing them here
+        all_proba = [
+            np.zeros((X.shape[0], j), dtype=np.float64)
+            for j in np.atleast_1d(self.n_classes_*len(self.estimators_))
+        ]
+        lock = threading.Lock()
+
+        Parallel(n_jobs=n_jobs, verbose=self.verbose, require="sharedmem")(
+            delayed(_accumulate_prediction_stacked)(e.predict_proba, X, all_proba, i, lock)
+            for i, e in enumerate(self.estimators_)
+        )
+
+        if not stacked_model_trained:
+            if y is None:
+                raise ValueError(
+                    "When the stacked model is not trained yet,"
+                    " y must be set."
+                )
+
+            if self.use_cudf:
+                import cudf
+
+                for idx, est_proba in enumerate(all_proba):
+                    X[f"{idx}th_est_pos_label_proba"] = cudf.Series(
+                        est_proba[:, 1],
+                        index=X.index
+                    )
+            else:
+                for idx, est_proba in enumerate(all_proba):
+                    X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
+
+            if isinstance(self.stacked_models_params, dict):
+                for key in self.stacked_models_params.keys():
+                    if not isinstance(key, str):
+                        raise ValueError(
+                            "All of the keys of the 'stacked_models_params' "
+                            "dictionary must be of type string."
+                        )
+            else:
+                raise ValueError(
+                    "'stacked_models_params' should be a dictionary "
+                    "containing the stacked model's parameters. "
+                    f"Given {self.stacked_models_params}."
+                )
+
+            if isinstance(self.stacked_model, str):
+                if self.stacked_model not in ["RF", "XGB", "XGBF", "LGBM"]:
+                    raise ValueError(
+                        "Currently, the stacked model should either be one of "
+                        f"'RF', 'XGB', 'XGBF' or 'LGBM'. Given {self.stacked_model}."
+                    )
+
+                if self.stacked_model == "RF":
+                    model_class = RandomForestClassifier
+                elif self.stacked_model == "XGB":
+                    model_class = XGBClassifier
+                elif self.stacked_model == "XGBF":
+                    model_class = XGBForestClassifier
+                else: # self.stacked_model == "LGBM"
+                    model_class = LGBMClassifier
+
+            elif isinstance(self.stacked_model, RandomForestClassifier):
+                model_class = RandomForestClassifier
+
+            elif isinstance(self.stacked_model, XGBClassifier):
+                model_class = XGBClassifier
+
+            elif isinstance(self.stacked_model, XGBForestClassifier):
+                model_class = XGBForestClassifier
+
+            elif isinstance(self.stacked_model, LGBMClassifier):
+                model_class = LGBMClassifier
+
+            model_instance = model_class()
+            valid_params = model_instance.get_params()
+            parameters = {
+                param: value for param, value in self.stacked_models_params.items()
+                if param in valid_params
+            }
+            self.stacked_model = model_class(**parameters)
+
+            self.stacked_model.fit(X, y)
+
+            return
+        else:
+            if self.use_cudf:
+                import cudf
+
+                for idx, est_proba in enumerate(all_proba):
+                    X[f"{idx}th_est_pos_label_proba"] = cudf.Series(
+                        est_proba[:, 1],
+                        index=X.index
+                    )
+            else:
+                for idx, est_proba in enumerate(all_proba):
+                    X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
+
+            return self.stacked_model.predict_proba(X)
+
+
 # Temperature Scaling calibration
 class TemperatureScalingCalibrator:
 
@@ -1046,6 +1229,34 @@ class ClassificationConformalPredictor:
                     calibrator.fit(prob_pred[:, idx], (y_calib == cls).astype(int))
                     self.calibrator[cls] = calibrator
 
+        elif self.calibration_method == "beta_temp" or self.calibration_method == "temp_beta":
+            if model == "meta":
+                self.meta_calibrator = {
+                    'temp': TemperatureScalingCalibrator(),
+                }
+
+                logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
+                self.meta_calibrator['temp'].fit(logits, y_calib)
+
+                for idx, cls in enumerate(self.classes_):
+                    # For each class, fit a separate BetaCalibration instance
+                    meta_calibrator = BetaCalibration()
+                    meta_calibrator.fit(prob_pred[:, idx], (y_calib == cls).astype(int))
+                    self.meta_calibrator[cls] = meta_calibrator
+            else:
+                self.calibrator = {
+                    'temp': TemperatureScalingCalibrator(),
+                }
+
+                logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
+                self.calibrator['temp'].fit(logits, y_calib)
+
+                for idx, cls in enumerate(self.classes_):
+                    # For each class, fit a separate BetaCalibration instance
+                    calibrator = BetaCalibration()
+                    calibrator.fit(prob_pred[:, idx], (y_calib == cls).astype(int))
+                    self.calibrator[cls] = calibrator
+
         elif self.calibration_method == "venn_abers":
             if model == "meta":
                 self.meta_calibrator = VennAbersCalibrator(
@@ -1080,7 +1291,7 @@ class ClassificationConformalPredictor:
         """
         Calibrates the probabilities using the chosen method if applicable.
         """
-        if self.calibrator is not None:
+        if self.calibrator is not None or self.meta_calibrator is not None:
             if self.calibration_method == "temperature_scaling":
                 logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
                 if model == "meta":
@@ -1098,6 +1309,26 @@ class ClassificationConformalPredictor:
                     for idx, cls in enumerate(self.classes_):
                         calibrated_probs[:, idx] = self.calibrator[cls].predict(prob_pred[:, idx])
                 prob_pred = calibrated_probs
+
+            elif self.calibration_method == "beta_temp" or self.calibration_method == "temp_beta":
+                # Calibrate probabilities for each class separately
+                calibrated_probs = np.zeros_like(prob_pred)
+                if model == "meta":
+                    for idx, cls in enumerate(self.classes_):
+                        calibrated_probs[:, idx] = self.meta_calibrator[cls].predict(prob_pred[:, idx])
+                else:
+                    for idx, cls in enumerate(self.classes_):
+                        calibrated_probs[:, idx] = self.calibrator[cls].predict(prob_pred[:, idx])
+                beta_prob_pred = calibrated_probs
+
+                logits = np.log(prob_pred + 1e-15)  # Convert probabilities to logits
+                if model == "meta":
+                    prob_pred = self.meta_calibrator['temp'].predict_proba(logits)
+                else:
+                    prob_pred = self.calibrator['temp'].predict_proba(logits)
+                temp_prob_pred = prob_pred
+
+                return beta_prob_pred, temp_prob_pred
 
             elif self.calibration_method == "venn_abers":
                 if model == "meta":
@@ -1200,7 +1431,12 @@ class ClassificationConformalPredictor:
                         # Apply calibration
                         if self.calibration_method is not None and self.calibration_method != "venn_abers":
                             self._apply_calibration(prob_pred, addi_y_calib)
-                            prob_pred = self._calibrate_proba(prob_pred)
+                            if self.calibration_method == 'beta_temp':
+                                prob_pred, _ = self._calibrate_proba(prob_pred)
+                            elif self.calibration_method == 'temp_beta':
+                                _, prob_pred = self._calibrate_proba(prob_pred)
+                            else:
+                                prob_pred = self._calibrate_proba(prob_pred)
 
                         for cls in self.classes_:
                             cls_indices = np.where(addi_y_calib == cls)[0]
@@ -1231,7 +1467,12 @@ class ClassificationConformalPredictor:
                         # Apply calibration
                         if self.calibration_method is not None and self.calibration_method != "venn_abers":
                             self._apply_calibration(prob_pred, y_calib)
-                            prob_pred = self._calibrate_proba(prob_pred)
+                            if self.calibration_method == 'beta_temp':
+                                prob_pred, _ = self._calibrate_proba(prob_pred)
+                            elif self.calibration_method == 'temp_beta':
+                                _, prob_pred = self._calibrate_proba(prob_pred)
+                            else:
+                                prob_pred = self._calibrate_proba(prob_pred)
 
                         for cls in self.classes_:
                             cls_indices = np.where(y_calib == cls)[0]
@@ -1272,7 +1513,12 @@ class ClassificationConformalPredictor:
                 # Apply calibration
                 if self.calibration_method is not None and self.calibration_method != "venn_abers":
                     self._apply_calibration(prob_pred, y_calib)
-                    prob_pred = self._calibrate_proba(prob_pred)
+                    if self.calibration_method == 'beta_temp':
+                        prob_pred, _ = self._calibrate_proba(prob_pred)
+                    elif self.calibration_method == 'temp_beta':
+                        _, prob_pred = self._calibrate_proba(prob_pred)
+                    else:
+                        prob_pred = self._calibrate_proba(prob_pred)
 
                 # Calculate nonconformity scores per class
                 self.calibration_scores = {cls: [] for cls in self.classes_}
@@ -1358,6 +1604,14 @@ class ClassificationConformalPredictor:
                         if self.calibration_method == "venn_abers":
                             base_prob_pred = prob_pred
                             prob_pred = self._calibrate_proba(addi_X)
+                        elif self.calibration_method == "beta_temp":
+                            base_prob_pred = prob_pred
+                            self._apply_calibration(prob_pred, addi_y)
+                            prob_pred, temp_prob_pred = self._calibrate_proba(prob_pred)
+                        elif self.calibration_method == "temp_beta":
+                            base_prob_pred = prob_pred
+                            self._apply_calibration(prob_pred, addi_y)
+                            beta_prob_pred, prob_pred = self._calibrate_proba(prob_pred)
                         else:
                             base_prob_pred = prob_pred
                             self._apply_calibration(prob_pred, addi_y)
@@ -1367,6 +1621,14 @@ class ClassificationConformalPredictor:
                         if self.calibration_method == "venn_abers":
                             base_prob_pred = prob_pred
                             prob_pred = self._calibrate_proba(X)
+                        elif self.calibration_method == "beta_temp":
+                            base_prob_pred = prob_pred
+                            self._apply_calibration(prob_pred, y)
+                            prob_pred, temp_prob_pred = self._calibrate_proba(prob_pred)
+                        elif self.calibration_method == "temp_beta":
+                            base_prob_pred = prob_pred
+                            self._apply_calibration(prob_pred, y)
+                            beta_prob_pred, prob_pred = self._calibrate_proba(prob_pred)
                         else:
                             base_prob_pred = prob_pred
                             self._apply_calibration(prob_pred, y)
@@ -1378,7 +1640,7 @@ class ClassificationConformalPredictor:
                             if not isinstance(key, str):
                                 raise ValueError(
                                     "All of the keys of the 'meta_models_params' "
-                                    "dictionary must be non-string keys."
+                                    "dictionary must be of type string."
                                 )
                     else:
                         raise ValueError(
@@ -1451,23 +1713,51 @@ class ClassificationConformalPredictor:
 
                         y_meta = cudf.Series(y_meta)
 
-                        if self.calibration_method is not None:
+                        if self.calibration_method == 'beta_temp':
                             X_meta["base_model's_probs"] = cudf.Series(
-                                np.max(base_prob_pred, axis=1), index=X_meta.index
+                                base_prob_pred[:, 1], index=X_meta.index
+                            )
+                            X_meta["base_model's_beta_probs"] = cudf.Series(
+                                prob_pred[:, 1], index=X_meta.index
+                            )
+                            X_meta["base_model's_temp_probs"] = cudf.Series(
+                                temp_prob_pred[:, 1], index=X_meta.index
+                            )
+                        elif self.calibration_method == 'temp_beta':
+                            X_meta["base_model's_probs"] = cudf.Series(
+                                base_prob_pred[:, 1], index=X_meta.index
+                            )
+                            X_meta["base_model's_beta_probs"] = cudf.Series(
+                                beta_prob_pred[:, 1], index=X_meta.index
+                            )
+                            X_meta["base_model's_temp_probs"] = cudf.Series(
+                                prob_pred[:, 1], index=X_meta.index
+                            )
+                        elif self.calibration_method is not None:
+                            X_meta["base_model's_probs"] = cudf.Series(
+                                base_prob_pred[:, 1], index=X_meta.index
                             )
                             X_meta["base_model's_calib_probs"] = cudf.Series(
-                                np.max(prob_pred, axis=1), index=X_meta.index
+                                prob_pred[:, 1], index=X_meta.index
                             )
                         else:
                             X_meta["base_model's_probs"] = cudf.Series(
-                                np.max(prob_pred, axis=1), index=X_meta.index
+                                prob_pred[:, 1], index=X_meta.index
                             )
                     else:
-                        if self.calibration_method is not None:
-                            X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                            X_meta["base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                        if self.calibration_method == 'beta_temp':
+                            X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                            X_meta["base_model's_beta_probs"] = prob_pred[:, 1]
+                            X_meta["base_model's_temp_probs"] = temp_prob_pred[:, 1]
+                        elif self.calibration_method == 'temp_beta':
+                            X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                            X_meta["base_model's_beta_probs"] = beta_prob_pred[:, 1]
+                            X_meta["base_model's_temp_probs"] = prob_pred[:, 1]
+                        elif self.calibration_method is not None:
+                            X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                            X_meta["base_model's_calib_probs"] = prob_pred[:, 1]
                         else:
-                            X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+                            X_meta["base_model's_probs"] = prob_pred[:, 1]
 
                     self.meta_model.fit(X_meta, y_meta)
 
@@ -1516,6 +1806,10 @@ class ClassificationConformalPredictor:
                             prob_pred = self._calibrate_proba(addi_X)
                         else:
                             prob_pred = self._calibrate_proba(X)
+                    elif self.calibration_method == 'beta_temp':
+                        prob_pred, _ = self._calibrate_proba(self.model.predict_proba(X))
+                    elif self.calibration_method == 'temp_beta':
+                        _, prob_pred = self._calibrate_proba(self.model.predict_proba(X))
                     else:
                         prob_pred = self._calibrate_proba(self.model.predict_proba(X))
 
@@ -1534,6 +1828,10 @@ class ClassificationConformalPredictor:
                             prob_pred = self._calibrate_proba(addi_X)
                         else:
                             prob_pred = self._calibrate_proba(X)
+                    elif self.calibration_method == 'beta_temp':
+                        prob_pred, _ = self._calibrate_proba(prob_pred)
+                    elif self.calibration_method == 'temp_beta':
+                        _, prob_pred = self._calibrate_proba(prob_pred)
                     else:
                         prob_pred = self._calibrate_proba(prob_pred)
 
@@ -1567,6 +1865,10 @@ class ClassificationConformalPredictor:
                         prob_pred = self._calibrate_proba(addi_X)
                     else:
                         prob_pred = self._calibrate_proba(X)
+                elif self.calibration_method == 'beta_temp':
+                    prob_pred, _ = self._calibrate_proba(self.model.predict_proba(X))
+                elif self.calibration_method == 'temp_beta':
+                    _, prob_pred = self._calibrate_proba(self.model.predict_proba(X))
                 else:
                     prob_pred = self._calibrate_proba(self.model.predict_proba(X))
 
@@ -1584,7 +1886,12 @@ class ClassificationConformalPredictor:
 
                 # Calibrate probabilities
                 if self.calibration_method != "venn_abers":
-                    prob_pred = self._calibrate_proba(prob_pred)
+                    if self.calibration_method == 'beta_temp':
+                        prob_pred, _ = self._calibrate_proba(prob_pred)
+                    elif self.calibration_method == 'temp_beta':
+                        _, prob_pred = self._calibrate_proba(prob_pred)
+                    else:
+                        prob_pred = self._calibrate_proba(prob_pred)
 
             if confidence_level is not None:
                 # Create an array of prediction sets, one set per sample
@@ -1628,6 +1935,12 @@ class ClassificationConformalPredictor:
                         prob_pred = self._calibrate_proba(addi_X)
                     else:
                         prob_pred = self._calibrate_proba(X)
+                elif self.calibration_method == 'beta_temp':
+                    base_prob_pred = prob_pred
+                    prob_pred, temp_prob_pred = self._calibrate_proba(prob_pred)
+                elif self.calibration_method == 'temp_beta':
+                    base_prob_pred = prob_pred
+                    beta_prob_pred, prob_pred = self._calibrate_proba(prob_pred)
                 else:
                     base_prob_pred = prob_pred
                     prob_pred = self._calibrate_proba(prob_pred)
@@ -1642,29 +1955,63 @@ class ClassificationConformalPredictor:
                 X_meta = X_meta.loc[predictions == 1]
                 prob_pred = prob_pred[predictions == 1]
 
-                if self.calibration_method is not None:
+                if self.calibration_method == 'beta_temp':
+                    base_prob_pred = base_prob_pred[predictions == 1]
+                    temp_prob_pred = temp_prob_pred[predictions == 1]
+                elif self.calibration_method == 'temp_beta':
+                    base_prob_pred = base_prob_pred[predictions == 1]
+                    beta_prob_pred = beta_prob_pred[predictions == 1]
+                elif self.calibration_method is not None:
                     base_prob_pred = base_prob_pred[predictions == 1]
 
             if self.use_cudf:
                 import cudf
 
-                if self.calibration_method is not None:
+                if self.calibration_method == 'beta_temp':
                     X_meta["base_model's_probs"] = cudf.Series(
-                        np.max(base_prob_pred, axis=1), index=X_meta.index
+                        base_prob_pred[:, 1], index=X_meta.index
+                    )
+                    X_meta["base_model's_beta_probs"] = cudf.Series(
+                        prob_pred[:, 1], index=X_meta.index
+                    )
+                    X_meta["base_model's_temp_probs"] = cudf.Series(
+                        temp_prob_pred[:, 1], index=X_meta.index
+                    )
+                elif self.calibration_method == 'temp_beta':
+                    X_meta["base_model's_probs"] = cudf.Series(
+                        base_prob_pred[:, 1], index=X_meta.index
+                    )
+                    X_meta["base_model's_beta_probs"] = cudf.Series(
+                        beta_prob_pred[:, 1], index=X_meta.index
+                    )
+                    X_meta["base_model's_temp_probs"] = cudf.Series(
+                        prob_pred[:, 1], index=X_meta.index
+                    )
+                elif self.calibration_method is not None:
+                    X_meta["base_model's_probs"] = cudf.Series(
+                        base_prob_pred[:, 1], index=X_meta.index
                     )
                     X_meta["base_model's_calib_probs"] = cudf.Series(
-                        np.max(prob_pred, axis=1), index=X_meta.index
+                        prob_pred[:, 1], index=X_meta.index
                     )
                 else:
                     X_meta["base_model's_probs"] = cudf.Series(
-                        np.max(prob_pred, axis=1), index=X_meta.index
+                        prob_pred[:, 1], index=X_meta.index
                     )
             else:
-                if self.calibration_method is not None:
-                    X_meta["base_model's_probs"] = np.max(base_prob_pred, axis=1)
-                    X_meta["base_model's_calib_probs"] = np.max(prob_pred, axis=1)
+                if self.calibration_method == 'beta_temp':
+                    X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                    X_meta["base_model's_beta_probs"] = prob_pred[:, 1]
+                    X_meta["base_model's_temp_probs"] = temp_prob_pred[:, 1]
+                elif self.calibration_method == 'temp_beta':
+                    X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                    X_meta["base_model's_beta_probs"] = beta_prob_pred[:, 1]
+                    X_meta["base_model's_temp_probs"] = prob_pred[:, 1]
+                elif self.calibration_method is not None:
+                    X_meta["base_model's_probs"] = base_prob_pred[:, 1]
+                    X_meta["base_model's_calib_probs"] = prob_pred[:, 1]
                 else:
-                    X_meta["base_model's_probs"] = np.max(prob_pred, axis=1)
+                    X_meta["base_model's_probs"] = prob_pred[:, 1]
 
             meta_probs = self.meta_model.predict_proba(X_meta)
 
@@ -1682,7 +2029,12 @@ class ClassificationConformalPredictor:
                         self._apply_calibration(meta_probs, (predictions == addi_y).astype(int), model="meta")
                     else:
                         self._apply_calibration(meta_probs, (predictions == y).astype(int), model="meta")
-                    meta_probs = self._calibrate_proba(meta_probs, model="meta")
+                    if self.calibration_method == 'beta_temp':
+                        meta_probs, _ = self._calibrate_proba(meta_probs, model="meta")
+                    elif self.calibration_method == 'temp_beta':
+                        _, meta_probs = self._calibrate_proba(meta_probs, model="meta")
+                    else:
+                        meta_probs = self._calibrate_proba(meta_probs, model="meta")
 
             del X_meta
             meta_pos_probs = meta_probs[:, 1]
@@ -1744,6 +2096,10 @@ class ClassificationConformalPredictor:
                     prob_pred = self._calibrate_proba(addi_X)
                 else:
                     prob_pred = self._calibrate_proba(X)
+            elif self.calibration_method == "beta_temp":
+                prob_pred, _ = self._calibrate_proba(self.model.predict_proba(X))
+            elif self.calibration_method == "temp_beta":
+                _, prob_pred = self._calibrate_proba(self.model.predict_proba(X))
             else:
                 prob_pred = self._calibrate_proba(self.model.predict_proba(X))
         else:
@@ -1782,10 +2138,12 @@ def model_func(
             "RF": RandomForestClassifier,
             "XGB" : XGBClassifier,
             "XGBF": XGBForestClassifier,
+            "XGBF+": StackedXGBForestClassifier,
             "LGBM": LGBMClassifier,
             "CF-RF": ClassificationConformalPredictor,
             "CF-XGB": ClassificationConformalPredictor,
             "CF-XGBF": ClassificationConformalPredictor,
+            "CF-XGBF+": ClassificationConformalPredictor,
             "CF-LGBM": ClassificationConformalPredictor,
         }
 

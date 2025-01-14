@@ -1587,6 +1587,14 @@ class ClassificationConformalPredictor:
                 predictions = self.classes_[np.argmax(prob_pred, axis=1)]
                 prediction_sets = None
 
+                # Fit calibration
+                if self.use_cudf:
+                    if self.calibration_method is not None and self.calibration_method != "venn_abers":
+                        self._apply_calibration(prob_pred, addi_y)
+                else:
+                    if self.calibration_method is not None and self.calibration_method != "venn_abers":
+                        self._apply_calibration(prob_pred, y)
+
             elif set_name == "valid":
                 if len(y) == 0:
                     raise ValueError("Input data y cannot be empty.")
@@ -1602,36 +1610,30 @@ class ClassificationConformalPredictor:
                 if self.use_cudf:
                     if self.calibration_method is not None:
                         if self.calibration_method == "venn_abers":
-                            base_prob_pred = prob_pred
+                            base_prob_pred = prob_pred.copy()
                             prob_pred = self._calibrate_proba(addi_X)
                         elif self.calibration_method == "beta_temp":
-                            base_prob_pred = prob_pred
-                            self._apply_calibration(prob_pred, addi_y)
+                            base_prob_pred = prob_pred.copy()
                             prob_pred, temp_prob_pred = self._calibrate_proba(prob_pred)
                         elif self.calibration_method == "temp_beta":
-                            base_prob_pred = prob_pred
-                            self._apply_calibration(prob_pred, addi_y)
+                            base_prob_pred = prob_pred.copy()
                             beta_prob_pred, prob_pred = self._calibrate_proba(prob_pred)
                         else:
-                            base_prob_pred = prob_pred
-                            self._apply_calibration(prob_pred, addi_y)
+                            base_prob_pred = prob_pred.copy()
                             prob_pred = self._calibrate_proba(prob_pred)
                 else:
                     if self.calibration_method is not None:
                         if self.calibration_method == "venn_abers":
-                            base_prob_pred = prob_pred
+                            base_prob_pred = prob_pred.copy()
                             prob_pred = self._calibrate_proba(X)
                         elif self.calibration_method == "beta_temp":
-                            base_prob_pred = prob_pred
-                            self._apply_calibration(prob_pred, y)
+                            base_prob_pred = prob_pred.copy()
                             prob_pred, temp_prob_pred = self._calibrate_proba(prob_pred)
                         elif self.calibration_method == "temp_beta":
-                            base_prob_pred = prob_pred
-                            self._apply_calibration(prob_pred, y)
+                            base_prob_pred = prob_pred.copy()
                             beta_prob_pred, prob_pred = self._calibrate_proba(prob_pred)
                         else:
-                            base_prob_pred = prob_pred
-                            self._apply_calibration(prob_pred, y)
+                            base_prob_pred = prob_pred.copy()
                             prob_pred = self._calibrate_proba(prob_pred)
 
                 if self.prob_estimator == "meta":
@@ -1930,19 +1932,19 @@ class ClassificationConformalPredictor:
             # Apply calibration
             if self.calibration_method is not None:
                 if self.calibration_method == "venn_abers":
-                    base_prob_pred = prob_pred
+                    base_prob_pred = prob_pred.copy()
                     if self.use_cudf:
                         prob_pred = self._calibrate_proba(addi_X)
                     else:
                         prob_pred = self._calibrate_proba(X)
                 elif self.calibration_method == 'beta_temp':
-                    base_prob_pred = prob_pred
+                    base_prob_pred = prob_pred.copy()
                     prob_pred, temp_prob_pred = self._calibrate_proba(prob_pred)
                 elif self.calibration_method == 'temp_beta':
-                    base_prob_pred = prob_pred
+                    base_prob_pred = prob_pred.copy()
                     beta_prob_pred, prob_pred = self._calibrate_proba(prob_pred)
                 else:
-                    base_prob_pred = prob_pred
+                    base_prob_pred = prob_pred.copy()
                     prob_pred = self._calibrate_proba(prob_pred)
 
             feature_importances = self.model.feature_importances_

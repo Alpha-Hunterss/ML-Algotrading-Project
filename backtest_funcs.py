@@ -591,7 +591,7 @@ def money_management(
             array[i, 3] = volumes[i]
             continue
 
-        cnf_level_exp = weights.get(chunk[-1, 6])
+        cnf_level_exp = weights.get(round(chunk[-1, 6], 2))
         volumes.append(math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp)
         array[i, 3] = volumes[i]
 
@@ -663,7 +663,6 @@ def do_backtest(
         new_trg_df["confidence_levels"] = confidence_levels
 
     if 'confidence_levels' in new_trg_df.columns:
-        new_trg_df['confidence_levels'] = round(new_trg_df['confidence_levels'] , 2)
         positive_profits = new_trg_df[new_trg_df['net_profit'] > 0]
         negative_profits = new_trg_df[new_trg_df['net_profit'] < 0]
 

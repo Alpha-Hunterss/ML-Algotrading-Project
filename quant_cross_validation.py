@@ -570,6 +570,7 @@ def quant_CV(
                         confidence_levels=confidence_levels,
                         model=model,
                         is_final_bt=False,
+                        is_cf_model=True,
                     )
                 else:
                     #? Backtest
@@ -596,6 +597,7 @@ def quant_CV(
                         confidence_levels=confidence_levels,
                         model=model,
                         is_final_bt=False,
+                        is_cf_model=False,
                     )
 
                 fold_profit_percent = bt_report['profit_percent']
@@ -667,6 +669,7 @@ def quant_CV(
             confidence_levels=confidence_levels,
             model=model,
             is_final_bt=True,
+            is_cf_model=is_cf_model,
         )
         general_backtest_report[f"profit_percent_{pred_name}"] = bt_report['profit_percent']
         general_backtest_report[f"max_dd_{pred_name}"] = bt_report['max_draw_down']

@@ -992,11 +992,106 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         self,
         stacked_model=None,
         stacked_models_params=None,
-        **kwargs
+        stacked_model_n_top_features=50,
+        n_estimators=100,
+        *,
+        bootstrap=False,
+        n_jobs=None,
+        random_state=None,
+        verbose=0,
+        max_samples=None,
+        class_weight=None,
+        p_strategy="threads",
+        use_loky=False,
+        xgb_n_estimators=100,
+        objective="binary:logistic",
+        nthread=-1,
+        max_depth=6,
+        learning_rate=0.3,
+        subsample=1.0,
+        colsample_bytree=1.0,
+        scale_pos_weight=1.0,
+        device="cpu",
+        tree_method="hist",
+        booster="gbtree",
+        verbosity=0,
+        use_rmm=False,
+        seed=0,
+        sampling_method="uniform",
+        colsample_bylevel=1.0,
+        colsample_bynode=1.0,
+        max_delta_step=0,
+        max_leaves=0,
+        max_bin=256,
+        num_parallel_tree=1,
+        refresh_leaf=1,
+        process_type="default",
+        early_stopping_rounds=None,
+        seed_per_iteration=False,
+        multi_strategy="one_output_per_tree",
+        sample_type="uniform",
+        one_drop=0,
+        skip_drop=0.0,
+        normalize_type="tree",
+        rate_drop=0.0,
+        max_cached_hist_node=65536,
+        grow_policy="depthwise",
+        min_child_weight=1,
+        reg_lambda=1,
+        reg_alpha=0,
+        gamma=0
     ):
-        super().__init__(**kwargs)
+        super().__init__(
+            n_estimators = n_estimators,
+            bootstrap = bootstrap,
+            n_jobs = n_jobs,
+            random_state = random_state,
+            verbose = verbose,
+            max_samples = max_samples,
+            class_weight = class_weight,
+            p_strategy = p_strategy,
+            use_loky = use_loky,
+            xgb_n_estimators = xgb_n_estimators,
+            objective = objective,
+            nthread = nthread,
+            max_depth = max_depth,
+            learning_rate = learning_rate,
+            subsample = subsample,
+            colsample_bytree = colsample_bytree,
+            scale_pos_weight = scale_pos_weight,
+            device = device,
+            tree_method = tree_method,
+            booster = booster,
+            verbosity = verbosity,
+            use_rmm = use_rmm,
+            seed = seed,
+            sampling_method = sampling_method,
+            colsample_bylevel = colsample_bylevel,
+            colsample_bynode = colsample_bynode,
+            max_delta_step = max_delta_step,
+            max_leaves = max_leaves,
+            max_bin = max_bin,
+            num_parallel_tree = num_parallel_tree,
+            refresh_leaf = refresh_leaf,
+            process_type = process_type,
+            early_stopping_rounds = early_stopping_rounds,
+            seed_per_iteration = seed_per_iteration,
+            multi_strategy = multi_strategy,
+            sample_type = sample_type,
+            one_drop = one_drop,
+            skip_drop = skip_drop,
+            normalize_type = normalize_type,
+            rate_drop = rate_drop,
+            max_cached_hist_node = max_cached_hist_node,
+            grow_policy = grow_policy,
+            min_child_weight = min_child_weight,
+            reg_lambda = reg_lambda,
+            reg_alpha = reg_alpha,
+            gamma = gamma,
+        )
         self.stacked_model = stacked_model
         self.stacked_models_params = stacked_models_params
+        self.stacked_model_n_top_features = stacked_model_n_top_features
 
     def predict_proba(self, X, y=None, stacked_model_trained=True):
         """
@@ -1038,6 +1133,11 @@ class StackedXGBForestClassifier(XGBForestClassifier):
             delayed(_accumulate_prediction_stacked)(e.predict_proba, X, all_proba, i, lock)
             for i, e in enumerate(self.estimators_)
         )
+
+        feature_importances = self.feature_importances_
+        sorted_idx = np.argsort(feature_importances)[::-1]
+        top_features = X.columns[sorted_idx[:self.stacked_model_n_top_features]]
+        X = X[top_features]
 
         if not stacked_model_trained:
             # Logging message (remove after doing tests)

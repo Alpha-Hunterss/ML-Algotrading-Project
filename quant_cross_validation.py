@@ -59,6 +59,8 @@ def quant_CV(
     max_floating_dd: float,
     max_daily_dd: float,
     use_floating_risk: bool,
+    sampled_times : list , 
+    sampling : dict , 
     use_perc_levels: bool = False,
 ):
     """
@@ -96,6 +98,7 @@ def quant_CV(
             'q2_cons_loss',
             'q3_cons_loss',
             'mean_cons_loss',
+            'n_trades',
         ]
     )
     df["pred_as_val"] = -1
@@ -440,6 +443,8 @@ def quant_CV(
                         confidence_levels=confidence_levels,
                         model=model,
                         is_final_bt=False,
+                        sampled_times = sampled_times , 
+                        sampling = sampling , 
                     )
                 else:
                     #? Backtest
@@ -466,6 +471,8 @@ def quant_CV(
                         confidence_levels=confidence_levels,
                         model=model,
                         is_final_bt=False,
+                        sampled_times = sampled_times , 
+                        sampling = sampling , 
                     )
 
                 fold_profit_percent = bt_report['profit_percent']
@@ -482,6 +489,9 @@ def quant_CV(
                 fold_q2_cons_loss = bt_report["q2_cons_loss"]
                 fold_q3_cons_loss = bt_report["q3_cons_loss"]
                 fold_mean_cons_loss = bt_report["mean_cons_loss"]
+                fold_n_trades = bt_report["n_trades"]
+
+                
                 general_backtest_df.update({f"bt_df_fold{i}_{set_name}" : bt_df})
                 del bt_df, bt_report
                 gc.collect()
@@ -502,6 +512,7 @@ def quant_CV(
                 fold_q2_cons_loss = None
                 fold_q3_cons_loss = None
                 fold_mean_cons_loss = None
+                fold_n_trades = None
 
             pong = time.time()
 
@@ -525,6 +536,7 @@ def quant_CV(
                 + [fold_max_vol_open_positions]
                 + [fold_max_consecutive_loss , fold_WR , fold_sl , fold_tp]
                 + [fold_q1_cons_loss , fold_q2_cons_loss , fold_q3_cons_loss , fold_mean_cons_loss]
+                + [fold_n_trades]
 
             )
 
@@ -556,6 +568,8 @@ def quant_CV(
             confidence_levels=confidence_levels,
             model=model,
             is_final_bt=True,
+            sampled_times = sampled_times , 
+            sampling = sampling , 
         )
         general_backtest_report[f"profit_percent_{pred_name}"] = bt_report['profit_percent']
         general_backtest_report[f"max_dd_{pred_name}"] = bt_report['max_draw_down']

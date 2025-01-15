@@ -481,6 +481,7 @@ def money_management(
     max_daily_dd: float,
     use_floating_risk: bool,
     use_perc_levels: bool,
+    sampled_times:list = [] ,
 ):
     symbols_base_lot = {
         'EURUSD': 0.01,
@@ -524,6 +525,7 @@ def money_management(
     total_open_volume = []
     prev_date = np.datetime64(array[0, 1], 'D')
     volumes = []
+    label_position = []
     max_exp_daily_dd = 0
 
     for i in range(array.shape[0]):
@@ -556,11 +558,18 @@ def money_management(
             start_day_balance += added_balance
             prev_date = curr_date
             added_balance = 0
-
+        
+        if pd.Timestamp(chunk[-1, 1]).to_pydatetime() in sampled_times :
+            volumes.append(0.0)
+            array[i, 3] = volumes[i]
+            label_position.append('by_sampling')
+            continue
+        
         remaining_pos = n_max_OP - cond_len
         if remaining_pos <= 0:
             volumes.append(0.0)
             array[i, 3] = volumes[i]
+            label_position.append('by_max-n-op')
             continue
 
         if use_perc_levels:
@@ -568,12 +577,6 @@ def money_management(
 
         used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
         daily_dd_budget = (start_day_balance * max_daily_dd) + added_balance
-
-        remaining_pos = n_max_OP - cond_len
-        if remaining_pos == 0:
-            volumes.append(0)
-            array[i, 3] = volumes[i]
-            continue
 
         base_lot = (
             (daily_dd_budget - used_dd_budget) / remaining_pos
@@ -589,15 +592,25 @@ def money_management(
         if base_lot <= 0:
             volumes.append(0.0)
             array[i, 3] = volumes[i]
+            label_position.append('by_floating-dd')
             continue
 
         cnf_level_exp = weights.get(round(chunk[-1, 6], 2))
         volumes.append(math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp)
         array[i, 3] = volumes[i]
+        if volumes[i] == 0:
+            if (cnf_level_exp*base_lot)<symbols_base_lot.get(target_symbol) :
+                label_position.append('by_base symbol lot')
+            else:
+                label_position.append('by_daily dd')
+        else:
+            label_position.append('')
+
 
     df["volume"] = np.array(volumes)
     df["n_open_position"] = np.array(n_open_position)
     df["volume_open_position"] = np.array(total_open_volume)
+    df['label_position'] = np.array(label_position)
 
     return max_exp_daily_dd, df
 def cal_n_open_position(df:pd.DataFrame):
@@ -609,11 +622,11 @@ def cal_n_open_position(df:pd.DataFrame):
     total_open_volume = []
     for i in range(array.shape[0]):
         chunk = array[:i+1]
-        cond = chunk[:-1 , 1] > chunk[-1 , 0]
-        cond_len = len(np.where(cond)[0]) +1 
+        cond = (chunk[:, 1] >= chunk[-1, 0]) & (chunk[:-1, 2] > 0)
+        cond_len = len(np.where(cond)[0]) 
         n_open_position.append(cond_len)
-        open_volumes = chunk[:-1, 2][cond]
-        total_volume = open_volumes.sum() + chunk[-1, 2]
+        open_volumes = chunk[:, 2][cond]
+        total_volume = open_volumes.sum()
         total_open_volume.append(total_volume)
     return n_open_position , total_open_volume
 
@@ -636,6 +649,8 @@ def do_backtest(
     confidence_levels: np.ndarray,
     model,
     is_final_bt: bool,
+    sampled_times : list , 
+    sampling : dict ,
 ):
     pip_value = {
         'EURUSD': 10,
@@ -654,6 +669,7 @@ def do_backtest(
     new_trg_df["volume"] = volume
     new_trg_df["n_open_position"] = 0
     new_trg_df["volume_open_position"] = 0.0
+    new_trg_df['label_position'] = ''
     max_exp_daily_dd = 0.0
 
     plot_profit_distribution(new_trg_df)
@@ -674,27 +690,47 @@ def do_backtest(
         print(f"loss trade:\n {result_negative}")
         print('==========')
         
-        if use_money_management:
+    else:
+        new_trg_df["confidence_levels"] = 1
+
+    if use_money_management:
+        if sampling['use'] and sampling['method'] == 'befor_backtest':
             max_exp_daily_dd, new_trg_df = money_management(
-                new_trg_df, stop_loss, spread, initial_balance,
-                target_symbol, pip_value, n_max_OP, max_floating_dd,
-                max_daily_dd, use_floating_risk, use_perc_levels
+                df = new_trg_df ,
+                stop_loss = stop_loss , 
+                spread = spread ,
+                initial_balance=initial_balance ,
+                target_symbol=target_symbol ,
+                pip_value=pip_value ,
+                n_max_OP=n_max_OP ,
+                max_floating_dd=max_floating_dd ,
+                max_daily_dd=max_daily_dd ,
+                use_floating_risk=use_floating_risk ,
+                use_perc_levels=use_perc_levels ,
+                sampled_times=sampled_times,
             )
         else:
-            new_trg_df["n_open_position"] , new_trg_df["volume_open_position"] = cal_n_open_position(new_trg_df)
-
-        ##? calculate balance
-        new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * new_trg_df[
-            "confidence_levels"
-        ] * pip_value[target_symbol] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
+            max_exp_daily_dd, new_trg_df = money_management(
+                df = new_trg_df ,
+                stop_loss = stop_loss , 
+                spread = spread ,
+                initial_balance=initial_balance ,
+                target_symbol=target_symbol ,
+                pip_value=pip_value ,
+                n_max_OP=n_max_OP ,
+                max_floating_dd=max_floating_dd ,
+                max_daily_dd=max_daily_dd ,
+                use_floating_risk=use_floating_risk ,
+                use_perc_levels=use_perc_levels ,   
+            )
     else:
-        ##? calculate balance
-        new_trg_df["balance"] = new_trg_df[
-            "net_profit"
-        ] * volume * pip_value[target_symbol] + (new_trg_df["swap_days"] * volume * swap_rate)
-        new_trg_df["n_open_position"] , new_trg_df["volume_open_position"] = cal_n_open_position(new_trg_df)
-
-
+        if sampling['use'] and sampling['method'] == 'befor_backtest':
+            new_trg_df.loc[new_trg_df['_time'].isin(sampled_times), 'volume'] = 0
+            new_trg_df.loc[new_trg_df['_time'].isin(sampled_times), 'label_position'] = 'by_sampling'
+        new_trg_df["n_open_position"] , new_trg_df["volume_open_position"] = cal_n_open_position(new_trg_df)        
+    
+    ##? calculate balance
+    new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * pip_value[target_symbol] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
     new_trg_df["balance"] = new_trg_df["balance"].cumsum()
     new_trg_df["balance"] += initial_balance
 
@@ -727,6 +763,7 @@ def do_backtest(
             "Tp(%)": 0.0,
             "Sl(%)": 0.0,
             "WinRate(%)" : 0.0,
+            'n_trades':0.0
         }
     else:
         backtest_report = {
@@ -750,6 +787,7 @@ def do_backtest(
             "Tp(%)": round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df[bt_column_name] == 1)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
             "Sl(%)": round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df[bt_column_name] == -1)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
             "WinRate(%)" : round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df['net_profit'] > 0)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
+            'n_trades' : new_trg_df[new_trg_df['volume'] > 0].shape[0],
         }
 
     return (
@@ -763,6 +801,8 @@ def do_backtest(
                 "net_profit",
                 "balance",
                 "volume",
+                'confidence_levels',
+                'label_position'
             ]
         ],
     )

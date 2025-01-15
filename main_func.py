@@ -14,6 +14,7 @@ from datetime import datetime
 import traceback
 import gc
 from configss.symbols_info import symbols_dict
+from sampling import sampling_func
 
 
 def main(
@@ -67,6 +68,7 @@ def main(
             max_train_size = man_params["max_train_size"]
             test_size = man_params["test_size"]
             train_test_gap = man_params["train_test_gap"]
+            sampling = man_params["sampling"]
             try:
                 early_stopping_rounds = man_params["parameters"][
                     "early_stopping_rounds"
@@ -192,6 +194,16 @@ def main(
             base_time_frame=5,
         )
 
+        if sampling["use"]: 
+            sampled_times = sampling_func(
+                sampling_dict=sampling ,
+                C5M_data_path = C5M_data_path,
+                target_symbol = target_symbol,
+                trade_mode = trade_mode,
+            )
+        else:
+            sampled_times = []
+
         if manual:
             print(f"Percentage of the True Class: {df_all[df_all.target == 1].shape[0]/ df_all.shape[0]*100:.1f}")
             df_all["target"].value_counts().sort_index().plot(
@@ -250,7 +262,9 @@ def main(
             max_floating_dd = max_floating_dd,
             max_daily_dd = max_daily_dd,
             use_floating_risk = use_floating_risk,
-            use_perc_levels = use_perc_levels,          
+            use_perc_levels = use_perc_levels,
+            sampled_times = sampled_times , 
+            sampling = sampling ,           
         )
 
         # ______________________________Retrain Last Model to Save___________________________________________

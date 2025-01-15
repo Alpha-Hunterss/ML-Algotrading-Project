@@ -754,7 +754,7 @@ def cal_RSI_base_func(
     pip_size: float,  # only for compatibility
     prefix: str = "fe_RSI",
     percentage_feature: bool = False,
-    add_30_70: bool = True,
+    add_30_70: bool = False,
 ) -> pl.DataFrame:
     """
     This function creates RSI feature
@@ -876,23 +876,30 @@ def cal_EMA_base_func(
     feature = features[0]
 
     df = df.sort("_time")
+    df = df.with_columns(
+        (
+            (
+                (pl.col(feature).ewm_mean(span=w, ignore_nulls=True))
+            )
+        ).alias(f"EMA_{feature}_W{w}_cndl_M{time_frame}")
+    ).lazy()
 
     if normalize:
         df = df.with_columns(
             (
                 (
-                    (pl.col(feature).ewm_mean(span=w, ignore_nulls=True))
+                    (pl.col(f"EMA_{feature}_W{w}_cndl_M{time_frame}"))
                     - pl.col(feature)
                 )
                 / pip_size
             ).alias(f"{prefix}_{feature}_W{w}_cndl_M{time_frame}_norm")
         ).lazy()
-    else:
-        df = df.with_columns(
-            (pl.col(feature).ewm_mean(span=w, ignore_nulls=True)).alias(
-                f"{prefix}_{feature}_W{w}_cndl_M{time_frame}"
-            )
-        ).lazy()
+    # else:
+    #     df = df.with_columns(
+    #         (pl.col(feature).ewm_mean(span=w, ignore_nulls=True)).alias(
+    #             f"{prefix}_{feature}_W{w}_cndl_M{time_frame}"
+    #         )
+    #     ).lazy()
 
     df = df.collect()
 
@@ -1853,6 +1860,10 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
                 df = df.drop_nulls()
                 df = df.with_columns(pl.lit(symbol).alias("symbol"))
+                if fe_prefix == 'fe_EMA':
+                    pat_drop_pivot = re.compile(rf'EMA')
+                    col_drop_pivot = [col for col in df.columns if pat_drop_pivot.match(col)]
+                    df =df.drop(col_drop_pivot)
 
                 file_name = features_folder_path + f"/{fe_prefix}_{symbol}.parquet"
                 df.write_parquet(file_name)

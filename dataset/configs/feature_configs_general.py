@@ -192,8 +192,8 @@ general_config = {
 
 
     'fe_EMA': {
-        'timeframe': [5],
-        'window_size': [7, 60, 336, 1440],
+        'timeframe': [5 , 15 , 30],
+        'window_size': [7, 60, 200, 288],
         'base_columns': ['CLOSE']
     },
 

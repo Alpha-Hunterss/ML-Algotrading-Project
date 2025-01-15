@@ -960,8 +960,6 @@ def _accumulate_prediction_stacked(predict, X, out, idx, lock):
     """
     prediction = predict(X)
 
-    print(f"The current idx: {idx}")
-
     with lock:
         out[idx] = prediction
 
@@ -1130,12 +1128,6 @@ class StackedXGBForestClassifier(XGBForestClassifier):
             for j in np.atleast_1d([self.n_classes_]*len(self.estimators_))
         ]
         lock = threading.Lock()
-
-        print(f"The `X.shape[0]` value: {X.shape[0]}")
-        print(f"The `self.n_classes_` value: {self.n_classes_}")
-        print(f"The number of estimators: {len(self.estimators_)}")
-        print(f"`all_proba` length: {len(all_proba)}")
-        print(f"The last index of `all_proba` shape: {all_proba[len(self.estimators_)-1].shape}")
 
         Parallel(n_jobs=n_jobs, verbose=self.verbose, require="sharedmem")(
             delayed(_accumulate_prediction_stacked)(e.predict_proba, X, all_proba, i, lock)

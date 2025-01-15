@@ -1127,7 +1127,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         # storing the output of every estimator
         all_proba = [
             np.zeros((X.shape[0], j), dtype=np.float64)
-            for j in np.atleast_1d(self.n_classes_*len(self.estimators_))
+            for j in np.atleast_1d([self.n_classes_]*len(self.estimators_))
         ]
         lock = threading.Lock()
 

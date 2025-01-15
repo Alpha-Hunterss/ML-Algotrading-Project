@@ -665,10 +665,19 @@ def do_backtest(
             ] * pip_value[target_symbol] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
 
     else:
+        new_trg_df["confidence_levels"] = confidence_levels
+
+        if use_money_management:
+            max_exp_daily_dd, new_trg_df = money_management(
+                new_trg_df, stop_loss, spread, initial_balance,
+                target_symbol, pip_value, n_max_OP, max_floating_dd,
+                max_daily_dd, use_floating_risk, use_perc_levels
+            )
+
         ##? calculate balance
-        new_trg_df["balance"] = new_trg_df[
-            "net_profit"
-        ] * volume * pip_value[target_symbol] + (new_trg_df["swap_days"] * volume * swap_rate)
+        new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * pip_value[
+            target_symbol
+        ] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
 
     new_trg_df["balance"] = new_trg_df["balance"].cumsum()
     new_trg_df["balance"] += initial_balance

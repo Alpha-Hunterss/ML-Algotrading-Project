@@ -665,7 +665,10 @@ def do_backtest(
             ] * pip_value[target_symbol] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
 
     else:
-        new_trg_df["confidence_levels"] = confidence_levels
+        if not is_final_bt:
+            new_trg_df["confidence_levels"] = confidence_levels
+        else:
+            new_trg_df["confidence_levels"] = 1.0
 
         if use_money_management:
             max_exp_daily_dd, new_trg_df = money_management(

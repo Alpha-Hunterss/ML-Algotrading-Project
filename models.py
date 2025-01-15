@@ -974,6 +974,9 @@ class StackedXGBForestClassifier(XGBForestClassifier):
     stacked_model : estimator object, default=None
         The meta-model to be trained on the predictions of base estimators.
         Must implement fit and predict_proba methods.
+    stacked_models_params : dictionary of parameters, default=None
+        The meta-model's parameters with the dictionary type and string keys.
+        Must contain valid meta-model's parameters.
 
     All other parameters are inherited from XGBForestClassifier.
 
@@ -1024,7 +1027,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         # Assign chunk of trees to jobs
         n_jobs, _, _ = _partition_estimators(self.n_estimators, self.n_jobs)
 
-        # avoid storing the output of every estimator by summing them here
+        # storing the output of every estimator
         all_proba = [
             np.zeros((X.shape[0], j), dtype=np.float64)
             for j in np.atleast_1d(self.n_classes_*len(self.estimators_))
@@ -1037,6 +1040,9 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         )
 
         if not stacked_model_trained:
+            # Logging message (remove after doing tests)
+            print("`XGBF+` model's `predict_proba` is being used in the first phase ...")
+
             if y is None:
                 raise ValueError(
                     "When the stacked model is not trained yet,"
@@ -1109,6 +1115,9 @@ class StackedXGBForestClassifier(XGBForestClassifier):
 
             return
         else:
+            # Logging message (remove after doing tests)
+            print("`XGBF+` model's `predict_proba` is being used in the second phase ...")
+
             if self.use_cudf:
                 import cudf
 
@@ -2089,7 +2098,7 @@ class ClassificationConformalPredictor:
 
         return predictions, confidence_level_range
 
-    def predict_proba(self, X, addi_X=None):
+    def predict_proba(self, X, addi_X=None, y=None, stacked_model_trained=True):
         """
         Just for compatibility"""
         if self.apply_calibs:
@@ -2105,7 +2114,12 @@ class ClassificationConformalPredictor:
             else:
                 prob_pred = self._calibrate_proba(self.model.predict_proba(X))
         else:
-            prob_pred = self.model.predict_proba(X)
+            if not stacked_model_trained:
+                self.model.predict_proba(X, y=y, stacked_model_trained=False)
+
+                return
+            else:
+                prob_pred = self.model.predict_proba(X)
 
         return prob_pred
 

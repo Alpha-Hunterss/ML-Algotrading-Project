@@ -11,6 +11,7 @@ def split_time_series(
     n_splits: int,
     test_size: int,
     train_test_gap: int,
+    eval_set_ratio: float = 0.4,
 ):
     """
     Return a nested dictionary key is k number and value is dicitonary of train, valid and test Dates
@@ -31,12 +32,12 @@ def split_time_series(
         train_dates = all_dates[0][train_index]
 
         # Calculate split point for pre_eval and eval (60%-40%)
-        split_idx = int(len(train_dates) * 0.6)
+        split_idx = int(len(train_dates) * (1.0-eval_set_ratio))
 
         folds[i] = {
             "train_dates": train_dates,
             "pre_eval_dates": train_dates[:split_idx],
-            "eval_dates": train_dates[split_idx:],
+            "eval_dates": train_dates[split_idx+(10*276):],
             "valid_dates": all_dates[0][test_valid_index[:2*test_size]],
             "test_dates": all_dates[0][test_valid_index[2*test_size:]],
         }
@@ -106,6 +107,7 @@ def quant_CV(
     the_features = df.drop(columns=non_feature_columns).columns
     feature_importances = {feature: [] for feature in the_features}
     is_cf_model = model_name.startswith("CF-")
+    is_ensemble_xgbf_model = "XGBF+" in model_name
 
     if "XGB" in model_name:
         if is_cf_model:
@@ -144,109 +146,235 @@ def quant_CV(
         print(f"--> fold valid size: {df.loc[folds[i]['valid_dates']].shape}")
         print(f"--> fold test size: {df.loc[folds[i]['test_dates']].shape}")
 
-        if use_cudf:
-            if early_stopping_rounds is not None:
-                print("early_stopping_rounds: ", early_stopping_rounds)
+        if is_ensemble_xgbf_model:
+            if use_cudf:
+                if early_stopping_rounds is not None:
+                    print("early_stopping_rounds: ", early_stopping_rounds)
 
-                eval_set = [
-                    (
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i]["valid_dates"].to_list())
-                        ].drop(
-                            columns=non_feature_columns
-                        ),
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i]["valid_dates"].to_list())
-                        ]["target"],
-                    )
-                ]
+                    eval_set = [
+                        (
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["eval_dates"].to_list())
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["eval_dates"].to_list())
+                            ]["target"],
+                        )
+                    ]
 
-                if is_cf_model:
-                    model.fit(
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                        ].drop(
-                            columns=non_feature_columns
-                        ),
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                        ]["target"],
-                        addi_X=df.loc[folds[i]["train_dates"]].drop(
-                            columns=non_feature_columns
-                        ),
-                        addi_y=df.loc[folds[i]["train_dates"]]["target"],
-                        use_cudf=use_cudf,
-                    )
+                    if is_cf_model:
+                        model.fit(
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
+                            ]["target"],
+                            addi_X=df.loc[folds[i]["pre_eval_dates"]].drop(
+                                columns=non_feature_columns
+                            ),
+                            addi_y=df.loc[folds[i]["pre_eval_dates"]]["target"],
+                            use_cudf=use_cudf,
+                        )
+                    else:
+                        model.fit(
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
+                            ]["target"],
+                            eval_set=eval_set,
+                            verbose = False,
+                        )
                 else:
+                    if is_cf_model:
+                        model.fit(
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
+                            ]["target"],
+                            addi_X=df.loc[folds[i]["pre_eval_dates"]].drop(
+                                columns=non_feature_columns
+                            ),
+                            addi_y=df.loc[folds[i]["pre_eval_dates"]]["target"],
+                            use_cudf=use_cudf,
+                        )
+                    else:
+                        model.fit(
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
+                            ]["target"],
+                        )
+
+                model.predict_proba(
+                    cudf_df.loc[
+                        cudf_df.index.isin(folds[i]["eval_dates"].to_list())
+                    ].drop(
+                        columns=non_feature_columns
+                    ),
+                    y=cudf_df.loc[
+                        cudf_df.index.isin(folds[i]["eval_dates"].to_list())
+                    ]["target"],
+                    stacked_model_trained=False,
+                )
+
+            else:
+                if early_stopping_rounds is not None:
+                    print("early_stopping_rounds: ", early_stopping_rounds)
+
+                    eval_set = [
+                        (
+                            df.loc[folds[i]["eval_dates"]].drop(
+                                columns=non_feature_columns
+                            ),
+                            df.loc[folds[i]["eval_dates"]]["target"],
+                        )
+                    ]
+
                     model.fit(
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                        ].drop(
+                        df.loc[folds[i]["pre_eval_dates"]].drop(
                             columns=non_feature_columns
                         ),
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                        ]["target"],
+                        df.loc[folds[i]["pre_eval_dates"]]["target"],
                         eval_set=eval_set,
                         verbose = False,
                     )
-            else:
-                if is_cf_model:
+                else:
                     model.fit(
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                        ].drop(
+                        df.loc[folds[i]["pre_eval_dates"]].drop(
                             columns=non_feature_columns
                         ),
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                        ]["target"],
-                        addi_X=df.loc[folds[i]["train_dates"]].drop(
+                        df.loc[folds[i]["pre_eval_dates"]]["target"],
+                    )
+
+                model.predict_proba(
+                    df.loc[folds[i]["eval_dates"]].drop(
+                        columns=non_feature_columns
+                    ),
+                    y=df.loc[folds[i]["eval_dates"]]["target"],
+                    stacked_model_trained=False,
+                )
+
+        else:
+            if use_cudf:
+                if early_stopping_rounds is not None:
+                    print("early_stopping_rounds: ", early_stopping_rounds)
+
+                    eval_set = [
+                        (
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["valid_dates"].to_list())
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["valid_dates"].to_list())
+                            ]["target"],
+                        )
+                    ]
+
+                    if is_cf_model:
+                        model.fit(
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                            ]["target"],
+                            addi_X=df.loc[folds[i]["train_dates"]].drop(
+                                columns=non_feature_columns
+                            ),
+                            addi_y=df.loc[folds[i]["train_dates"]]["target"],
+                            use_cudf=use_cudf,
+                        )
+                    else:
+                        model.fit(
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                            ]["target"],
+                            eval_set=eval_set,
+                            verbose = False,
+                        )
+                else:
+                    if is_cf_model:
+                        model.fit(
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                            ]["target"],
+                            addi_X=df.loc[folds[i]["train_dates"]].drop(
+                                columns=non_feature_columns
+                            ),
+                            addi_y=df.loc[folds[i]["train_dates"]]["target"],
+                            use_cudf=use_cudf,
+                        )
+                    else:
+                        model.fit(
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
+                            cudf_df.loc[
+                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
+                            ]["target"],
+                        )
+
+            else:
+                if early_stopping_rounds is not None:
+                    print("early_stopping_rounds: ", early_stopping_rounds)
+
+                    eval_set = [
+                        (
+                            df.loc[folds[i]["valid_dates"]].drop(
+                                columns=non_feature_columns
+                            ),
+                            df.loc[folds[i]["valid_dates"]]["target"],
+                        )
+                    ]
+
+                    model.fit(
+                        df.loc[folds[i]["train_dates"]].drop(
                             columns=non_feature_columns
                         ),
-                        addi_y=df.loc[folds[i]["train_dates"]]["target"],
-                        use_cudf=use_cudf,
+                        df.loc[folds[i]["train_dates"]]["target"],
+                        eval_set=eval_set,
+                        verbose = False,
                     )
                 else:
                     model.fit(
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                        ].drop(
+                        df.loc[folds[i]["train_dates"]].drop(
                             columns=non_feature_columns
                         ),
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                        ]["target"],
+                        df.loc[folds[i]["train_dates"]]["target"],
                     )
-
-        else:
-            if early_stopping_rounds is not None:
-                print("early_stopping_rounds: ", early_stopping_rounds)
-
-                eval_set = [
-                    (
-                        df.loc[folds[i]["valid_dates"]].drop(
-                            columns=non_feature_columns
-                        ),
-                        df.loc[folds[i]["valid_dates"]]["target"],
-                    )
-                ]
-
-                model.fit(
-                    df.loc[folds[i]["train_dates"]].drop(
-                        columns=non_feature_columns
-                    ),
-                    df.loc[folds[i]["train_dates"]]["target"],
-                    eval_set=eval_set,
-                    verbose = False,
-                )
-            else:
-                model.fit(
-                    df.loc[folds[i]["train_dates"]].drop(
-                        columns=non_feature_columns
-                    ),
-                    df.loc[folds[i]["train_dates"]]["target"],
-                )
 
         try:
             if is_cf_model:

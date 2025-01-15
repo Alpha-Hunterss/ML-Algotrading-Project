@@ -64,6 +64,7 @@ def main(
             max_train_size = man_params["max_train_size"]
             test_size = man_params["test_size"]
             train_test_gap = man_params["train_test_gap"]
+            eval_set_ratio = man_params["eval_set_ratio"]
             try:
                 early_stopping_rounds = man_params["parameters"][
                     "early_stopping_rounds"
@@ -112,6 +113,7 @@ def main(
                 "max_train_size",
                 "test_size",
                 "train_test_gap",
+                "eval_set_ratio",
                 "early_stopping_rounds",
             ]
 
@@ -155,6 +157,7 @@ def main(
             max_train_size = wandb.config.max_train_size
             test_size = wandb.config.test_size
             train_test_gap = wandb.config.train_test_gap
+            eval_set_ratio = wandb.config.eval_set_ratio
             early_stopping_rounds = wandb.config.early_stopping_rounds
 
 
@@ -202,6 +205,7 @@ def main(
             n_splits=n_splits,
             test_size=test_size,
             train_test_gap=train_test_gap,
+            eval_set_ratio=eval_set_ratio,
         )
 
         # ______________________________Pre-Backtest: Backtest on all raw data_______________________________

@@ -652,10 +652,16 @@ def do_backtest(
                 max_daily_dd, use_floating_risk, use_perc_levels
             )
 
-        ##? calculate balance
-        new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * new_trg_df[
-            "confidence_levels"
-        ] * pip_value[target_symbol] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
+            ##? calculate balance
+            new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * pip_value[
+                target_symbol
+            ] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
+        else:
+            ##? calculate balance
+            new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * new_trg_df[
+                "confidence_levels"
+            ] * pip_value[target_symbol] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
+
     else:
         ##? calculate balance
         new_trg_df["balance"] = new_trg_df[

@@ -1131,6 +1131,9 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         ]
         lock = threading.Lock()
 
+        print(f"The `X.shape[0]` value: {X.shape[0]}")
+        print(f"The `self.n_classes_` value: {self.n_classes_}")
+        print(f"The number of estimators: {len(self.estimators_)}")
         print(f"`all_proba` length: {len(all_proba)}")
         print(f"The last index of `all_proba` shape: {all_proba[len(self.estimators_)-1].shape}")
 

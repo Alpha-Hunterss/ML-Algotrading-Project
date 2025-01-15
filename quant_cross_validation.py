@@ -492,7 +492,7 @@ def quant_CV(
                                     "confidence_levels"
                                 ] = confidence_levels
                     else:
-                        confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
+                        confidence_levels = np.ones((len(y_pred[y_pred == 1]),), dtype=np.float16)
                 else:
                     if is_cf_model:
                         if model.use_valid_as_calib:
@@ -524,7 +524,7 @@ def quant_CV(
                                     "confidence_levels"
                                 ] = confidence_levels
                     else:
-                        confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
+                        confidence_levels = np.ones((len(y_pred[y_pred == 1]),), dtype=np.float16)
 
                 # if np.shape(proba_pred)[1] > 1:
                 #     df.loc[

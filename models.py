@@ -974,6 +974,9 @@ class StackedXGBForestClassifier(XGBForestClassifier):
     stacked_model : estimator object, default=None
         The meta-model to be trained on the predictions of base estimators.
         Must implement fit and predict_proba methods.
+    stacked_models_params : dictionary of parameters, default=None
+        The meta-model's parameters with the dictionary type and string keys.
+        Must contain valid meta-model's parameters.
 
     All other parameters are inherited from XGBForestClassifier.
 
@@ -989,11 +992,106 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         self,
         stacked_model=None,
         stacked_models_params=None,
-        **kwargs
+        stacked_model_n_top_features=50,
+        n_estimators=100,
+        *,
+        bootstrap=False,
+        n_jobs=None,
+        random_state=None,
+        verbose=0,
+        max_samples=None,
+        class_weight=None,
+        p_strategy="threads",
+        use_loky=False,
+        xgb_n_estimators=100,
+        objective="binary:logistic",
+        nthread=-1,
+        max_depth=6,
+        learning_rate=0.3,
+        subsample=1.0,
+        colsample_bytree=1.0,
+        scale_pos_weight=1.0,
+        device="cpu",
+        tree_method="hist",
+        booster="gbtree",
+        verbosity=0,
+        use_rmm=False,
+        seed=0,
+        sampling_method="uniform",
+        colsample_bylevel=1.0,
+        colsample_bynode=1.0,
+        max_delta_step=0,
+        max_leaves=0,
+        max_bin=256,
+        num_parallel_tree=1,
+        refresh_leaf=1,
+        process_type="default",
+        early_stopping_rounds=None,
+        seed_per_iteration=False,
+        multi_strategy="one_output_per_tree",
+        sample_type="uniform",
+        one_drop=0,
+        skip_drop=0.0,
+        normalize_type="tree",
+        rate_drop=0.0,
+        max_cached_hist_node=65536,
+        grow_policy="depthwise",
+        min_child_weight=1,
+        reg_lambda=1,
+        reg_alpha=0,
+        gamma=0
     ):
-        super().__init__(**kwargs)
+        super().__init__(
+            n_estimators = n_estimators,
+            bootstrap = bootstrap,
+            n_jobs = n_jobs,
+            random_state = random_state,
+            verbose = verbose,
+            max_samples = max_samples,
+            class_weight = class_weight,
+            p_strategy = p_strategy,
+            use_loky = use_loky,
+            xgb_n_estimators = xgb_n_estimators,
+            objective = objective,
+            nthread = nthread,
+            max_depth = max_depth,
+            learning_rate = learning_rate,
+            subsample = subsample,
+            colsample_bytree = colsample_bytree,
+            scale_pos_weight = scale_pos_weight,
+            device = device,
+            tree_method = tree_method,
+            booster = booster,
+            verbosity = verbosity,
+            use_rmm = use_rmm,
+            seed = seed,
+            sampling_method = sampling_method,
+            colsample_bylevel = colsample_bylevel,
+            colsample_bynode = colsample_bynode,
+            max_delta_step = max_delta_step,
+            max_leaves = max_leaves,
+            max_bin = max_bin,
+            num_parallel_tree = num_parallel_tree,
+            refresh_leaf = refresh_leaf,
+            process_type = process_type,
+            early_stopping_rounds = early_stopping_rounds,
+            seed_per_iteration = seed_per_iteration,
+            multi_strategy = multi_strategy,
+            sample_type = sample_type,
+            one_drop = one_drop,
+            skip_drop = skip_drop,
+            normalize_type = normalize_type,
+            rate_drop = rate_drop,
+            max_cached_hist_node = max_cached_hist_node,
+            grow_policy = grow_policy,
+            min_child_weight = min_child_weight,
+            reg_lambda = reg_lambda,
+            reg_alpha = reg_alpha,
+            gamma = gamma,
+        )
         self.stacked_model = stacked_model
         self.stacked_models_params = stacked_models_params
+        self.stacked_model_n_top_features = stacked_model_n_top_features
 
     def predict_proba(self, X, y=None, stacked_model_trained=True):
         """
@@ -1024,10 +1122,10 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         # Assign chunk of trees to jobs
         n_jobs, _, _ = _partition_estimators(self.n_estimators, self.n_jobs)
 
-        # avoid storing the output of every estimator by summing them here
+        # storing the output of every estimator
         all_proba = [
             np.zeros((X.shape[0], j), dtype=np.float64)
-            for j in np.atleast_1d(self.n_classes_*len(self.estimators_))
+            for j in np.atleast_1d([self.n_classes_]*len(self.estimators_))
         ]
         lock = threading.Lock()
 
@@ -1036,7 +1134,15 @@ class StackedXGBForestClassifier(XGBForestClassifier):
             for i, e in enumerate(self.estimators_)
         )
 
+        feature_importances = self.feature_importances_
+        sorted_idx = np.argsort(feature_importances)[::-1]
+        top_features = X.columns[sorted_idx[:self.stacked_model_n_top_features]]
+        X = X[top_features]
+
         if not stacked_model_trained:
+            # Logging message (remove after doing tests)
+            print("`XGBF+` model's `predict_proba` is being used in the first phase ...")
+
             if y is None:
                 raise ValueError(
                     "When the stacked model is not trained yet,"
@@ -1109,6 +1215,9 @@ class StackedXGBForestClassifier(XGBForestClassifier):
 
             return
         else:
+            # Logging message (remove after doing tests)
+            print("`XGBF+` model's `predict_proba` is being used in the second phase ...")
+
             if self.use_cudf:
                 import cudf
 
@@ -1587,6 +1696,14 @@ class ClassificationConformalPredictor:
                 predictions = self.classes_[np.argmax(prob_pred, axis=1)]
                 prediction_sets = None
 
+                # Fit calibration
+                if self.use_cudf:
+                    if self.calibration_method is not None and self.calibration_method != "venn_abers":
+                        self._apply_calibration(prob_pred, addi_y)
+                else:
+                    if self.calibration_method is not None and self.calibration_method != "venn_abers":
+                        self._apply_calibration(prob_pred, y)
+
             elif set_name == "valid":
                 if len(y) == 0:
                     raise ValueError("Input data y cannot be empty.")
@@ -1606,15 +1723,12 @@ class ClassificationConformalPredictor:
                             prob_pred = self._calibrate_proba(addi_X)
                         elif self.calibration_method == "beta_temp":
                             base_prob_pred = prob_pred.copy()
-                            self._apply_calibration(prob_pred, addi_y)
                             prob_pred, temp_prob_pred = self._calibrate_proba(prob_pred)
                         elif self.calibration_method == "temp_beta":
                             base_prob_pred = prob_pred.copy()
-                            self._apply_calibration(prob_pred, addi_y)
                             beta_prob_pred, prob_pred = self._calibrate_proba(prob_pred)
                         else:
                             base_prob_pred = prob_pred.copy()
-                            self._apply_calibration(prob_pred, addi_y)
                             prob_pred = self._calibrate_proba(prob_pred)
                 else:
                     if self.calibration_method is not None:
@@ -1623,15 +1737,12 @@ class ClassificationConformalPredictor:
                             prob_pred = self._calibrate_proba(X)
                         elif self.calibration_method == "beta_temp":
                             base_prob_pred = prob_pred.copy()
-                            self._apply_calibration(prob_pred, y)
                             prob_pred, temp_prob_pred = self._calibrate_proba(prob_pred)
                         elif self.calibration_method == "temp_beta":
                             base_prob_pred = prob_pred.copy()
-                            self._apply_calibration(prob_pred, y)
                             beta_prob_pred, prob_pred = self._calibrate_proba(prob_pred)
                         else:
                             base_prob_pred = prob_pred.copy()
-                            self._apply_calibration(prob_pred, y)
                             prob_pred = self._calibrate_proba(prob_pred)
 
                 if self.prob_estimator == "meta":
@@ -2087,7 +2198,7 @@ class ClassificationConformalPredictor:
 
         return predictions, confidence_level_range
 
-    def predict_proba(self, X, addi_X=None):
+    def predict_proba(self, X, addi_X=None, y=None, stacked_model_trained=True):
         """
         Just for compatibility"""
         if self.apply_calibs:
@@ -2103,7 +2214,12 @@ class ClassificationConformalPredictor:
             else:
                 prob_pred = self._calibrate_proba(self.model.predict_proba(X))
         else:
-            prob_pred = self.model.predict_proba(X)
+            if not stacked_model_trained:
+                self.model.predict_proba(X, y=y, stacked_model_trained=False)
+
+                return
+            else:
+                prob_pred = self.model.predict_proba(X)
 
         return prob_pred
 

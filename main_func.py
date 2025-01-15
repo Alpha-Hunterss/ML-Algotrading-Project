@@ -61,13 +61,13 @@ def main(
             # Output Model:
             save_model_mode = man_params["save_model_mode"]
             use_cudf = man_params["use_cudf"]
-
             n_rand_features = man_params['n_rand_features']
             # Split Data & Time Series Cross Validation:
             n_splits = man_params["n_splits"]
             max_train_size = man_params["max_train_size"]
             test_size = man_params["test_size"]
             train_test_gap = man_params["train_test_gap"]
+            eval_set_ratio = man_params["eval_set_ratio"]
             sampling = man_params["sampling"]
             try:
                 early_stopping_rounds = man_params["parameters"][
@@ -117,6 +117,7 @@ def main(
                 "max_train_size",
                 "test_size",
                 "train_test_gap",
+                "eval_set_ratio",
                 "early_stopping_rounds",
             ]
 
@@ -161,6 +162,7 @@ def main(
             max_train_size = wandb.config.max_train_size
             test_size = wandb.config.test_size
             train_test_gap = wandb.config.train_test_gap
+            eval_set_ratio = wandb.config.eval_set_ratio
             early_stopping_rounds = wandb.config.early_stopping_rounds
 
 
@@ -218,6 +220,7 @@ def main(
             n_splits=n_splits,
             test_size=test_size,
             train_test_gap=train_test_gap,
+            eval_set_ratio=eval_set_ratio,
         )
 
         # ______________________________Pre-Backtest: Backtest on all raw data_______________________________

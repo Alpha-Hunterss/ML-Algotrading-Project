@@ -675,8 +675,8 @@ def do_backtest(
     plot_profit_distribution(new_trg_df)
     plt.show()
 
-    if model.use_meta_labeling and not is_final_bt:
-        new_trg_df["confidence_levels"] = confidence_levels
+    # if model.use_meta_labeling and not is_final_bt:
+    #     new_trg_df["confidence_levels"] = confidence_levels
 
     if 'confidence_levels' in new_trg_df.columns:
         positive_profits = new_trg_df[new_trg_df['net_profit'] > 0]

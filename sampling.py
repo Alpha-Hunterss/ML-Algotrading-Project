@@ -31,7 +31,6 @@ def sampling_func(
             .fill_null(strategy="forward")
             .drop(*["index"])
         )
-        print(df)
         df = df.drop_nulls()
         for name in name_feature:
             if trade_mode == 'long':

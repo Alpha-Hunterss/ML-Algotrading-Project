@@ -983,6 +983,7 @@ def MetaFeaEng(df, n_components):
 
     scaled_data = StandardScaler().fit_transform(df[col_prob].to_numpy())
     principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
+
     for i in range(n_components):
         df[f"prob_PCA{i}"] = principal_components[:, i]
 

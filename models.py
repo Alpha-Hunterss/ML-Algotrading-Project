@@ -970,7 +970,7 @@ def MetaFeaEng(df, n_components):
     import re
 
     model_columns = df.columns.tolist()
-    pattern = re.compile(rf'th')
+    pattern = re.compile(r'th')
     col_prob = [col for col in model_columns if pattern.match(col)]
 
     print(f"The size of prob feats (inside func): {len(col_prob)}")
@@ -1243,7 +1243,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 if param in valid_params
             }
             self.stacked_model = model_class(**parameters)
-            print(f"The `X` column names:\n {X.columns}")
+            print(f"The `X` column names:\n {X.columns.tolist()}")
             print(f"The `X` shape: {X.shape}")
             X = MetaFeaEng(df=X, n_components=3)
             self.stacked_model.fit(X, y)
@@ -1264,7 +1264,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
             else:
                 for idx, est_proba in enumerate(all_proba):
                     X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
-            print(f"The `X` column names:\n {X.columns}")
+            print(f"The `X` column names:\n {X.columns.tolist()}")
             print(f"The `X` shape: {X.shape}")
             X = MetaFeaEng(df=X, n_components=3)
 

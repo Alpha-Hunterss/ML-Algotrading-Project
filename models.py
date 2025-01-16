@@ -971,9 +971,6 @@ def MetaFeaEng(df, n_components):
     model_columns = df.columns.tolist()
     col_prob = [col for col in model_columns if "th_est_pos_label_proba" in col]
 
-    print(f"The size of prob feats (inside func): {len(col_prob)}")
-    print(f"The shape of the filtered dataframe (inside func): {df[col_prob].shape}")
-
     # Calculate statistics on probability columns
     df['mean'] = df[col_prob].mean(axis=1)
     df['std'] = df[col_prob].std(axis=1)
@@ -1171,9 +1168,6 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         X = X[top_features]
 
         if not stacked_model_trained:
-            # Logging message (remove after doing tests)
-            print("`XGBF+` model's `predict_proba` is being used in the first phase ...")
-
             if y is None:
                 raise ValueError(
                     "When the stacked model is not trained yet,"
@@ -1241,16 +1235,11 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 if param in valid_params
             }
             self.stacked_model = model_class(**parameters)
-            print(f"The `X` column names:\n {X.columns.tolist()}")
-            print(f"The `X` shape: {X.shape}")
             X = MetaFeaEng(df=X, n_components=3)
             self.stacked_model.fit(X, y)
 
             return
         else:
-            # Logging message (remove after doing tests)
-            print("`XGBF+` model's `predict_proba` is being used in the second phase ...")
-
             if self.use_cudf:
                 import cudf
 
@@ -1262,8 +1251,6 @@ class StackedXGBForestClassifier(XGBForestClassifier):
             else:
                 for idx, est_proba in enumerate(all_proba):
                     X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
-            print(f"The `X` column names:\n {X.columns.tolist()}")
-            print(f"The `X` shape: {X.shape}")
             X = MetaFeaEng(df=X, n_components=3)
 
             return self.stacked_model.predict_proba(X)

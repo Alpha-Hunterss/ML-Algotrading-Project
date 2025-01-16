@@ -965,38 +965,29 @@ def _accumulate_prediction_stacked(predict, X, out, idx, lock):
     with lock:
         out[idx] = prediction
 
-def corrplot(df, method="pearson", fig_size = (8,6), annot=True, **kwargs):
-    sns.clustermap(
-        df.corr(method, numeric_only=True),
-        vmin=-1.0,
-        vmax=1.0,
-        cmap="icefire",
-        method="complete",
-        annot=annot,
-        # ax=axs[0],
-        **kwargs,
-    )
 
 def MetaFeaEng(df , n_components):
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
+    import re
     model_columns = df.columns.tolist()
+    pattern = re.compile(rf'th')
+    col_prob = [col for col in model_columns if pattern.match(col)]
 
-    df['mean'] = df[model_columns].mean(axis=1)
-    df['std'] = df[model_columns].std(axis=1)
-    df['variance'] = df[model_columns].var(axis=1)
-    df['row_count_above_0.5'] = (df[model_columns] > 0.5).sum(axis=1)
+    df['mean'] = df[col_prob].mean(axis=1)
+    df['std'] = df[col_prob].std(axis=1)
+    df['variance'] = df[col_prob].var(axis=1)
+    df['row_count_above_0.5'] = (df[col_prob] > 0.5).sum(axis=1)
+    df['max_prob'] = df[col_prob].max(axis=1)
+    df['min_prob'] = df[col_prob].max(axis=1)
+    df['median_prob'] = df[col_prob].median(axis=1)
 
-    df['max_prob'] = df[model_columns].max(axis=1)
-    df['min_prob'] = df[model_columns].max(axis=1)
-    df['median_prob'] = df[model_columns].median(axis=1)
-
-    scaled_data = StandardScaler().fit_transform(df[model_columns].to_numpy())
+    scaled_data = StandardScaler().fit_transform(df[col_prob].to_numpy())
     principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
     for i in range(n_components):
         df[f"prob_PCA{i}"] = principal_components[:, i]
     
-    df = df.drop(columns=model_columns)
+    df = df.drop(columns=col_prob)
 
     return df                 
     
@@ -1189,13 +1180,13 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 import cudf
 
                 for idx, est_proba in enumerate(all_proba):
-                    X[f"{idx}th_est_pos_label_proba"] = cudf.Series(
+                    X[f"th{idx}_est_pos_label_proba"] = cudf.Series(
                         est_proba[:, 1],
                         index=X.index
                     )
             else:
                 for idx, est_proba in enumerate(all_proba):
-                    X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
+                    X[f"th{idx}_est_pos_label_proba"] = est_proba[:, 1]
 
             if isinstance(self.stacked_models_params, dict):
                 for key in self.stacked_models_params.keys():
@@ -1247,11 +1238,6 @@ class StackedXGBForestClassifier(XGBForestClassifier):
             }
             self.stacked_model = model_class(**parameters)
             X = MetaFeaEng(df=X , n_components=3)
-            if self.use_cudf:
-                X_namayesh = X.to_pandas()
-                print(X_namayesh.describe())
-                corrplot(X_namayesh, annot=False)
-
             self.stacked_model.fit(X, y)
 
             return
@@ -1263,13 +1249,13 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 import cudf
 
                 for idx, est_proba in enumerate(all_proba):
-                    X[f"{idx}th_est_pos_label_proba"] = cudf.Series(
+                    X[f"th{idx}_est_pos_label_proba"] = cudf.Series(
                         est_proba[:, 1],
                         index=X.index
                     )
             else:
                 for idx, est_proba in enumerate(all_proba):
-                    X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
+                    X[f"th{idx}_est_pos_label_proba"] = est_proba[:, 1]
             X = MetaFeaEng(df=X , n_components=3)
             return self.stacked_model.predict_proba(X)
 

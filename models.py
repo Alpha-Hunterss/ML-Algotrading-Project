@@ -964,7 +964,7 @@ def _accumulate_prediction_stacked(predict, X, out, idx, lock):
         out[idx] = prediction
 
 
-def MetaFeaEng(df, n_components):
+def MetaFeaEng(df, n_components, use_cudf):
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
     import re
@@ -973,16 +973,36 @@ def MetaFeaEng(df, n_components):
     pattern = re.compile(rf'th')
     col_prob = [col for col in model_columns if pattern.match(col)]
 
-    df['mean'] = df[col_prob].mean(axis=1)
-    df['std'] = df[col_prob].std(axis=1)
-    df['variance'] = df[col_prob].var(axis=1)
-    df['row_count_above_0.5'] = (df[col_prob] > 0.5).sum(axis=1)
-    df['max_prob'] = df[col_prob].max(axis=1)
-    df['min_prob'] = df[col_prob].max(axis=1)
-    df['median_prob'] = df[col_prob].median(axis=1)
+    if use_cudf:
+        import cudf
 
-    scaled_data = StandardScaler().fit_transform(df[col_prob].to_numpy())
-    principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
+        # Calculate statistics on probability columns
+        df["mean"] = cudf.mean(df[col_prob], axis=1)
+        df["std"] = cudf.std(df[col_prob], axis=1)
+        df["variance"] = cudf.var(df[col_prob], axis=1)
+        df["row_count_above_0.5"] = (df[col_prob] > 0.5).sum(axis=1)
+        df["max_prob"] = cudf.max(df[col_prob], axis=1)
+        df["min_prob"] = cudf.min(df[col_prob], axis=1)
+        df["median_prob"] = cudf.median(df[col_prob], axis=1)
+
+        # Standardize and perform PCA on probability columns
+        scaler = cudf.StandardScaler()
+        scaled_data = scaler.fit_transform(df[col_prob].to_numpy())
+        principal_components = cudf.PCA(n_components=n_components).fit_transform(scaled_data)
+
+    else:
+        # Calculate statistics on probability columns
+        df['mean'] = df[col_prob].mean(axis=1)
+        df['std'] = df[col_prob].std(axis=1)
+        df['variance'] = df[col_prob].var(axis=1)
+        df['row_count_above_0.5'] = (df[col_prob] > 0.5).sum(axis=1)
+        df['max_prob'] = df[col_prob].max(axis=1)
+        df['min_prob'] = df[col_prob].min(axis=1)
+        df['median_prob'] = df[col_prob].median(axis=1)
+
+        # Standardize and perform PCA on probability columns
+        scaled_data = StandardScaler().fit_transform(df[col_prob].to_numpy())
+        principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
 
     for i in range(n_components):
         df[f"prob_PCA{i}"] = principal_components[:, i]
@@ -1238,7 +1258,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 if param in valid_params
             }
             self.stacked_model = model_class(**parameters)
-            X = MetaFeaEng(df=X, n_components=3)
+            X = MetaFeaEng(df=X, n_components=3, use_cudf=self.use_cudf)
             self.stacked_model.fit(X, y)
 
             return
@@ -1257,7 +1277,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
             else:
                 for idx, est_proba in enumerate(all_proba):
                     X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
-            X = MetaFeaEng(df=X, n_components=3)
+            X = MetaFeaEng(df=X, n_components=3, use_cudf=self.use_cudf)
 
             return self.stacked_model.predict_proba(X)
 

@@ -622,7 +622,7 @@ def cal_n_open_position(df:pd.DataFrame):
     total_open_volume = []
     for i in range(array.shape[0]):
         chunk = array[:i+1]
-        cond = (chunk[:, 1] >= chunk[-1, 0]) & (chunk[:-1, 2] > 0)
+        cond = (chunk[:, 1] >= chunk[-1, 0]) & (chunk[:, 2] > 0)
         cond_len = len(np.where(cond)[0]) 
         n_open_position.append(cond_len)
         open_volumes = chunk[:, 2][cond]

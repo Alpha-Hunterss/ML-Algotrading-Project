@@ -23,6 +23,8 @@ from lightgbm import LGBMClassifier
 from typing_extensions import runtime_checkable
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 def _generate_sample_indices(random_state, n_samples, n_samples_bootstrap):
@@ -963,6 +965,17 @@ def _accumulate_prediction_stacked(predict, X, out, idx, lock):
     with lock:
         out[idx] = prediction
 
+def corrplot(df, method="pearson", fig_size = (8,6), annot=True, **kwargs):
+    sns.clustermap(
+        df.corr(method, numeric_only=True),
+        vmin=-1.0,
+        vmax=1.0,
+        cmap="icefire",
+        method="complete",
+        annot=annot,
+        # ax=axs[0],
+        **kwargs,
+    )
 
 class StackedXGBForestClassifier(XGBForestClassifier):
     """
@@ -1210,6 +1223,10 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 if param in valid_params
             }
             self.stacked_model = model_class(**parameters)
+            if self.use_cudf:
+                X_namayesh = X.to_pandas()
+                print(X_namayesh.describe())
+                corrplot(X_namayesh, annot=False)
 
             self.stacked_model.fit(X, y)
 

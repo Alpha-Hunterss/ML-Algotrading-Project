@@ -967,11 +967,9 @@ def _accumulate_prediction_stacked(predict, X, out, idx, lock):
 def MetaFeaEng(df, n_components):
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
-    import re
 
     model_columns = df.columns.tolist()
-    pattern = re.compile(r'th')
-    col_prob = [col for col in model_columns if pattern.match(col)]
+    col_prob = [col for col in model_columns if "th_est_pos_label_proba" in col]
 
     print(f"The size of prob feats (inside func): {len(col_prob)}")
     print(f"The shape of the filtered dataframe (inside func): {df[col_prob].shape}")

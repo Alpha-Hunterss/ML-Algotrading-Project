@@ -1021,6 +1021,8 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         stacked_model=None,
         stacked_models_params=None,
         stacked_model_n_top_features=50,
+        use_pca_stacked_model=False,
+        pca_n_components=3,
         n_estimators=100,
         *,
         bootstrap=False,
@@ -1120,6 +1122,8 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         self.stacked_model = stacked_model
         self.stacked_models_params = stacked_models_params
         self.stacked_model_n_top_features = stacked_model_n_top_features
+        self.use_pca_stacked_model = use_pca_stacked_model
+        self.pca_n_components = pca_n_components
 
     def predict_proba(self, X, y=None, stacked_model_trained=True):
         """
@@ -1235,7 +1239,10 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 if param in valid_params
             }
             self.stacked_model = model_class(**parameters)
-            X = MetaFeaEng(df=X, n_components=3)
+
+            if self.use_pca_stacked_model:
+                X = MetaFeaEng(df=X, n_components=self.pca_n_components)
+
             self.stacked_model.fit(X, y)
 
             return
@@ -1251,7 +1258,9 @@ class StackedXGBForestClassifier(XGBForestClassifier):
             else:
                 for idx, est_proba in enumerate(all_proba):
                     X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
-            X = MetaFeaEng(df=X, n_components=3)
+
+            if self.use_pca_stacked_model:
+                X = MetaFeaEng(df=X, n_components=self.pca_n_components)
 
             return self.stacked_model.predict_proba(X)
 

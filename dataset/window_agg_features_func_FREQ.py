@@ -44,6 +44,9 @@ def hilbert_cupy(x):
 
 def apply_hanning_window(array, window_size, use_cudf=False):
     """Apply a Hanning window to the data."""
+    if use_cudf:
+        import cupy as cp
+
     hanning_window = np.hanning(window_size) if not use_cudf else cp.hanning(window_size)
 
     return array.flatten() * hanning_window
@@ -52,6 +55,8 @@ def apply_hanning_window(array, window_size, use_cudf=False):
 def compute_fft_features(selected_slice, window_size, sampling_rate, use_cudf=False):
     """Compute FFT features."""
     if use_cudf:
+        import cupy as cp
+
         fft_values = cp.fft.fft(selected_slice)
         fft_amplitude = cp.abs(fft_values[: window_size // 2])
         fft_amplitude[1:] = 2 * fft_amplitude[1:]
@@ -82,6 +87,8 @@ def compute_wavelet_features(selected_slice, window_size, sampling_rate, use_cud
     reconstructed_signal = pywt.waverec(filtered_coeffs, "bior4.4")
 
     if use_cudf:
+        import cupy as cp
+
         reconstructed_signal = cp.asarray(reconstructed_signal)
 
     return compute_fft_features(reconstructed_signal, window_size, sampling_rate, use_cudf=use_cudf)
@@ -90,6 +97,8 @@ def compute_wavelet_features(selected_slice, window_size, sampling_rate, use_cud
 def compute_envelope_features(selected_slice, window_size, sampling_rate, use_cudf=False):
     """Compute Envelope features."""
     if use_cudf:
+        import cupy as cp
+
         analytic_signal = hilbert_cupy(selected_slice)
 
         envelope = cp.abs(analytic_signal)
@@ -120,6 +129,8 @@ def compute_envelope_features(selected_slice, window_size, sampling_rate, use_cu
 def compute_cepstrum_features(selected_slice, use_cudf=False):
     """Compute Cepstrum features."""
     if use_cudf:
+        import cupy as cp
+
         fft_values = cp.fft.fft(selected_slice)
         log_spectrum = cp.log(cp.abs(fft_values) + 1e-10)
         cepstrum = cp.fft.ifft(log_spectrum).real
@@ -143,6 +154,8 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False):
     total_features = num_features_fft + num_features_wavelet + num_features_envelope + num_features_cepstrum + num_features_stats
 
     if use_cudf:
+        import cupy as cp
+
         res = cp.zeros([array.shape[0], total_features], dtype=cp.float32)  # result array
         res[:window_size, :] = cp.nan
     else:
@@ -277,6 +290,8 @@ def add_win_fe_base_func(
             res = cal_window_max(array, w_size, sampling_rate, use_cudf=use_cudf)
 
             if use_cudf:
+                import cudf
+
                 # Append the calculated results to the new_columns list as DataFrames
                 new_columns.append(cudf.DataFrame(res[:, 0:10].round(round_to), columns=col_fft_magnitudes, index=df.index))
                 new_columns.append(cudf.DataFrame(res[:, 10:20].round(round_to), columns=col_fft_frequencies, index=df.index))

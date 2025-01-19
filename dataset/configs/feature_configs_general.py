@@ -189,6 +189,13 @@ general_config = {
     },
 
 
+    'fe_WIN_FREQ': {
+        'timeframe': [5],
+        'window_size': [240, 480, 1440],
+        'base_columns': ['CLOSE']
+    },
+
+
     'fe_cndl': [5, 15, 30, 60, 240, 1440],
 
 

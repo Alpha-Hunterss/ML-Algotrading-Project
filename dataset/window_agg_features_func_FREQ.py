@@ -187,7 +187,7 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
         
         round_to = 6
-        sampling_rate = 0.2  # Assumed sampling rate in Hz; adjust if necessary
+        sampling_rate = 1  # Assumed sampling rate in Hz; adjust if necessary
         
 
         for symbol in feature_config.keys():

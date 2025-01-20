@@ -166,31 +166,31 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False, logger=def
     array_shape = array.shape[0]/10
 
     for i in range(window_size, array.shape[0]):
-        if i >= array_shape & flags[0]:
+        if (i >= array_shape) & flags[0]:
             logger.info("---> Did 10 perc of the job ...")
             flags[0] = False
-        elif i >= 2*array_shape & flags[1]:
+        elif (i >= 2*array_shape) & flags[1]:
             logger.info("---> Did 20 perc of the job ...")
             flags[1] = False
-        elif i >= 3*array_shape & flags[2]:
+        elif (i >= 3*array_shape) & flags[2]:
             logger.info("---> Did 30 perc of the job ...")
             flags[2] = False
-        elif i >= 4*array_shape & flags[3]:
+        elif (i >= 4*array_shape) & flags[3]:
             logger.info("---> Did 40 perc of the job ...")
             flags[3] = False
-        elif i >= 5*array_shape & flags[4]:
+        elif (i >= 5*array_shape) & flags[4]:
             logger.info("---> Did 50 perc of the job ...")
             flags[4] = False
-        elif i >= 6*array_shape & flags[5]:
+        elif (i >= 6*array_shape) & flags[5]:
             logger.info("---> Did 60 perc of the job ...")
             flags[5] = False
-        elif i >= 7*array_shape & flags[6]:
+        elif (i >= 7*array_shape) & flags[6]:
             logger.info("---> Did 70 perc of the job ...")
             flags[6] = False
-        elif i >= 8*array_shape & flags[7]:
+        elif (i >= 8*array_shape) & flags[7]:
             logger.info("---> Did 80 perc of the job ...")
             flags[7] = False
-        elif i >= 9*array_shape & flags[8]:
+        elif (i >= 9*array_shape) & flags[8]:
             logger.info("---> Did 90 perc of the job ...")
             flags[8] = False
 

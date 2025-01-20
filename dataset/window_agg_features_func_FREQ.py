@@ -17,7 +17,9 @@ def compute_fft_features(selected_slice, window_size, sampling_rate):
     fft_values = np.fft.fft(selected_slice)
     fft_amplitude = np.abs(fft_values[:window_size // 2])
     fft_amplitude[1:] = 2 * fft_amplitude[1:]  # Double the amplitudes for positive frequencies
-    fft_amplitude[0] = 0  # Remove the DC component by setting the first value to 0
+    
+    # fft_amplitude[0] = 0  # Remove the DC component by setting the first vaue to 0
+    
     # frequencies = np.fft.fftfreq(len(fft_amplitude), d=1 / sampling_rate)
     # positive_frequencies = frequencies[:window_size // 2]
     
@@ -60,8 +62,8 @@ def add_win_fe_base_func(
 
             # Define feature column names based on updated `cal_window_max` function
             col_fft_magnitudes = [f"{fe_prefix}_fft_mag_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
-            col_fft_frequencies = [f"{fe_prefix}_fft_freq_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
-            col_fft_phases = [f"{fe_prefix}_fft_phase_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
+            # col_fft_frequencies = [f"{fe_prefix}_fft_freq_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
+            # col_fft_phases = [f"{fe_prefix}_fft_phase_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
 
             array = df[raw_features].to_numpy()
 
@@ -69,8 +71,8 @@ def add_win_fe_base_func(
 
             # Append the calculated results to the new_columns list as DataFrames
             new_columns.append(pd.DataFrame(res[:, 0:10].round(round_to), columns=col_fft_magnitudes, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 10:20].round(round_to), columns=col_fft_frequencies, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 20:30].round(round_to), columns=col_fft_phases, index=df.index))
+            # new_columns.append(pd.DataFrame(res[:, 10:20].round(round_to), columns=col_fft_frequencies, index=df.index))
+            # new_columns.append(pd.DataFrame(res[:, 20:30].round(round_to), columns=col_fft_phases, index=df.index))
 
 
     df = pd.concat([df] + new_columns, axis=1)

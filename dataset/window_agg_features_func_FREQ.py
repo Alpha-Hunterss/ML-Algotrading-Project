@@ -162,13 +162,43 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False, logger=def
         res = np.zeros([array.shape[0], total_features])  # result array
         res[:window_size, :] = np.nan  # fill initial rows with NaN
 
+    flags = [True for i in range(9)]
+    array_shape = array.shape[0]/10
+
     for i in range(window_size, array.shape[0]):
+        if i >= array_shape & flags[0]:
+            logger.info("---> Did 10 perc of the job ...")
+            flags[0] = False
+        elif i >= 2*array_shape & flags[1]:
+            logger.info("---> Did 20 perc of the job ...")
+            flags[1] = False
+        elif i >= 3*array_shape & flags[2]:
+            logger.info("---> Did 30 perc of the job ...")
+            flags[2] = False
+        elif i >= 4*array_shape & flags[3]:
+            logger.info("---> Did 40 perc of the job ...")
+            flags[3] = False
+        elif i >= 5*array_shape & flags[4]:
+            logger.info("---> Did 50 perc of the job ...")
+            flags[4] = False
+        elif i >= 6*array_shape & flags[5]:
+            logger.info("---> Did 60 perc of the job ...")
+            flags[5] = False
+        elif i >= 7*array_shape & flags[6]:
+            logger.info("---> Did 70 perc of the job ...")
+            flags[6] = False
+        elif i >= 8*array_shape & flags[7]:
+            logger.info("---> Did 80 perc of the job ...")
+            flags[7] = False
+        elif i >= 9*array_shape & flags[8]:
+            logger.info("---> Did 90 perc of the job ...")
+            flags[8] = False
+
         selected_slice = apply_hanning_window(
             array[i - window_size + 1: i + 1], window_size, use_cudf=use_cudf
         )
 
         # Compute FFT features
-        logger.info("---> Computing fft features ...")
         fft_amplitude, positive_frequencies, fft_phase = compute_fft_features(
             selected_slice, window_size, sampling_rate, use_cudf=use_cudf
         )
@@ -183,7 +213,6 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False, logger=def
         res[i, 20:30] = fft_phase[sorted_indices_fft]
 
         # Compute Wavelet features
-        logger.info("---> Computing wavelet features ...")
         fft_amplitude_wavelet, positive_frequencies_wavelet, fft_phase_wavelet = compute_wavelet_features(
             selected_slice, window_size, sampling_rate, use_cudf=use_cudf
         )
@@ -198,7 +227,6 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False, logger=def
         res[i, 50:60] = fft_phase_wavelet[sorted_indices_wavelet_fft]
 
         # Compute Envelope features
-        logger.info("---> Computing envelope features ...")
         envelope_fft_amplitude, positive_envelope_frequencies, envelope_fft_phase, instantaneous_frequency = compute_envelope_features(
             selected_slice, window_size, sampling_rate, use_cudf=use_cudf
         )
@@ -216,7 +244,6 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False, logger=def
         res[i, 90:100] = instantaneous_frequency[sorted_indices_if]
 
         # Compute Cepstrum features
-        logger.info("---> Computing cepstrum features ...")
         cepstrum = compute_cepstrum_features(selected_slice, use_cudf=use_cudf)
 
         if use_cudf:

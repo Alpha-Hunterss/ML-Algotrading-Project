@@ -259,16 +259,18 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False, use_wavele
             # Compute statistical features
             res[i, 120] = cp.mean(positive_frequencies[sorted_indices_fft])
             res[i, 121] = cp.std(positive_frequencies[sorted_indices_fft])
-            res[i, 122] = cp.mean(positive_frequencies_wavelet[sorted_indices_wavelet_fft])
-            res[i, 123] = cp.std(positive_frequencies_wavelet[sorted_indices_wavelet_fft])
+            if use_wavelet:
+                res[i, 122] = cp.mean(positive_frequencies_wavelet[sorted_indices_wavelet_fft])
+                res[i, 123] = cp.std(positive_frequencies_wavelet[sorted_indices_wavelet_fft])
             res[i, 124] = cp.mean(positive_envelope_frequencies[sorted_indices_envelope])
             res[i, 125] = cp.std(positive_envelope_frequencies[sorted_indices_envelope])
         else:
             # Compute statistical features
             res[i, 120] = np.mean(positive_frequencies[sorted_indices_fft])
             res[i, 121] = np.std(positive_frequencies[sorted_indices_fft])
-            res[i, 122] = np.mean(positive_frequencies_wavelet[sorted_indices_wavelet_fft])
-            res[i, 123] = np.std(positive_frequencies_wavelet[sorted_indices_wavelet_fft])
+            if use_wavelet:
+                res[i, 122] = np.mean(positive_frequencies_wavelet[sorted_indices_wavelet_fft])
+                res[i, 123] = np.std(positive_frequencies_wavelet[sorted_indices_wavelet_fft])
             res[i, 124] = np.mean(positive_envelope_frequencies[sorted_indices_envelope])
             res[i, 125] = np.std(positive_envelope_frequencies[sorted_indices_envelope])
 

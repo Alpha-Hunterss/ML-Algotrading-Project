@@ -142,7 +142,7 @@ def compute_cepstrum_features(selected_slice, use_cudf=False):
     return cepstrum
 
 
-def cal_window_max(array, window_size, sampling_rate, use_cudf=False):
+def cal_window_max(array, window_size, sampling_rate, use_cudf=False, logger=default_logger):
     """
     Compute various features (FFT, Wavelet, Envelope, Cepstrum) for different windows.
     """
@@ -168,6 +168,7 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False):
         )
 
         # Compute FFT features
+        logger.info("---> Computing fft features ...")
         fft_amplitude, positive_frequencies, fft_phase = compute_fft_features(
             selected_slice, window_size, sampling_rate, use_cudf=use_cudf
         )
@@ -182,6 +183,7 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False):
         res[i, 20:30] = fft_phase[sorted_indices_fft]
 
         # Compute Wavelet features
+        logger.info("---> Computing wavelet features ...")
         fft_amplitude_wavelet, positive_frequencies_wavelet, fft_phase_wavelet = compute_wavelet_features(
             selected_slice, window_size, sampling_rate, use_cudf=use_cudf
         )
@@ -196,6 +198,7 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False):
         res[i, 50:60] = fft_phase_wavelet[sorted_indices_wavelet_fft]
 
         # Compute Envelope features
+        logger.info("---> Computing envelope features ...")
         envelope_fft_amplitude, positive_envelope_frequencies, envelope_fft_phase, instantaneous_frequency = compute_envelope_features(
             selected_slice, window_size, sampling_rate, use_cudf=use_cudf
         )
@@ -213,6 +216,7 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False):
         res[i, 90:100] = instantaneous_frequency[sorted_indices_if]
 
         # Compute Cepstrum features
+        logger.info("---> Computing cepstrum features ...")
         cepstrum = compute_cepstrum_features(selected_slice, use_cudf=use_cudf)
 
         if use_cudf:
@@ -246,12 +250,13 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False):
 def add_win_fe_base_func(
     df, raw_features, timeframes, window_sizes,
     sampling_rate, round_to=4, fe_prefix="fe_WIN_FREQ",
-    use_cudf=False,
+    use_cudf=False, logger=default_logger,
 ):
     new_columns = []
 
     for tf in timeframes:
         for w_size in window_sizes:
+            logger.info(f"---> Doing window size {w_size} ...")
             assert tf == 5, "!!! For now, this code only works with 5M timeframe; tf must be 5."
 
             # Define feature column names based on updated `cal_window_max` function
@@ -385,6 +390,7 @@ def history_fe_WIN_features_FREQ(feature_config, use_cudf=False, logger=default_
                     df["_time"] = pd.to_datetime(df["_time"], format="%Y-%m-%d %H:%M:%S")
 
             # Add the window-based features
+            logger.info("---> Entering the main func ...")
             df = add_win_fe_base_func(
                 df,
                 raw_features=raw_features,
@@ -395,6 +401,7 @@ def history_fe_WIN_features_FREQ(feature_config, use_cudf=False, logger=default_
                 fe_prefix=fe_prefix,
                 use_cudf=use_cudf,
             )
+            logger.info("---> Exiting the main func ...")
 
             # Clean up the DataFrame, dropping the raw features and adding symbol info
             df = df.drop(columns=[raw_features])

@@ -142,7 +142,7 @@ def compute_cepstrum_features(selected_slice, use_cudf=False):
     return cepstrum
 
 
-def cal_window_max(array, window_size, sampling_rate, use_cudf=False, logger=default_logger):
+def cal_window_max(array, window_size, sampling_rate, use_cudf=False, use_wavelet=True, logger=default_logger):
     """
     Compute various features (FFT, Wavelet, Envelope, Cepstrum) for different windows.
     """
@@ -213,18 +213,19 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False, logger=def
         res[i, 20:30] = fft_phase[sorted_indices_fft]
 
         # Compute Wavelet features
-        fft_amplitude_wavelet, positive_frequencies_wavelet, fft_phase_wavelet = compute_wavelet_features(
-            selected_slice, window_size, sampling_rate, use_cudf=use_cudf
-        )
+        if use_wavelet:
+            fft_amplitude_wavelet, positive_frequencies_wavelet, fft_phase_wavelet = compute_wavelet_features(
+                selected_slice, window_size, sampling_rate, use_cudf=use_cudf
+            )
 
-        if use_cudf:
-            sorted_indices_wavelet_fft = cp.argsort(fft_amplitude_wavelet[1:])[::-1][:10] + 1
-        else:
-            sorted_indices_wavelet_fft = np.argsort(fft_amplitude_wavelet[1:])[::-1][:10] + 1
+            if use_cudf:
+                sorted_indices_wavelet_fft = cp.argsort(fft_amplitude_wavelet[1:])[::-1][:10] + 1
+            else:
+                sorted_indices_wavelet_fft = np.argsort(fft_amplitude_wavelet[1:])[::-1][:10] + 1
 
-        res[i, 30:40] = fft_amplitude_wavelet[sorted_indices_wavelet_fft]
-        res[i, 40:50] = positive_frequencies_wavelet[sorted_indices_wavelet_fft]
-        res[i, 50:60] = fft_phase_wavelet[sorted_indices_wavelet_fft]
+            res[i, 30:40] = fft_amplitude_wavelet[sorted_indices_wavelet_fft]
+            res[i, 40:50] = positive_frequencies_wavelet[sorted_indices_wavelet_fft]
+            res[i, 50:60] = fft_phase_wavelet[sorted_indices_wavelet_fft]
 
         # Compute Envelope features
         envelope_fft_amplitude, positive_envelope_frequencies, envelope_fft_phase, instantaneous_frequency = compute_envelope_features(
@@ -277,7 +278,7 @@ def cal_window_max(array, window_size, sampling_rate, use_cudf=False, logger=def
 def add_win_fe_base_func(
     df, raw_features, timeframes, window_sizes,
     sampling_rate, round_to=4, fe_prefix="fe_WIN_FREQ",
-    use_cudf=False, logger=default_logger,
+    use_cudf=False, use_wavelet=True, logger=default_logger,
 ):
     new_columns = []
 
@@ -319,7 +320,7 @@ def add_win_fe_base_func(
             else:
                 array = df[raw_features].to_numpy()
 
-            res = cal_window_max(array, w_size, sampling_rate, use_cudf=use_cudf)
+            res = cal_window_max(array, w_size, sampling_rate, use_cudf=use_cudf, use_wavelet=use_wavelet)
 
             if use_cudf:
                 import cudf
@@ -370,7 +371,7 @@ def add_win_fe_base_func(
     return df
 
 
-def history_fe_WIN_features_FREQ(feature_config, use_cudf=False, logger=default_logger):
+def history_fe_WIN_features_FREQ(feature_config, use_cudf=False, use_wavelet=True, logger=default_logger):
     logger.info("- " * 25)
     logger.info("--> Start history_fe_WIN_FREQ_features function:")
     try:
@@ -427,6 +428,7 @@ def history_fe_WIN_features_FREQ(feature_config, use_cudf=False, logger=default_
                 round_to=round_to,
                 fe_prefix=fe_prefix,
                 use_cudf=use_cudf,
+                use_wavelet=use_wavelet,
             )
             logger.info("---> Exiting the main func ...")
 

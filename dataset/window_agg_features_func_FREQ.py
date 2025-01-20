@@ -26,7 +26,7 @@ def compute_fft_features(selected_slice, window_size, sampling_rate):
     return fft_amplitude
 
 def extract_fft_features(array, window_size, sampling_rate):
-    num_features_fft = 20
+    num_features_fft = 10
     total_features = num_features_fft #+ num_features_wavelet + num_features_envelope + num_features_cepstrum + num_features_stats
     
     res = np.zeros([array.shape[0], total_features])  # result array
@@ -39,8 +39,8 @@ def extract_fft_features(array, window_size, sampling_rate):
         fft_amplitude = compute_fft_features(selected_slice, window_size, sampling_rate)
 
         # Split the FFT amplitude into 10 quantiles and get the maximum value from each quantile
-        quantiles = np.percentile(fft_amplitude[1:], np.linspace(0, 100, 21)[1:])  # 10 quantiles excluding the DC component
-        for j in range(19):
+        quantiles = np.percentile(fft_amplitude[1:], np.linspace(0, 100, 11)[1:])  # 10 quantiles excluding the DC component
+        for j in range(9):
             # Find the maximum value in each quantile range
             mask = (fft_amplitude[1:] >= quantiles[j]) & (fft_amplitude[1:] < quantiles[j+1])
             if np.any(mask):
@@ -63,7 +63,7 @@ def add_win_fe_base_func(
             assert tf == 5, "!!! For now, this code only works with 5M timeframe; tf must be 5."
 
             # Define feature column names based on updated `cal_window_max` function
-            col_fft_magnitudes = [f"{fe_prefix}_fft_mag_W{w_size}_M{tf}_Top{i+1}" for i in range(20)]
+            col_fft_magnitudes = [f"{fe_prefix}_fft_mag_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
             # col_fft_frequencies = [f"{fe_prefix}_fft_freq_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
             # col_fft_phases = [f"{fe_prefix}_fft_phase_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
 
@@ -72,7 +72,7 @@ def add_win_fe_base_func(
             res = extract_fft_features(array, w_size, sampling_rate)
 
             # Append the calculated results to the new_columns list as DataFrames
-            new_columns.append(pd.DataFrame(res[:, 0:20].round(round_to), columns=col_fft_magnitudes, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 0:10].round(round_to), columns=col_fft_magnitudes, index=df.index))
             # new_columns.append(pd.DataFrame(res[:, 10:20].round(round_to), columns=col_fft_frequencies, index=df.index))
             # new_columns.append(pd.DataFrame(res[:, 20:30].round(round_to), columns=col_fft_phases, index=df.index))
 
@@ -90,7 +90,7 @@ def add_win_fe_base_func(
             assert tf == 5, "!!! For now, this code only works with 5M timeframe; tf must be 5."
 
             # Define feature column names based on updated `cal_window_max` function
-            col_fft_magnitudes = [f"{fe_prefix}_fft_MaxAmp_W{w_size}_M{tf}_Quantile_{i+1}" for i in range(20)]
+            col_fft_magnitudes = [f"{fe_prefix}_fft_MaxAmp_W{w_size}_M{tf}_Quantile_{i+1}" for i in range(10)]
 
             array = df[raw_features].to_numpy()
 
@@ -98,7 +98,7 @@ def add_win_fe_base_func(
             res = extract_fft_features(array, w_size, sampling_rate)
 
             # Append the calculated results to the new_columns list as DataFrames
-            new_columns.append(pd.DataFrame(res[:, 0:20].round(round_to), columns=col_fft_magnitudes, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 0:10].round(round_to), columns=col_fft_magnitudes, index=df.index))
 
 
     # Concatenate the original DataFrame with the newly calculated columns

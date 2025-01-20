@@ -46,7 +46,7 @@ def extract_fft_features(array, window_size, sampling_rate):
             if np.any(mask):
                 max_value_in_quantile = np.max(fft_amplitude[1:][mask])
                 quantile_median = np.median(fft_amplitude[1:][mask])
-                max_value_in_quantile = max_value_in_quantile ** (1/quantile_median*1000)
+                max_value_in_quantile = np.sqrt(max_value_in_quantile**2 + quantile_median**2)
             else:
                 max_value_in_quantile = 0
             res[i, j] = max_value_in_quantile
@@ -118,7 +118,7 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
         base_candle_folder_path = f"{root_path}/data/features/fe_FFD/" # address fe_FFD parquet
 
-        round_to = 7
+        round_to = 5
         sampling_rate = 2  # Assumed sampling rate in Hz; adjust if necessary
         
         for symbol in feature_config.keys():

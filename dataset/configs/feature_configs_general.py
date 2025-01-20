@@ -188,8 +188,8 @@ general_config = {
     },
     
     'fe_WIN_FREQ': {'timeframe': [5],
-        'window_size': [240 #, 480, 1440
-                        ],
+        'window_size': [#240 , 480,
+                         1440],
         
         'base_columns': ['CLOSE']
     },

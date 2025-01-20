@@ -40,7 +40,7 @@ def extract_fft_features(array, window_size, sampling_rate):
 
         # Split the FFT amplitude into 10 quantiles and get the maximum value from each quantile
         quantiles = np.percentile(fft_amplitude[1:], np.linspace(0, 100, 11)[1:])  # 10 quantiles excluding the DC component
-        for j in range(9):
+        for j in range(10):
             # Find the maximum value in each quantile range
             mask = (fft_amplitude[1:] >= quantiles[j]) & (fft_amplitude[1:] < quantiles[j+1])
             if np.any(mask):

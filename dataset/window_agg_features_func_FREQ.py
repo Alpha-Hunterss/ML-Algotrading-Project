@@ -46,7 +46,7 @@ def extract_fft_features(array, window_size, sampling_rate):
             if np.any(mask):
                 max_value_in_quantile = np.max(fft_amplitude[1:][mask])
                 quantile_median = np.median(fft_amplitude[1:][mask])
-                max_value_in_quantile = max_value_in_quantile ** (1/quantile_median)
+                max_value_in_quantile = max_value_in_quantile ** (1/quantile_median*100)
             else:
                 max_value_in_quantile = 0
             res[i, j] = max_value_in_quantile

@@ -20,11 +20,11 @@ def compute_fft_features(selected_slice, window_size, sampling_rate):
     fft_amplitude[0] = 0  # Remove the DC component by setting the first value to 0
     # frequencies = np.fft.fftfreq(len(fft_amplitude), d=1 / sampling_rate)
     # positive_frequencies = frequencies[:window_size // 2]
-    fft_phase = np.angle(fft_values)
-    return fft_amplitude, fft_phase
+    
+    return fft_amplitude
 
 def extract_fft_features(array, window_size, sampling_rate):
-    num_features_fft = 30
+    num_features_fft = 10
     total_features = num_features_fft #+ num_features_wavelet + num_features_envelope + num_features_cepstrum + num_features_stats
     
     res = np.zeros([array.shape[0], total_features])  # result array
@@ -34,7 +34,7 @@ def extract_fft_features(array, window_size, sampling_rate):
         selected_slice = apply_hanning_window(array[i - window_size + 1: i + 1], window_size)
 
         # Compute FFT features
-        fft_amplitude, fft_phase = compute_fft_features(selected_slice, window_size, sampling_rate)
+        fft_amplitude = compute_fft_features(selected_slice, window_size, sampling_rate)
 
         # Split the FFT amplitude into 10 quantiles and get the maximum value from each quantile
         quantiles = np.percentile(fft_amplitude[1:], np.linspace(0, 100, 11)[1:])  # 10 quantiles excluding the DC component
@@ -46,9 +46,6 @@ def extract_fft_features(array, window_size, sampling_rate):
             else:
                 max_value_in_quantile = 0
             res[i, j] = max_value_in_quantile
-
-        # Store corresponding frequencies and phases
-        res[i, 10:20] = fft_phase[:10]  # Top 10 frequencies
 
     return res
 
@@ -90,7 +87,6 @@ def add_win_fe_base_func(
 
             # Define feature column names based on updated `cal_window_max` function
             col_fft_magnitudes = [f"{fe_prefix}_fft_MaxAmp_W{w_size}_M{tf}_Quantile_{i+1}" for i in range(10)]
-            col_fft_phases = [f"{fe_prefix}_fft_phase_W{w_size}_M{tf}_{i+1}" for i in range(10)]
 
             array = df[raw_features].to_numpy()
 
@@ -99,7 +95,6 @@ def add_win_fe_base_func(
 
             # Append the calculated results to the new_columns list as DataFrames
             new_columns.append(pd.DataFrame(res[:, 0:10].round(round_to), columns=col_fft_magnitudes, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 10:20].round(round_to), columns=col_fft_phases, index=df.index))
 
 
     # Concatenate the original DataFrame with the newly calculated columns
@@ -119,12 +114,9 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
         base_candle_folder_path = f"{root_path}/data/features/fe_FFD/" # address fe_FFD parquet
 
-
-        
         round_to = 6
-        sampling_rate = 1  # Assumed sampling rate in Hz; adjust if necessary
+        sampling_rate = 2  # Assumed sampling rate in Hz; adjust if necessary
         
-
         for symbol in feature_config.keys():
             logger.info(f"---> Symbol: {symbol}")
             logger.info("= " * 40)

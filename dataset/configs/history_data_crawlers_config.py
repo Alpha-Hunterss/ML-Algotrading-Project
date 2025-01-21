@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 import os
 
-start_date_str = "2024/01/01"
+start_date_str = "2024/06/01"
 # stop_date_str = "2024/07/01"
 start_date = datetime.strptime(start_date_str, "%Y/%m/%d")
 # stop_date = datetime.strptime(stop_date_str, "%Y/%m/%d")

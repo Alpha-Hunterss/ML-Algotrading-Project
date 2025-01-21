@@ -78,6 +78,7 @@ def cal_window_max(array, window_size, sampling_rate):
         res[i, 0:10] = fft_amplitude[sorted_indices_fft]
         res[i, 10:20] = positive_frequencies[sorted_indices_fft]
         res[i, 20:30] = fft_phase[sorted_indices_fft]
+        print(f"FFT Done for slice {i}")
 
         # Compute Wavelet features
         fft_amplitude_wavelet, positive_frequencies_wavelet, fft_phase_wavelet = compute_wavelet_features(selected_slice, window_size, sampling_rate)
@@ -85,7 +86,7 @@ def cal_window_max(array, window_size, sampling_rate):
         res[i, 30:40] = fft_amplitude_wavelet[sorted_indices_wavelet_fft]
         res[i, 40:50] = positive_frequencies_wavelet[sorted_indices_wavelet_fft]
         res[i, 50:60] = fft_phase_wavelet[sorted_indices_wavelet_fft]
-
+        print(f"Wavelet Done for slice {i}")
         # Compute Envelope features
         envelope_fft_amplitude, positive_envelope_frequencies, envelope_fft_phase, instantaneous_frequency = compute_envelope_features(selected_slice, window_size, sampling_rate)
         sorted_indices_envelope = np.argsort(envelope_fft_amplitude[1:])[::-1][:10] + 1
@@ -94,13 +95,13 @@ def cal_window_max(array, window_size, sampling_rate):
         res[i, 70:80] = positive_envelope_frequencies[sorted_indices_envelope]
         res[i, 80:90] = envelope_fft_phase[sorted_indices_envelope]
         res[i, 90:100] = instantaneous_frequency[sorted_indices_if]
-
+        print(f"Envelope Done for slice {i}")
         # Compute Cepstrum features
         cepstrum = compute_cepstrum_features(selected_slice, window_size, sampling_rate)
         sorted_indices_cepstrum = np.argsort(np.abs(cepstrum[1:]))[::-1][:10] + 1
         res[i, 100:110] = cepstrum[sorted_indices_cepstrum]
         res[i, 110:120] = sorted_indices_cepstrum / sampling_rate
-
+        print(f"Cepstrum Done for slice {i}")
         # Compute statistical features
         res[i, 120] = np.mean(positive_frequencies[sorted_indices_fft])
         res[i, 121] = np.std(positive_frequencies[sorted_indices_fft])
@@ -108,7 +109,7 @@ def cal_window_max(array, window_size, sampling_rate):
         res[i, 123] = np.std(positive_frequencies_wavelet[sorted_indices_wavelet_fft])
         res[i, 124] = np.mean(positive_envelope_frequencies[sorted_indices_envelope])
         res[i, 125] = np.std(positive_envelope_frequencies[sorted_indices_envelope])
-
+        print(f"Stats Done for slice {i}")
     return res
 
 def add_win_fe_base_func(

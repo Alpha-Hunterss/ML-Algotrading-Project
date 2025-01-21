@@ -12,18 +12,17 @@ def apply_hanning_window(array, window_size):
     hanning_window = np.hanning(window_size)
     return array.flatten() * hanning_window
 
-def compute_fft_features(selected_slice, window_size, sampling_rate):
+def compute_fft_features(selected_slice, window_size):
     """Compute FFT features with DC component removed."""
     fft_values = np.fft.fft(selected_slice)
     fft_amplitude = np.abs(fft_values[:window_size // 2])
     fft_amplitude[1:] = 2 * fft_amplitude[1:]  # Double the amplitudes for positive frequencies
-    
     # fft_amplitude[0] = 0  # Remove the DC component by setting the first vaue to 0
     
-    # frequencies = np.fft.fftfreq(len(fft_amplitude), d=1 / sampling_rate)
-    # positive_frequencies = frequencies[:window_size // 2]
+    frequencies = np.fft.fftfreq(len(fft_amplitude))
+    positive_frequencies = frequencies[:window_size // 2]
     
-    return fft_amplitude
+    return fft_amplitude, positive_frequencies
 
 def extract_fft_features(array, window_size, sampling_rate):
     num_features_fft = 10
@@ -36,21 +35,20 @@ def extract_fft_features(array, window_size, sampling_rate):
         selected_slice = apply_hanning_window(array[i - window_size + 1: i + 1], window_size)
 
         # Compute FFT features
-        fft_amplitude = compute_fft_features(selected_slice, window_size, sampling_rate)
+        fft_amplitude, fft_freq = compute_fft_features(selected_slice, window_size)
 
-        # Split the FFT amplitude into 10 quantiles and get the maximum value from each quantile
-        quantiles = np.percentile(fft_amplitude[1:], np.linspace(0, 100, 11)[1:])  # 10 quantiles excluding the DC component
-        for j in range(9):
-            # Find the maximum value in each quantile range
-            mask = (fft_amplitude[1:] >= quantiles[j]) & (fft_amplitude[1:] < quantiles[j+1])
-            if np.any(mask):
-                max_value_in_quantile = np.max(fft_amplitude[1:][mask])
-                quantile_median = np.median(fft_amplitude[1:][mask])
-                max_value_in_quantile = np.sqrt(max_value_in_quantile**2 + quantile_median**2)
-            else:
-                max_value_in_quantile = 0
-            res[i, j] = max_value_in_quantile
+        # Exclude the DC component (index 0) and sort the amplitude-frequency pairs by amplitude
+        non_dc_amplitude = fft_amplitude[1:]
+        non_dc_frequencies = fft_freq[1:]
 
+        # Get the indices of the top 10 largest amplitudes
+        top_10_indices = np.argsort(non_dc_amplitude)[-10:]
+
+        # Multiply the amplitude and frequency of the top 10 components
+        top_10_magnitude_freq_product = non_dc_amplitude[top_10_indices] * non_dc_frequencies[top_10_indices]
+
+        # Store the result in res (since we want the magnitude-frequency product for each of the top 10 components)
+        res[i, :] = top_10_magnitude_freq_product
     return res
 
 def add_win_fe_base_func(
@@ -63,7 +61,7 @@ def add_win_fe_base_func(
             assert tf == 5, "!!! For now, this code only works with 5M timeframe; tf must be 5."
 
             # Define feature column names based on updated `cal_window_max` function
-            col_fft_magnitudes = [f"{fe_prefix}_fft_mag_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
+            col_fft_magnitudes = [f"{fe_prefix}_fft_AmpFreq_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
             # col_fft_frequencies = [f"{fe_prefix}_fft_freq_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
             # col_fft_phases = [f"{fe_prefix}_fft_phase_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
 

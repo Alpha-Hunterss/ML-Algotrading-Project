@@ -76,7 +76,7 @@ def cal_window_max(array, window_size, sampling_rate):
         res[i, 7] = skew_wavelet_Re
         res[i, 8] = kurt_wavelet_Re
         # Print progress every 1000 iterations
-        if i % 1000 == 0:
+        if i % 5000 == 0:
             print(f"Wavelet done on slices: {i}")
         
     return res

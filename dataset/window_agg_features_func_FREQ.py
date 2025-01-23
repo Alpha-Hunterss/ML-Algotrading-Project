@@ -52,6 +52,7 @@ def cal_window_max(array, window_size, sampling_rate):
         # kurt_wavelet_cD = kurtosis(cD_positive_magnitude, fisher=True)
         #
         coeffs = pywt.wavedec(selected_slice, "bior4.4", level=4)
+        coeffs = [coeff if coeff.ndim == 1 else coeff.flatten() for coeff in coeffs]  # Ensure 1D arrays
         coeff_array, coeff_slices = pywt.coeffs_to_array(coeffs)
         threshold = np.std(coeff_array) * np.sqrt(2 * np.log(len(coeff_array)))
         coeff_array[np.abs(coeff_array) < threshold] = 0

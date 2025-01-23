@@ -119,9 +119,9 @@ def add_win_fe_base_func(
             new_columns.append(pd.DataFrame(res[:, 3].round(round_to), columns=col_skew_wavelet_cD, index=df.index))
             new_columns.append(pd.DataFrame(res[:, 4].round(round_to), columns=col_kurt_wavelet_cA, index=df.index))
             new_columns.append(pd.DataFrame(res[:, 5].round(round_to), columns=col_kurt_wavelet_cD, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 0].round(round_to), columns=col_sortval_wavelet_Re, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 1].round(round_to), columns=col_skew_wavelet_Re, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 2].round(round_to), columns=col_kurt_wavelet_Re, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 6].round(round_to), columns=col_sortval_wavelet_Re, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 7].round(round_to), columns=col_skew_wavelet_Re, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 8].round(round_to), columns=col_kurt_wavelet_Re, index=df.index))
             
 
     df = pd.concat([df] + new_columns, axis=1)

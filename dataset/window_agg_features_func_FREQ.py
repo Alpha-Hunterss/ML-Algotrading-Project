@@ -24,7 +24,7 @@ def cal_window_max(array, window_size, sampling_rate):
     Compute various features (FFT, Wavelet, Envelope, Cepstrum) for different windows.
     """
     
-    num_features_wavelet = 3
+    num_features_wavelet = 9
     
     total_features =  num_features_wavelet 
     

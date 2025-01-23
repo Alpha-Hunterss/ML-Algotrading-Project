@@ -58,6 +58,7 @@ def cal_window_max(array, window_size, sampling_rate):
         coeff_array[np.abs(coeff_array) < threshold] = 0
 
         filtered_coeffs = pywt.array_to_coeffs(coeff_array, coeff_slices, output_format="wavedec")
+        filtered_coeffs = [coeff.reshape(slc) for coeff, slc in zip(filtered_coeffs, coeff_slices)]  # Reshape coefficients
         reconstructed_signal = pywt.waverec(filtered_coeffs, "bior4.4")
 
         Re_positive_magnitude, Re_positive_freqs = compute_fft(reconstructed_signal)

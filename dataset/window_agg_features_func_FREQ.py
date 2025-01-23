@@ -133,15 +133,16 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
     logger.info("--> Start history_fe_WIN_FREQ_features function:")
     try:
         fe_prefix = "fe_WIN_FREQ"
+        # features_folder_path = f"{root_path}/data/features/{fe_prefix}/"
+        # Path(features_folder_path).mkdir(parents=True, exist_ok=True)
+        # base_candle_folder_path = f"{root_path}/data/features/fe_FFD/" # address fe_FFD parquet
+
         features_folder_path = f"{root_path}/data/features/{fe_prefix}/"
         Path(features_folder_path).mkdir(parents=True, exist_ok=True)
-
-
-        base_candle_folder_path = f"{root_path}/data/features/fe_FFD/" # address fe_FFD parquet
-
-
+        base_candle_folder_path = f"{root_path}/data/realtime_candle/"
         
-        round_to = 6
+        
+        round_to = 5
         sampling_rate = 2  # Assumed sampling rate in Hz; adjust if necessary
         
 
@@ -151,19 +152,27 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
             # base_cols = feature_config[symbol][fe_prefix]["base_columns"]
             # raw_features = [rf"fe_FFD-M5_{base_col}.*" for base_col in base_cols]
+            # file_name = base_candle_folder_path + f"fe_FFD_{symbol}.parquet"
 
-            file_name = base_candle_folder_path + f"fe_FFD_{symbol}.parquet"
-
+            base_cols = feature_config[symbol][fe_prefix]["base_columns"]
+            raw_features = [f"M5_{base_col}" for base_col in base_cols]
+            needed_columns = ["_time", "minutesPassed", "symbol"] + raw_features
+            file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
+            
             # Read the data using Pandas
-            df = pd.read_parquet(file_name)
-            raw_features = df.columns[1]  # Get the name of the second column
-            needed_columns = ["_time", raw_features]
-            df = pd.read_parquet(file_name, columns=needed_columns).sort_values("_time")
-        
+            # df = pd.read_parquet(file_name)
+            # raw_features = df.columns[1]  # Get the name of the second column
+            # needed_columns = ["_time", raw_features]
 
-            # Ensure `_time` column is a datetime type
-            if not pd.api.types.is_datetime64_any_dtype(df["_time"]):
-                df["_time"] = pd.to_datetime(df["_time"], format="%Y-%m-%d %H:%M:%S")
+            df = pd.read_parquet(file_name, columns=needed_columns).sort_values("_time")
+            df["_time"] = df["_time"].dt.tz_localize(None)
+            df.drop(columns=["symbol"])
+            df.sort_values("_time", inplace=True)
+
+
+            # # Ensure `_time` column is a datetime type
+            # if not pd.api.types.is_datetime64_any_dtype(df["_time"]):
+            #     df["_time"] = pd.to_datetime(df["_time"], format="%Y-%m-%d %H:%M:%S")
 
             # Add the window-based features
             df = add_win_fe_base_func(
@@ -178,8 +187,9 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
             )
 
             # Clean up the DataFrame, dropping the raw features and adding symbol info
-            df = df.drop(columns=[raw_features])
+            # df = df.drop(columns=[raw_features])
 
+            df.drop(columns=raw_features + ["minutesPassed"], inplace=True)
             df["symbol"] = symbol
             df.to_parquet(f"{features_folder_path}/{fe_prefix}_{symbol}.parquet", index=False)
         logger.info("--> history_fe_WIN_FREQ_features run successfully.")
@@ -191,7 +201,6 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
 if __name__ == "__main__":
     from configs.feature_configs_general import generate_general_config
-
     config_general = generate_general_config()
     history_fe_WIN_features_FREQ(config_general)
     default_logger.info("--> history_fe_WIN_FREQ_features DONE.")

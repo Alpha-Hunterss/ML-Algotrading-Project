@@ -51,7 +51,7 @@ def cal_window_max(array, window_size, sampling_rate):
         # kurt_wavelet_cA = kurtosis(cA_positive_magnitude, fisher=True)
         # kurt_wavelet_cD = kurtosis(cD_positive_magnitude, fisher=True)
         #
-        coeffs = pywt.wavedec(selected_slice, "bior4.4", level=5)
+        coeffs = pywt.wavedec(selected_slice, "bior4.4", level=4)
         coeff_array, coeff_slices = pywt.coeffs_to_array(coeffs)
         threshold = np.std(coeff_array) * np.sqrt(2 * np.log(len(coeff_array)))
         coeff_array[np.abs(coeff_array) < threshold] = 0
@@ -156,7 +156,8 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
             base_cols = feature_config[symbol][fe_prefix]["base_columns"]
             raw_features = [f"M5_{base_col}" for base_col in base_cols]
-            needed_columns = ["_time", "minutesPassed", "symbol"] + raw_features
+            # needed_columns = ["_time", "minutesPassed", "symbol"] + raw_features
+            needed_columns = ["_time"] + raw_features
             file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
             
             # Read the data using Pandas
@@ -166,9 +167,10 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
             df = pd.read_parquet(file_name, columns=needed_columns).sort_values("_time")
             df["_time"] = df["_time"].dt.tz_localize(None)
-            df.drop(columns=["symbol"])
+            
             df.sort_values("_time", inplace=True)
-
+            df.drop(columns=["_time"])
+            df = df["M5_CLOSE"]
 
             # # Ensure `_time` column is a datetime type
             # if not pd.api.types.is_datetime64_any_dtype(df["_time"]):

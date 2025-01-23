@@ -24,7 +24,7 @@ def cal_window_max(array, window_size, sampling_rate):
     Compute various features (FFT, Wavelet, Envelope, Cepstrum) for different windows.
     """
     
-    num_features_wavelet = 9
+    num_features_wavelet = 6
     
     total_features =  num_features_wavelet 
     
@@ -48,8 +48,8 @@ def cal_window_max(array, window_size, sampling_rate):
         sortval_wavelet_cD = cD_positive_freqs[sortinx_wavelet_cD]
         skew_wavelet_cA = skew(cA_positive_magnitude)
         skew_wavelet_cD = skew(cD_positive_magnitude)
-        kurt_wavelet_cA = kurtosis(cA_positive_magnitude, fisher=True)
-        kurt_wavelet_cD = kurtosis(cD_positive_magnitude, fisher=True)
+        # kurt_wavelet_cA = kurtosis(cA_positive_magnitude, fisher=True)
+        # kurt_wavelet_cD = kurtosis(cD_positive_magnitude, fisher=True)
         #
         coeffs = pywt.wavedec(selected_slice, "bior4.4", level=5)
         coeff_array, coeff_slices = pywt.coeffs_to_array(coeffs)
@@ -65,7 +65,7 @@ def cal_window_max(array, window_size, sampling_rate):
         #
         sortval_wavelet_Re = Re_positive_freqs[sortinx_wavelet_Re]
         skew_wavelet_Re = skew(Re_positive_magnitude)
-        kurt_wavelet_Re = kurtosis(Re_positive_magnitude, fisher=True)
+        # kurt_wavelet_Re = kurtosis(Re_positive_magnitude, fisher=True)
         #
         res[i, 0] = sortval_wavelet_cA
         res[i, 1] = sortval_wavelet_cD
@@ -73,10 +73,10 @@ def cal_window_max(array, window_size, sampling_rate):
 
         res[i, 3] = skew_wavelet_cA
         res[i, 4] = skew_wavelet_cD
-        res[i, 5] = kurt_wavelet_cA
-        res[i, 6] = kurt_wavelet_cD
-        res[i, 7] = skew_wavelet_Re
-        res[i, 8] = kurt_wavelet_Re
+        # res[i, 5] = kurt_wavelet_cA
+        # res[i, 6] = kurt_wavelet_cD
+        res[i, 5] = skew_wavelet_Re
+        # res[i, 8] = kurt_wavelet_Re
         # Print progress every 1000 iterations
         if i % 5000 == 0:
             print(f"Wavelet done on slices: {i}")
@@ -100,12 +100,12 @@ def add_win_fe_base_func(
             col_skew_wavelet_cA = [f"{fe_prefix}_skew_cA_W{w_size}_M{tf}"]
             col_skew_wavelet_cD = [f"{fe_prefix}_skew_cD_W{w_size}_M{tf}" ]
             
-            col_kurt_wavelet_cA = [f"{fe_prefix}_kurt_cA_W{w_size}_M{tf}"]
-            col_kurt_wavelet_cD = [f"{fe_prefix}_kurt_cD_W{w_size}_M{tf}"]
+            # col_kurt_wavelet_cA = [f"{fe_prefix}_kurt_cA_W{w_size}_M{tf}"]
+            # col_kurt_wavelet_cD = [f"{fe_prefix}_kurt_cD_W{w_size}_M{tf}"]
 
             
             col_skew_wavelet_Re = [f"{fe_prefix}_skew_Re_W{w_size}_M{tf}"]
-            col_kurt_wavelet_Re = [f"{fe_prefix}_kurt_Re_W{w_size}_M{tf}"]
+            # col_kurt_wavelet_Re = [f"{fe_prefix}_kurt_Re_W{w_size}_M{tf}"]
 
 
             array = df[raw_features].to_numpy()
@@ -117,11 +117,11 @@ def add_win_fe_base_func(
             new_columns.append(pd.DataFrame(res[:, 1].round(round_to), columns=col_sortval_wavelet_cD, index=df.index))
             new_columns.append(pd.DataFrame(res[:, 2].round(round_to), columns=col_skew_wavelet_cA, index=df.index))
             new_columns.append(pd.DataFrame(res[:, 3].round(round_to), columns=col_skew_wavelet_cD, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 4].round(round_to), columns=col_kurt_wavelet_cA, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 5].round(round_to), columns=col_kurt_wavelet_cD, index=df.index))
+            # new_columns.append(pd.DataFrame(res[:, 4].round(round_to), columns=col_kurt_wavelet_cA, index=df.index))
+            # new_columns.append(pd.DataFrame(res[:, 5].round(round_to), columns=col_kurt_wavelet_cD, index=df.index))
             new_columns.append(pd.DataFrame(res[:, 6].round(round_to), columns=col_sortval_wavelet_Re, index=df.index))
             new_columns.append(pd.DataFrame(res[:, 7].round(round_to), columns=col_skew_wavelet_Re, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 8].round(round_to), columns=col_kurt_wavelet_Re, index=df.index))
+            # new_columns.append(pd.DataFrame(res[:, 8].round(round_to), columns=col_kurt_wavelet_Re, index=df.index))
             
 
     df = pd.concat([df] + new_columns, axis=1)

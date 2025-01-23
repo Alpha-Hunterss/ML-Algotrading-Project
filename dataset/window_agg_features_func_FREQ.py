@@ -52,13 +52,11 @@ def cal_window_max(array, window_size, sampling_rate):
         # kurt_wavelet_cD = kurtosis(cD_positive_magnitude, fisher=True)
         #
         coeffs = pywt.wavedec(selected_slice, "bior4.4", level=4)
-        coeffs = [coeff if coeff.ndim == 1 else coeff.flatten() for coeff in coeffs]  # Ensure 1D arrays
         coeff_array, coeff_slices = pywt.coeffs_to_array(coeffs)
         threshold = np.std(coeff_array) * np.sqrt(2 * np.log(len(coeff_array)))
         coeff_array[np.abs(coeff_array) < threshold] = 0
 
         filtered_coeffs = pywt.array_to_coeffs(coeff_array, coeff_slices, output_format="wavedec")
-        filtered_coeffs = [coeff.reshape(slc.shape) for coeff, slc in zip(filtered_coeffs, coeff_slices)]  # Reshape coefficients
         reconstructed_signal = pywt.waverec(filtered_coeffs, "bior4.4")
 
         Re_positive_magnitude, Re_positive_freqs = compute_fft(reconstructed_signal)
@@ -157,7 +155,8 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
             # file_name = base_candle_folder_path + f"fe_FFD_{symbol}.parquet"
 
             base_cols = feature_config[symbol][fe_prefix]["base_columns"]
-            raw_features = [f"M5_{base_col}" for base_col in base_cols]
+            #raw_features = [f"M5_{base_col}" for base_col in base_cols]
+            raw_features = ["M5_CLOSE"]
             needed_columns = ["_time", "minutesPassed", "symbol"] + raw_features
             file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
             

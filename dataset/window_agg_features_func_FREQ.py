@@ -156,8 +156,7 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
             base_cols = feature_config[symbol][fe_prefix]["base_columns"]
             raw_features = [f"M5_{base_col}" for base_col in base_cols]
-            # needed_columns = ["_time", "minutesPassed", "symbol"] + raw_features
-            needed_columns = ["_time"] + raw_features
+            needed_columns = ["_time", "minutesPassed", "symbol"] + raw_features
             file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
             
             # Read the data using Pandas
@@ -165,12 +164,13 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
             # raw_features = df.columns[1]  # Get the name of the second column
             # needed_columns = ["_time", raw_features]
 
-            df = pd.read_parquet(file_name, columns=needed_columns).sort_values("_time")
-            df["_time"] = df["_time"].dt.tz_localize(None)
-            
+            df = pd.read_parquet(file_name, columns=needed_columns)
             df.sort_values("_time", inplace=True)
-            df.drop(columns=["_time"])
-            df = df["M5_CLOSE"]
+
+            df["_time"] = df["_time"].dt.tz_localize(None)
+            df.drop(columns=["symbol"])
+            df.sort_values("_time", inplace=True)
+        
 
             # # Ensure `_time` column is a datetime type
             # if not pd.api.types.is_datetime64_any_dtype(df["_time"]):

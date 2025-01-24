@@ -726,6 +726,8 @@ def do_backtest(
                 "pip_diff",
                 "net_profit",
                 "balance",
+                "volume",
+                "confidence_levels"
             ]
         ],
     )

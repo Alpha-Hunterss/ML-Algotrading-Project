@@ -227,7 +227,7 @@ def main(
         non_feature_columns = ["target", "pred_as_val", "pred_val_proba", "pred_as_test", "pred_test_proba", "K"]
         swap_rate = symbols_dict[target_symbol]["swap_rate"][trade_mode]
         the_config["swap_rate"] = symbols_dict[target_symbol]["swap_rate"]
-        input_cols_and_type, input_cols, evals, val_predictions, test_predictions, general_backtest_report, importance_df = quant_CV(
+        input_cols_and_type, input_cols, evals, val_predictions, test_predictions, general_backtest_report, importance_df, general_backtest_df = quant_CV(
             df_all,
             folds,
             model=clf,
@@ -337,8 +337,8 @@ def main(
         # ______________________________Manual Mode: Return Experiment Tracker Object_________________________
             artifact_name = "manual" + target_col
             gc.collect()
-            return exp_obj, exp_metadata, artifact_name
-        
+            return exp_obj, exp_metadata, artifact_name, general_backtest_df
+
     except Exception as e:
         print(e)
         traceback.print_exc()

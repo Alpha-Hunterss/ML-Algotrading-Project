@@ -1353,11 +1353,11 @@ def cal_supertrend_func(
         closes = eager_df[features[0]].to_numpy()
         lower_bands = eager_df[lower_band_column_names[idx]].to_numpy()
         upper_bands = eager_df[upper_band_column_names[idx]].to_numpy()
-        supertrend = np.zeros(len(df))
-        trend_direction = np.zeros(len(df))
+        supertrend = np.zeros(len(eager_df))
+        trend_direction = np.zeros(len(eager_df))
         trend_changed = False
 
-        for i in range(len(df)):
+        for i in range(len(eager_df)):
             if i == 0:
                 # First row initialization
                 supertrend[i] = upper_bands[i]

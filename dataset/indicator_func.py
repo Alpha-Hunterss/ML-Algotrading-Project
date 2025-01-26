@@ -1303,8 +1303,6 @@ def cal_supertrend_func(
 
     df = df.sort("_time")
 
-    print(f"The df schema (step 0) is: {df.schema}")
-
     df = df.with_columns([
         pl.max_horizontal(
             (pl.col(features[1]) - pl.col(features[2])).abs(),
@@ -1313,13 +1311,9 @@ def cal_supertrend_func(
         ).alias("true_range")
     ]).lazy()
 
-    print(f"The df schema (step 1) is: {df.schema}")
-
     df = df.with_columns([
         pl.col("true_range").rolling_mean(window_size=w).alias("atr")
     ]).lazy()
-
-    print(f"The df schema (step 2) is: {df.schema}")
 
     upper_band_column_names = []
     lower_band_column_names = []
@@ -1339,14 +1333,10 @@ def cal_supertrend_func(
 
         column_name = f"{prefix}_trend_direction_tf{time_frame}_w{w}_mp{multiplier}"
 
-        print(f"The df schema (step 3-{idx}) is: {df.schema}")
-
         # Initialize Supertrend columns
         df = df.with_columns([
             pl.lit(0).alias(column_name)
         ]).lazy()
-
-        print(f"The df schema (step 4-{idx}) is: {df.schema}")
 
         # Iterate over rows to calculate Supertrend
         eager_df = df.collect()

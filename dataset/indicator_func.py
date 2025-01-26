@@ -1317,6 +1317,8 @@ def cal_supertrend_func(
 
     # Calculate basic upper and lower bands
     df = df.with_columns([
+        pl.col(features[1]).cast(pl.Float64),
+        pl.col(features[2]).cast(pl.Float64),
         ((pl.col(features[1]) + pl.col(features[2])) / 2 + (multiplier * pl.col("atr"))).alias("upper_band"),
         ((pl.col(features[1]) + pl.col(features[2])) / 2 - (multiplier * pl.col("atr"))).alias("lower_band"),
     ])
@@ -1366,7 +1368,7 @@ def cal_supertrend_func(
 
     df = df.drop(["upper_band", "lower_band", "true_range", "atr"] + input_features)
 
-    return df.collect()
+    return df
 
 
 def cal_RSTD_func(
@@ -1554,8 +1556,8 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_RSTD": {"func": cal_RSTD_func},
             "fe_leg": {"func": cal_leg_base_func},
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
-            "fe_FFD": {"func": cal_FFD_func},
             "fe_supertrend": {"func": cal_supertrend_func},
+            "fe_FFD": {"func": cal_FFD_func},
         }
 
         for symbol in list(feature_config.keys()):

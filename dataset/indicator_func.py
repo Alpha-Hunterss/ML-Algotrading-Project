@@ -1315,8 +1315,6 @@ def cal_supertrend_func(
         pl.col("true_range").rolling_mean(window_size=w).alias("atr")
     ]).lazy()
 
-    print(f"The dataframe's schema: {df.schema}")
-
     # Calculate basic upper and lower bands
     df = df.with_columns([
         (
@@ -1327,28 +1325,32 @@ def cal_supertrend_func(
         ).alias("lower_band"),
     ]).lazy()
 
+    column_name = f"{prefix}_trend_direction_tf{time_frame}_w{w}"
+
     # Initialize Supertrend columns
     df = df.with_columns([
-        pl.lit(0).alias(f"{prefix}_trend_direction_tf{time_frame}_w{w}")
+        pl.lit(0).alias(column_name)
     ]).lazy()
 
     # Iterate over rows to calculate Supertrend
-    df_pandas = df.to_pandas()
+    closes = df[features[0]].to_list()
+    lower_bands = df["lower_band"].to_list()
+    upper_bands = df["upper_band"].to_list()
     supertrend = []
     trend_direction = []
     trend_changed = False
 
-    for i in range(len(df_pandas)):
+    for i in range(len(df)):
         if i == 0:
             # First row initialization
-            supertrend.append(df_pandas["upper_band"].iloc[i])
+            supertrend.append(upper_bands[i])
             trend_direction.append(1)
         else:
-            if df_pandas[features[0]].iloc[i] > supertrend[-1]:
+            if closes[i] > supertrend[-1]:
                 if trend_direction[-1] == 0:
                     trend_changed = True
                 trend_direction.append(1)
-            elif df_pandas[features[0]].iloc[i] < supertrend[-1]:
+            elif closes[i] < supertrend[-1]:
                 if trend_direction[-1] == 1:
                     trend_changed = True
                 trend_direction.append(0)
@@ -1357,19 +1359,17 @@ def cal_supertrend_func(
 
             if trend_changed:
                 if trend_direction[-1] == 1:
-                    supertrend.append(df_pandas["lower_band"].iloc[i])
+                    supertrend.append(lower_bands[i])
                 else:
-                    supertrend.append(df_pandas["upper_band"].iloc[i])
+                    supertrend.append(upper_bands[i])
                 trend_changed = False
             else:
                 if trend_direction[-1] == 1:
-                    supertrend.append(max(df_pandas["lower_band"].iloc[i], supertrend[-1]))
+                    supertrend.append(max(lower_bands[i], supertrend[-1]))
                 else:
-                    supertrend.append(min(df_pandas["upper_band"].iloc[i], supertrend[-1]))
+                    supertrend.append(min(upper_bands[i], supertrend[-1]))
 
-    df_pandas[f"{prefix}_trend_direction_tf{time_frame}_w{w}"] = trend_direction
-    df = pl.from_pandas(df_pandas)
-
+    df = df.with_columns(pl.Series(column_name, trend_direction)).lazy()
     df = df.drop(["upper_band", "lower_band", "true_range", "atr"] + input_features)
 
     return df.collect()

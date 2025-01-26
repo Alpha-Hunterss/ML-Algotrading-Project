@@ -1324,10 +1324,10 @@ def cal_supertrend_func(
     # Calculate basic upper and lower bands
     df = df.with_columns([
         (
-            (pl.col(features[1]) + pl.col(features[2])) / 2 + (pl.lit(multiplier).cast(pl.Float64) * pl.col("atr"))
+            (pl.col(features[1]) + pl.col(features[2])) / 2 + (multiplier * pl.col("atr"))
         ).alias("upper_band"),
         (
-            (pl.col(features[1]) + pl.col(features[2])) / 2 - (pl.lit(multiplier).cast(pl.Float64) * pl.col("atr"))
+            (pl.col(features[1]) + pl.col(features[2])) / 2 - (multiplier * pl.col("atr"))
         ).alias("lower_band"),
     ]).lazy()
 

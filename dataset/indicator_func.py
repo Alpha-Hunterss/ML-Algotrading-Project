@@ -975,12 +975,14 @@ def add_candle_base_indicators_polars(
     time_frames = opts["candle_timeframe"]
     window_sizes = opts["window_size"]
 
-    if prefix=='fe_GMA':
+    if prefix == 'fe_GMA':
         devs = opts['feature_config']['devs']
-    elif prefix=='fe_FFD':
+    elif prefix == 'fe_FFD':
         n_splits = opts['feature_config']['n_splits']
-    elif prefix=='fe_OL':
+    elif prefix == 'fe_OL':
         w_sma = opts['feature_config']['window_size_SMA']
+    elif prefix == 'fe_supertrend':
+        multiplier = opts['feature_config']['multiplier']
 
     if prefix == "fe_leg":
         exponents = opts["exponents"]
@@ -1028,7 +1030,7 @@ def add_candle_base_indicators_polars(
                 other_tf_features = [f for f in features if not pattern.match(f)]
                 df = df.drop(other_tf_features + ["minutesPassed"])
 
-                if prefix=='fe_GMA':
+                if prefix == 'fe_GMA':
                     df = base_func(
                         df=df,
                         w=w,
@@ -1038,7 +1040,7 @@ def add_candle_base_indicators_polars(
                         prefix=prefix,
                         devs=devs,
                     )
-                elif prefix=='fe_FFD':
+                elif prefix == 'fe_FFD':
                     df = base_func(
                         df=df,
                         time_frame=time_frame,
@@ -1046,7 +1048,7 @@ def add_candle_base_indicators_polars(
                         prefix=prefix,
                         n_splits=n_splits,
                     )
-                elif prefix=='fe_OL':
+                elif prefix == 'fe_OL':
                     df = base_func(
                         df=df,
                         w=w,
@@ -1054,6 +1056,15 @@ def add_candle_base_indicators_polars(
                         time_frame=time_frame,
                         features=list(set(features) - set(other_tf_features)),
                         pip_size=pip_size,
+                        prefix=prefix,
+                    )
+                elif prefix == 'fe_supertrend':
+                    df = base_func(
+                        df=df,
+                        w=w,
+                        time_frame=time_frame,
+                        features=list(set(features) - set(other_tf_features)),
+                        multiplier=multiplier,
                         prefix=prefix,
                     )
                 else:
@@ -1266,6 +1277,98 @@ def cal_ATR_func(
     return df.collect()
 
 
+def cal_supertrend_func(
+    df: pl.DataFrame,
+    w: int,
+    time_frame: int,
+    features: List[str],
+    multiplier: int,
+    prefix: str = "fe_supertrend",
+) -> pl.DataFrame:
+    assert (
+        len(features) == 3
+    ), f"Only 3 feature should have been passed but {len(features)} received!"
+    features = sorted(features)
+    input_features = [
+        f'M{time_frame}_CLOSE',
+        f'M{time_frame}_HIGH',
+        f'M{time_frame}_LOW'
+    ]
+    if features != input_features:
+        print('Input features are wrong')
+        return
+    # features[0] == f'M{time_frame}_CLOSE'
+    # features[1] == f'M{time_frame}_HIGH'
+    # features[2] == f'M{time_frame}_LOW'
+
+    df = df.sort("_time")
+
+    df = df.with_columns([
+        pl.max_horizontal(
+            (pl.col(features[1]) - pl.col(features[2])).abs(),
+            (pl.col(features[1]) - pl.col(features[0]).shift(1)).abs(),
+            (pl.col(features[2]) - pl.col(features[0]).shift(1)).abs(),
+        ).alias("true_range")
+    ])
+
+    df = df.with_columns([
+        pl.col("true_range").rolling_mean(window_size=w).alias("atr")
+    ])
+
+    # Calculate basic upper and lower bands
+    df = df.with_columns([
+        ((pl.col(features[1]) + pl.col(features[2])) / 2 + (multiplier * pl.col("atr"))).alias("upper_band"),
+        ((pl.col(features[1]) + pl.col(features[2])) / 2 - (multiplier * pl.col("atr"))).alias("lower_band"),
+    ])
+
+    # Initialize Supertrend columns
+    df = df.with_columns([
+        pl.lit(0).alias(f"{prefix}_trend_direction_tf{time_frame}_w{w}")
+    ])
+
+    # Iterate over rows to calculate Supertrend
+    df_pandas = df.to_pandas()
+    supertrend = []
+    trend_direction = []
+    trend_changed = False
+
+    for i in range(len(df_pandas)):
+        if i == 0:
+            # First row initialization
+            supertrend.append(df_pandas["upper_band"].iloc[i])
+            trend_direction.append(1)
+        else:
+            if df_pandas[features[0]].iloc[i] > supertrend[-1]:
+                if trend_direction[-1] == 0:
+                    trend_changed = True
+                trend_direction.append(1)
+            elif df_pandas[features[0]].iloc[i] < supertrend[-1]:
+                if trend_direction[-1] == 1:
+                    trend_changed = True
+                trend_direction.append(0)
+            else:
+                trend_direction.append(trend_direction[-1])
+
+            if trend_changed:
+                if trend_direction[-1] == 1:
+                    supertrend.append(df_pandas["lower_band"].iloc[i])
+                else:
+                    supertrend.append(df_pandas["upper_band"].iloc[i])
+                trend_changed = False
+            else:
+                if trend_direction[-1] == 1:
+                    supertrend.append(max(df_pandas["lower_band"].iloc[i], supertrend[-1]))
+                else:
+                    supertrend.append(min(df_pandas["upper_band"].iloc[i], supertrend[-1]))
+
+    df_pandas[f"{prefix}_trend_direction_tf{time_frame}_w{w}"] = trend_direction
+    df = pl.from_pandas(df_pandas)
+
+    df = df.drop(["upper_band", "lower_band", "true_range", "atr"] + input_features)
+
+    return df.collect()
+
+
 def cal_RSTD_func(
     df: pl.DataFrame,
     w: int,
@@ -1452,6 +1555,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_leg": {"func": cal_leg_base_func},
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
             "fe_FFD": {"func": cal_FFD_func},
+            "fe_supertrend": {"func": cal_supertrend_func},
         }
 
         for symbol in list(feature_config.keys()):

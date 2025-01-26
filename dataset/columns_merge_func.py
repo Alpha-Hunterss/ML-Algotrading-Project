@@ -36,6 +36,7 @@ prefixes = [
     "fe_SMA",
     "fe_ATR",
     "fe_leg",
+    "fe_supertrend",
     "fe_cndl_shape_n_cntxt",
     "fe_market_close",
 ]
@@ -132,6 +133,7 @@ def history_columns_merge(feature_config, logger=default_logger, general_mode=Fa
         "fe_cndl",
         'fe_cndl_shape_n_cntxt',
         'fe_leg',
+        'fe_supertrend',
         "fe_RSI",
         "fe_RSTD",
         "fe_ATR",

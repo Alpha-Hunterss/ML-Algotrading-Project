@@ -156,6 +156,14 @@ general_config = {
     },
 
 
+    'fe_supertrend': {
+        'timeframe': [5, 15],
+        'window_size': [14],
+        'multiplier': [1, 3],
+        'base_columns': ['HIGH', 'CLOSE', 'LOW']
+    },
+
+
     'fe_leg': {
         'base_columns': ['CLOSE']
     },

@@ -1282,7 +1282,7 @@ def cal_supertrend_func(
     w: int,
     time_frame: int,
     features: List[str],
-    multiplier: int,
+    multiplier: float,
     prefix: str = "fe_supertrend",
 ) -> pl.DataFrame:
     assert (

@@ -1311,13 +1311,13 @@ def cal_supertrend_func(
             (pl.col(features[1]) - pl.col(features[0]).shift(1)).abs(),
             (pl.col(features[2]) - pl.col(features[0]).shift(1)).abs(),
         ).alias("true_range").cast(pl.Float64)
-    ]).lazy()
+    ])
 
     print(f"The df schema (step 1) is: {df.schema}")
 
     df = df.with_columns([
         pl.col("true_range").rolling_mean(window_size=w, center=False).fill_null(0.0).alias("atr").cast(pl.Float64)
-    ]).lazy()
+    ])
 
     print(f"The df schema (step 2) is: {df.schema}")
 
@@ -1329,7 +1329,7 @@ def cal_supertrend_func(
         (
             (pl.col(features[1]) + pl.col(features[2])) / 2 - (multiplier * pl.col("atr"))
         ).alias("lower_band"),
-    ]).lazy()
+    ])
 
     column_name = f"{prefix}_trend_direction_tf{time_frame}_w{w}"
 
@@ -1338,15 +1338,14 @@ def cal_supertrend_func(
     # Initialize Supertrend columns
     df = df.with_columns([
         pl.lit(0).alias(column_name)
-    ]).lazy()
+    ])
 
     print(f"The df schema (step 4) is: {df.schema}")
 
     # Iterate over rows to calculate Supertrend
-    eager_df = df.collect()
-    closes = eager_df[features[0]].to_numpy()
-    lower_bands = eager_df["lower_band"].to_numpy()
-    upper_bands = eager_df["upper_band"].to_numpy()
+    closes = df[features[0]].to_numpy()
+    lower_bands = df["lower_band"].to_numpy()
+    upper_bands = df["upper_band"].to_numpy()
     supertrend = np.zeros(len(df))
     trend_direction = np.zeros(len(df))
     trend_changed = False
@@ -1382,10 +1381,10 @@ def cal_supertrend_func(
 
     df = df.with_columns([
         pl.Series(name=column_name, values=trend_direction)
-    ]).lazy()
+    ])
     df = df.drop(["upper_band", "lower_band", "true_range", "atr"] + input_features)
 
-    return df.collect()
+    return df
 
 
 def cal_RSTD_func(

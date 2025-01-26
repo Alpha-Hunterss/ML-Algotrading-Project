@@ -1308,21 +1308,21 @@ def cal_supertrend_func(
             (pl.col(features[1]) - pl.col(features[2])).abs(),
             (pl.col(features[1]) - pl.col(features[0]).shift(1)).abs(),
             (pl.col(features[2]) - pl.col(features[0]).shift(1)).abs(),
-        ).alias("true_range")
+        ).alias("true_range").cast(pl.Float64)
     ]).lazy()
 
     df = df.with_columns([
-        pl.col("true_range").rolling_mean(window_size=w).alias("atr")
+        pl.col("true_range").rolling_mean(window_size=w).alias("atr").cast(pl.Float64)
     ]).lazy()
 
     # Calculate basic upper and lower bands
     df = df.with_columns([
         (
             (pl.col(features[1]) + pl.col(features[2])) / 2 + (multiplier * pl.col("atr"))
-        ).alias("upper_band"),
+        ).alias("upper_band").cast(pl.Float64),
         (
             (pl.col(features[1]) + pl.col(features[2])) / 2 - (multiplier * pl.col("atr"))
-        ).alias("lower_band"),
+        ).alias("lower_band").cast(pl.Float64),
     ]).lazy()
 
     column_name = f"{prefix}_trend_direction_tf{time_frame}_w{w}"

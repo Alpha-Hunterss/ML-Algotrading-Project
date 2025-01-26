@@ -1316,7 +1316,7 @@ def cal_supertrend_func(
     print(f"The df schema (step 1) is: {df.schema}")
 
     df = df.with_columns([
-        pl.col("true_range").rolling_mean(window_size=w).alias("atr").cast(pl.Float64)
+        pl.col("true_range").rolling_mean(window_size=w, center=False).fill_null(0.0).alias("atr").cast(pl.Float64)
     ]).lazy()
 
     print(f"The df schema (step 2) is: {df.schema}")

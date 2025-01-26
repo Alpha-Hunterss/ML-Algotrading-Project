@@ -1301,46 +1301,39 @@ def cal_supertrend_func(
     # features[1] == f'M{time_frame}_HIGH'
     # features[2] == f'M{time_frame}_LOW'
 
-    df = df.sort("_time")
+    df = df.to_pandas()
+    df = df.sort_values(by="_time")
 
-    print(f"The df schema (step 0) is: {df.schema}")
+    print(f"The df columns (step 0) is: {df.columns}")
 
-    df = df.with_columns([
-        pl.max_horizontal(
-            (pl.col(features[1]) - pl.col(features[2])).abs(),
-            (pl.col(features[1]) - pl.col(features[0]).shift(1)).abs(),
-            (pl.col(features[2]) - pl.col(features[0]).shift(1)).abs(),
-        ).alias("true_range")
-    ])
+    # Calculate true range
+    df["true_range"] = np.maximum(
+        df[features[1]] - df[features[2]],
+        np.maximum(
+            (df[features[1]] - df[features[0]].shift(1)).abs(),
+            (df[features[2]] - df[features[0]].shift(1)).abs(),
+        ),
+    )
 
-    print(f"The df schema (step 1) is: {df.schema}")
+    print(f"The df columns (step 1) is: {df.columns}")
 
-    df = df.with_columns([
-        pl.col("true_range").rolling_mean(window_size=w).alias("atr")
-    ])
+    # Calculate average true range (ATR)
+    df["atr"] = df["true_range"].rolling(window=w).mean()
 
-    print(f"The df schema (step 2) is: {df.schema}")
+    print(f"The df columns (step 2) is: {df.columns}")
 
     # Calculate basic upper and lower bands
-    df = df.with_columns([
-        (
-            (pl.col(features[1]) + pl.col(features[2])) / 2 + (multiplier * pl.col("atr"))
-        ).alias("upper_band"),
-        (
-            (pl.col(features[1]) + pl.col(features[2])) / 2 - (multiplier * pl.col("atr"))
-        ).alias("lower_band"),
-    ])
+    df["upper_band"] = (df[features[1]] + df[features[2]]) / 2 + (multiplier * df["atr"])
+    df["lower_band"] = (df[features[1]] + df[features[2]]) / 2 - (multiplier * df["atr"])
 
     column_name = f"{prefix}_trend_direction_tf{time_frame}_w{w}"
 
-    print(f"The df schema (step 3) is: {df.schema}")
+    print(f"The df columns (step 3) is: {df.columns}")
 
-    # Initialize Supertrend columns
-    df = df.with_columns([
-        pl.lit(0).alias(column_name)
-    ])
+    # Initialize Supertrend trend direction columns
+    df[column_name] = 0
 
-    print(f"The df schema (step 4) is: {df.schema}")
+    print(f"The df columns (step 4) is: {df.columns}")
 
     # Iterate over rows to calculate Supertrend
     closes = df[features[0]].to_numpy()
@@ -1379,12 +1372,10 @@ def cal_supertrend_func(
                 else:
                     supertrend[i] = min(upper_bands[i], supertrend[i-1])
 
-    df = df.with_columns([
-        pl.Series(name=column_name, values=trend_direction)
-    ])
-    df = df.drop(["upper_band", "lower_band", "true_range", "atr"] + input_features)
+    df[column_name] = trend_direction
+    df.drop(["upper_band", "lower_band", "true_range", "atr"] + input_features, inplace=True)
 
-    return df
+    return pl.from_pandas(df)
 
 
 def cal_RSTD_func(

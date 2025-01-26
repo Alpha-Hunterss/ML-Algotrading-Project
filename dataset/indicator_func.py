@@ -982,7 +982,7 @@ def add_candle_base_indicators_polars(
     elif prefix == 'fe_OL':
         w_sma = opts['feature_config']['window_size_SMA']
     elif prefix == 'fe_supertrend':
-        multiplier = opts['feature_config']['multiplier']
+        multipliers = opts['feature_config']['multipliers']
 
     if prefix == "fe_leg":
         exponents = opts["exponents"]
@@ -1064,7 +1064,7 @@ def add_candle_base_indicators_polars(
                         w=w,
                         time_frame=time_frame,
                         features=list(set(features) - set(other_tf_features)),
-                        multiplier=multiplier,
+                        multipliers=multipliers,
                         prefix=prefix,
                     )
                 else:
@@ -1282,7 +1282,7 @@ def cal_supertrend_func(
     w: int,
     time_frame: int,
     features: List[str],
-    multiplier: float,
+    multipliers: list[float],
     prefix: str = "fe_supertrend",
 ) -> pl.DataFrame:
     assert (
@@ -1301,81 +1301,98 @@ def cal_supertrend_func(
     # features[1] == f'M{time_frame}_HIGH'
     # features[2] == f'M{time_frame}_LOW'
 
-    df = df.to_pandas()
-    df = df.sort_values(by="_time")
+    df = df.sort("_time")
 
-    print(f"The df columns (step 0) is: {df.columns}")
+    print(f"The df schema (step 0) is: {df.schema}")
 
-    # Calculate true range
-    df["true_range"] = np.maximum(
-        df[features[1]] - df[features[2]],
-        np.maximum(
-            (df[features[1]] - df[features[0]].shift(1)).abs(),
-            (df[features[2]] - df[features[0]].shift(1)).abs(),
-        ),
-    )
+    df = df.with_columns([
+        pl.max_horizontal(
+            (pl.col(features[1]) - pl.col(features[2])).abs(),
+            (pl.col(features[1]) - pl.col(features[0]).shift(1)).abs(),
+            (pl.col(features[2]) - pl.col(features[0]).shift(1)).abs(),
+        ).alias("true_range")
+    ]).lazy()
 
-    print(f"The df columns (step 1) is: {df.columns}")
+    print(f"The df schema (step 1) is: {df.schema}")
 
-    # Calculate average true range (ATR)
-    df["atr"] = df["true_range"].rolling(window=w).mean()
+    df = df.with_columns([
+        pl.col("true_range").rolling_mean(window_size=w).alias("atr")
+    ]).lazy()
 
-    print(f"The df columns (step 2) is: {df.columns}")
+    print(f"The df schema (step 2) is: {df.schema}")
 
-    # Calculate basic upper and lower bands
-    df["upper_band"] = (df[features[1]] + df[features[2]]) / 2 + (multiplier * df["atr"])
-    df["lower_band"] = (df[features[1]] + df[features[2]]) / 2 - (multiplier * df["atr"])
+    upper_band_column_names = []
+    lower_band_column_names = []
 
-    column_name = f"{prefix}_trend_direction_tf{time_frame}_w{w}"
+    for idx, multiplier in enumerate(multipliers):
+        upper_band_column_names.append(f"upper_band_mp{multiplier}")
+        lower_band_column_names.append(f"lower_band_mp{multiplier}")
+        # Calculate basic upper and lower bands
+        df = df.with_columns([
+            (
+                (pl.col(features[1]) + pl.col(features[2])) / 2 + (multiplier * pl.col("atr"))
+            ).alias(upper_band_column_names[idx]),
+            (
+                (pl.col(features[1]) + pl.col(features[2])) / 2 - (multiplier * pl.col("atr"))
+            ).alias(lower_band_column_names[idx]),
+        ]).lazy()
 
-    print(f"The df columns (step 3) is: {df.columns}")
+        column_name = f"{prefix}_trend_direction_tf{time_frame}_w{w}_mp{multiplier}"
 
-    # Initialize Supertrend trend direction columns
-    df[column_name] = 0
+        print(f"The df schema (step 3-{idx}) is: {df.schema}")
 
-    print(f"The df columns (step 4) is: {df.columns}")
+        # Initialize Supertrend columns
+        df = df.with_columns([
+            pl.lit(0).alias(column_name)
+        ]).lazy()
 
-    # Iterate over rows to calculate Supertrend
-    closes = df[features[0]].to_numpy()
-    lower_bands = df["lower_band"].to_numpy()
-    upper_bands = df["upper_band"].to_numpy()
-    supertrend = np.zeros(len(df))
-    trend_direction = np.zeros(len(df))
-    trend_changed = False
+        print(f"The df schema (step 4-{idx}) is: {df.schema}")
 
-    for i in range(len(df)):
-        if i == 0:
-            # First row initialization
-            supertrend[i] = upper_bands[i]
-            trend_direction[i] = 1
-        else:
-            if closes[i] > supertrend[i-1]:
-                if trend_direction[i-1] == 0:
-                    trend_changed = True
+        # Iterate over rows to calculate Supertrend
+        eager_df = df.collect()
+        closes = eager_df[features[0]].to_numpy()
+        lower_bands = eager_df[lower_band_column_names[idx]].to_numpy()
+        upper_bands = eager_df[upper_band_column_names[idx]].to_numpy()
+        supertrend = np.zeros(len(df))
+        trend_direction = np.zeros(len(df))
+        trend_changed = False
+
+        for i in range(len(df)):
+            if i == 0:
+                # First row initialization
+                supertrend[i] = upper_bands[i]
                 trend_direction[i] = 1
-            elif closes[i] < supertrend[i-1]:
-                if trend_direction[i-1] == 1:
-                    trend_changed = True
-                trend_direction[i] = 0
             else:
-                trend_direction[i] = trend_direction[i-1]
-
-            if trend_changed:
-                if trend_direction[i-1] == 1:
-                    supertrend[i] = lower_bands[i]
+                if closes[i] > supertrend[i-1]:
+                    if trend_direction[i-1] == 0:
+                        trend_changed = True
+                    trend_direction[i] = 1
+                elif closes[i] < supertrend[i-1]:
+                    if trend_direction[i-1] == 1:
+                        trend_changed = True
+                    trend_direction[i] = 0
                 else:
-                    supertrend[i] = upper_bands[i]
-                trend_changed = False
-            else:
-                if trend_direction[i-1] == 1:
-                    supertrend[i] = max(lower_bands[i], supertrend[i-1])
+                    trend_direction[i] = trend_direction[i-1]
+
+                if trend_changed:
+                    if trend_direction[i-1] == 1:
+                        supertrend[i] = lower_bands[i]
+                    else:
+                        supertrend[i] = upper_bands[i]
+                    trend_changed = False
                 else:
-                    supertrend[i] = min(upper_bands[i], supertrend[i-1])
+                    if trend_direction[i-1] == 1:
+                        supertrend[i] = max(lower_bands[i], supertrend[i-1])
+                    else:
+                        supertrend[i] = min(upper_bands[i], supertrend[i-1])
 
-    df[column_name] = trend_direction
-    df.drop(["upper_band", "lower_band", "true_range", "atr"] + input_features, inplace=True)
+        df = df.with_columns([
+            pl.Series(name=column_name, values=trend_direction)
+        ]).lazy()
 
-    return pl.from_pandas(df)
+    df = df.drop(["true_range", "atr"] + input_features + upper_band_column_names + lower_band_column_names)
+
+    return df.collect()
 
 
 def cal_RSTD_func(

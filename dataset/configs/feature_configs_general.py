@@ -159,7 +159,7 @@ general_config = {
     'fe_supertrend': {
         'timeframe': [5, 15],
         'window_size': [14],
-        'multiplier': [1.0, 3.0],
+        'multipliers': [1.0, 3.0],
         'base_columns': ['HIGH', 'CLOSE', 'LOW']
     },
 

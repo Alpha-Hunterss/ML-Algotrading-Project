@@ -1310,13 +1310,13 @@ def cal_supertrend_func(
             (pl.col(features[1]) - pl.col(features[2])).abs(),
             (pl.col(features[1]) - pl.col(features[0]).shift(1)).abs(),
             (pl.col(features[2]) - pl.col(features[0]).shift(1)).abs(),
-        ).alias("true_range").cast(pl.Float64)
+        ).alias("true_range")
     ])
 
     print(f"The df schema (step 1) is: {df.schema}")
 
     df = df.with_columns([
-        pl.col("true_range").rolling_mean(window_size=w, center=False).fill_null(0.0).alias("atr").cast(pl.Float64)
+        pl.col("true_range").rolling_mean(window_size=w).alias("atr")
     ])
 
     print(f"The df schema (step 2) is: {df.schema}")
@@ -1325,10 +1325,10 @@ def cal_supertrend_func(
     df = df.with_columns([
         (
             (pl.col(features[1]) + pl.col(features[2])) / 2 + (multiplier * pl.col("atr"))
-        ).cast(pl.Float64).alias("upper_band"),
+        ).alias("upper_band"),
         (
             (pl.col(features[1]) + pl.col(features[2])) / 2 - (multiplier * pl.col("atr"))
-        ).cast(pl.Float64).alias("lower_band"),
+        ).alias("lower_band"),
     ])
 
     column_name = f"{prefix}_trend_direction_tf{time_frame}_w{w}"

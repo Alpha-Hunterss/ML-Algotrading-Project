@@ -733,10 +733,10 @@ def cal_leg_base_func(
     df = df.with_columns([
         # pl.Series(name=f"{prefix}_pvt_indicators_M{time_frame}_th_{th}{suffix}",values=pivot_indicators),
         # pl.Series(name=f"{prefix}_pvt_points_M{time_frame}_th_{th}{suffix}",values=pivot_points),
-        pl.Series(name=f"{prefix}_blsh_high_dist_M{time_frame}_th_{th}{suffix}",values=bullish_high_pivot_distances),
-        pl.Series(name=f"{prefix}_blsh_low_dist_M{time_frame}_th_{th}{suffix}",values=bullish_low_pivot_distances),
-        pl.Series(name=f"{prefix}_brsh_high_dist_M{time_frame}_th_{th}{suffix}",values=bearish_high_pivot_distances),
-        pl.Series(name=f"{prefix}_brsh_low_dist_M{time_frame}_th_{th}{suffix}",values=bearish_low_pivot_distances)
+        pl.Series(name=f"{prefix}_blsh_high_dist_M{time_frame}_th_{th}{suffix}", values=bullish_high_pivot_distances),
+        pl.Series(name=f"{prefix}_blsh_low_dist_M{time_frame}_th_{th}{suffix}", values=bullish_low_pivot_distances),
+        pl.Series(name=f"{prefix}_brsh_high_dist_M{time_frame}_th_{th}{suffix}", values=bearish_high_pivot_distances),
+        pl.Series(name=f"{prefix}_brsh_low_dist_M{time_frame}_th_{th}{suffix}", values=bearish_low_pivot_distances)
     ]).lazy()
 
     # Dropping price column (Comment it if you want to plot legs in Colab)
@@ -1336,40 +1336,42 @@ def cal_supertrend_func(
     closes = df[features[0]].to_numpy()
     lower_bands = df["lower_band"].to_numpy()
     upper_bands = df["upper_band"].to_numpy()
-    supertrend = []
-    trend_direction = []
+    supertrend = np.zeros(len(df))
+    trend_direction = np.zeros(len(df))
     trend_changed = False
 
     for i in range(len(df)):
         if i == 0:
             # First row initialization
-            supertrend.append(upper_bands[i])
-            trend_direction.append(1)
+            supertrend[i] = upper_bands[i]
+            trend_direction[i] = 1
         else:
-            if closes[i] > supertrend[-1]:
-                if trend_direction[-1] == 0:
+            if closes[i] > supertrend[i-1]:
+                if trend_direction[i-1] == 0:
                     trend_changed = True
-                trend_direction.append(1)
-            elif closes[i] < supertrend[-1]:
-                if trend_direction[-1] == 1:
+                trend_direction[i] = 1
+            elif closes[i] < supertrend[i-1]:
+                if trend_direction[i-1] == 1:
                     trend_changed = True
-                trend_direction.append(0)
+                trend_direction[i] = 0
             else:
-                trend_direction.append(trend_direction[-1])
+                trend_direction[i] = trend_direction[i-1]
 
             if trend_changed:
-                if trend_direction[-1] == 1:
-                    supertrend.append(lower_bands[i])
+                if trend_direction[i-1] == 1:
+                    supertrend[i] = lower_bands[i]
                 else:
-                    supertrend.append(upper_bands[i])
+                    supertrend[i] = upper_bands[i]
                 trend_changed = False
             else:
-                if trend_direction[-1] == 1:
-                    supertrend.append(max(lower_bands[i], supertrend[-1]))
+                if trend_direction[i-1] == 1:
+                    supertrend[i] = max(lower_bands[i], supertrend[i-1])
                 else:
-                    supertrend.append(min(upper_bands[i], supertrend[-1]))
+                    supertrend[i] = min(upper_bands[i], supertrend[i-1])
 
-    df = df.with_columns(pl.Series(column_name, trend_direction)).lazy()
+    df = df.with_columns([
+        pl.Series(name=column_name, values=trend_direction)
+    ]).lazy()
     df = df.drop(["upper_band", "lower_band", "true_range", "atr"] + input_features)
 
     return df.collect()

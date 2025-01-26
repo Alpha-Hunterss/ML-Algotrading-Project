@@ -1333,9 +1333,10 @@ def cal_supertrend_func(
     ]).lazy()
 
     # Iterate over rows to calculate Supertrend
-    closes = df[features[0]].to_numpy()
-    lower_bands = df["lower_band"].to_numpy()
-    upper_bands = df["upper_band"].to_numpy()
+    eager_df = df.collect()
+    closes = eager_df[features[0]].to_numpy()
+    lower_bands = eager_df["lower_band"].to_numpy()
+    upper_bands = eager_df["upper_band"].to_numpy()
     supertrend = np.zeros(len(df))
     trend_direction = np.zeros(len(df))
     trend_changed = False

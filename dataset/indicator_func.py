@@ -1325,10 +1325,10 @@ def cal_supertrend_func(
     df = df.with_columns([
         (
             (pl.col(features[1]) + pl.col(features[2])) / 2 + (pl.lit(multiplier).cast(pl.Float64) * pl.col("atr"))
-        ).alias("upper_band").cast(pl.Float64),
+        ).alias("upper_band"),
         (
             (pl.col(features[1]) + pl.col(features[2])) / 2 - (pl.lit(multiplier).cast(pl.Float64) * pl.col("atr"))
-        ).alias("lower_band").cast(pl.Float64),
+        ).alias("lower_band"),
     ]).lazy()
 
     column_name = f"{prefix}_trend_direction_tf{time_frame}_w{w}"

@@ -1332,6 +1332,8 @@ def cal_supertrend_func(
         pl.lit(0).alias(column_name)
     ]).lazy()
 
+    print(f"The df schema is: {df.schema}")
+
     # Iterate over rows to calculate Supertrend
     eager_df = df.collect()
     closes = eager_df[features[0]].to_numpy()

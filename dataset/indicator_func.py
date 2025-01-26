@@ -1309,26 +1309,28 @@ def cal_supertrend_func(
             (pl.col(features[1]) - pl.col(features[0]).shift(1)).abs(),
             (pl.col(features[2]) - pl.col(features[0]).shift(1)).abs(),
         ).alias("true_range")
-    ])
+    ]).lazy()
 
     df = df.with_columns([
         pl.col("true_range").rolling_mean(window_size=w).alias("atr")
-    ])
+    ]).lazy()
+
+    print(f"The dataframe's schema: {df.schema}")
 
     # Calculate basic upper and lower bands
     df = df.with_columns([
         (
-            (pl.col(features[1]) + pl.col(features[2])) / 2 + (pl.lit(multiplier) * pl.col("atr"))
+            (pl.col(features[1]) + pl.col(features[2])) / 2 + (multiplier * pl.col("atr"))
         ).alias("upper_band"),
         (
-            (pl.col(features[1]) + pl.col(features[2])) / 2 - (pl.lit(multiplier) * pl.col("atr"))
+            (pl.col(features[1]) + pl.col(features[2])) / 2 - (multiplier * pl.col("atr"))
         ).alias("lower_band"),
-    ])
+    ]).lazy()
 
     # Initialize Supertrend columns
     df = df.with_columns([
         pl.lit(0).alias(f"{prefix}_trend_direction_tf{time_frame}_w{w}")
-    ])
+    ]).lazy()
 
     # Iterate over rows to calculate Supertrend
     df_pandas = df.to_pandas()
@@ -1370,7 +1372,7 @@ def cal_supertrend_func(
 
     df = df.drop(["upper_band", "lower_band", "true_range", "atr"] + input_features)
 
-    return df
+    return df.collect()
 
 
 def cal_RSTD_func(

@@ -224,7 +224,7 @@ def cal_cndl_shape_n_cntxt_func(
             (pl.col(feature).rolling_max(window_size=w) -
              pl.col(feature).rolling_min(window_size=w))
             .alias(f"{feature}_rolling_range"),
-            (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) - 
+            (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) -
              pl.col(feature).rolling_quantile(quantile=0.25, window_size=w))
             .alias(f"{feature}_rolling_iqr"),
             pl.col(feature)
@@ -276,7 +276,7 @@ def cal_cndl_shape_n_cntxt_func(
     df = df.with_columns(calcs).lazy()
 
     # Drop unnecessary columns
-    cols_to_drop = features
+    cols_to_drop = features + context_features
     cols_to_drop.extend([
         f"{prefix}_higher_price_M{time_frame}",
         f"{prefix}_lower_price_M{time_frame}",

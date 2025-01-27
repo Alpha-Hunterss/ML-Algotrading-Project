@@ -121,7 +121,7 @@ def group_by_symbol_and_rename(df, symbol_col="symbol"):
 
     return result_df
 
-def history_columns_merge(feature_config, logger=default_logger, general_mode=False):
+def history_columns_merge(feature_config, fe_removal_list, logger=default_logger, general_mode=False):
     logger.info("- " * 25)
     logger.info("--> start history_columns_merge func:")
 
@@ -175,13 +175,16 @@ def history_columns_merge(feature_config, logger=default_logger, general_mode=Fa
         sy_fe = list(
             set(list(feature_config[symbol].keys())) & set(fe_refrece_list)
         )
+
         if symbol not in CRYPTO:
             sy_fe.append("fe_market_close")
-        sy_fe = list(set(sy_fe))
+
+        sy_fe = list(set(sy_fe) - set(fe_removal_list))
+
         for feture in sy_fe:
             try:
                 logger.info(f"--> {symbol} | {feture}")
-                logger.info(f"--> {symbol} | -->{feture}<---- --------------------------")
+                logger.info(f"--> {symbol} | -->{feture}<-------------------------------")
                 df = pl.read_parquet(
                     f"{feature_folder}/{feture}/{feture}_{symbol}.parquet"
                 )

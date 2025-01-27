@@ -42,6 +42,7 @@ def ETL(
     trg_take_profit_perc,
     trg_stop_loss_perc,
     use_perc_levels,
+    spread,
     n_rand_features,
     target_col, # name of target column
     base_time_frame, # for calculating targets
@@ -71,16 +72,17 @@ def ETL(
     ].to_numpy()
     tic = time.time()
     df["target"] = calculate_classification_target_numpy_ver(
-            array,
-            window_size,
-            symbol_decimal_multiply = symbols_dict[target_symbol]["pip_size"],
-            take_profit = trg_take_profit,
-            stop_loss = trg_stop_loss,
-            take_profit_perc = trg_take_profit_perc,
-            stop_loss_perc = trg_stop_loss_perc,
-            use_perc_levels = use_perc_levels,
-            mode = trade_mode,
-        )
+        array,
+        window_size,
+        symbol_decimal_multiply=symbols_dict[target_symbol]["pip_size"],
+        take_profit=trg_take_profit,
+        stop_loss=trg_stop_loss,
+        take_profit_perc=trg_take_profit_perc,
+        stop_loss_perc=trg_stop_loss_perc,
+        use_perc_levels=use_perc_levels,
+        spread_pip=spread,
+        mode=trade_mode,
+    )
     toc = time.time()
     df.dropna(inplace = True)
     print(f"---> Target {target_col} has been generated in {toc-tic:.2f} seconds")

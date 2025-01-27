@@ -38,6 +38,7 @@ def calculate_classification_target_backtest(
     take_profit_perc: float = 0.1,
     stop_loss_perc: float = 0.033,
     use_perc_levels: bool = False,
+    spread_pip: int = 5,
     mode: str = "long",
 ):
     """
@@ -56,6 +57,7 @@ def calculate_classification_target_backtest(
     )
     take_profit_ratio = take_profit_perc / 100
     stop_loss_ratio = stop_loss_perc / 100
+    spread = spread_pip * symbol_decimal_multiply
 
     if use_dynamic_sl:
         rstds = [
@@ -166,28 +168,28 @@ def calculate_classification_target_backtest(
                     calc_sl = stop_loss
                     calc_tp = -take_profit
 
-                pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
-                pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
+                pip_diff_high = (selected_chunk[1:, 1] - (selected_chunk[0, 0]+spread)) / symbol_decimal_multiply
+                pip_diff_low = (selected_chunk[1:, 2] - (selected_chunk[0, 0]+spread)) / symbol_decimal_multiply
 
-                sell_tp_cond = pip_diff_low <= calc_tp
-                sell_sl_cond = pip_diff_high >= calc_sl
+                sell_tp_cond = pip_diff_low <= calc_tp-spread_pip
+                sell_sl_cond = pip_diff_high >= calc_sl-spread_pip
 
                 if sell_tp_cond.any():
-                    arg_sell_tp_cond = np.where(pip_diff_low <= calc_tp)[0][0]
+                    arg_sell_tp_cond = np.where(pip_diff_low <= calc_tp-spread_pip)[0][0]
                     if not sell_sl_cond[: arg_sell_tp_cond + 1].any():
                         swap_days = selected_chunk[1 : arg_sell_tp_cond + 1, 3].sum()
                         target = 1
                         exit_price_diff = -calc_tp
                         index_open_position = arg_sell_tp_cond + 1
                     else:
-                        arg_sell_sl_cond = np.where(pip_diff_high >= calc_sl)[0][0]
+                        arg_sell_sl_cond = np.where(pip_diff_high >= calc_sl-spread_pip)[0][0]
                         swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
                         target = -1
                         exit_price_diff = -calc_sl
                         index_open_position = arg_sell_sl_cond + 1
 
                 elif sell_sl_cond.any():
-                    arg_sell_sl_cond = np.where(pip_diff_high >= calc_sl)[0][0]
+                    arg_sell_sl_cond = np.where(pip_diff_high >= calc_sl-spread_pip)[0][0]
                     swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
                     target = -1
                     exit_price_diff = -calc_sl
@@ -269,33 +271,33 @@ def calculate_classification_target_backtest(
                     curr_date = dates[0]
                     selected_chunk = selected_chunk[dates == curr_date]
 
-                pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
-                pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
+                pip_diff_high = (selected_chunk[1:, 1] - (selected_chunk[0, 0]+spread)) / symbol_decimal_multiply
+                pip_diff_low = (selected_chunk[1:, 2] - (selected_chunk[0, 0]+spread)) / symbol_decimal_multiply
 
                 if use_perc_levels:
                     curr_close = selected_chunk[0, 0]
                     take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
                     stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
-                sell_tp_cond = pip_diff_low <= -take_profit
-                sell_sl_cond = pip_diff_high >= stop_loss
+                sell_tp_cond = pip_diff_low <= -take_profit-spread_pip
+                sell_sl_cond = pip_diff_high >= stop_loss-spread_pip
 
                 if sell_tp_cond.any():
-                    arg_sell_tp_cond = np.where(pip_diff_low <= -take_profit)[0][0]
+                    arg_sell_tp_cond = np.where(pip_diff_low <= -take_profit-spread_pip)[0][0]
                     if not sell_sl_cond[: arg_sell_tp_cond + 1].any():
                         swap_days = selected_chunk[1 : arg_sell_tp_cond + 1, 3].sum()
                         target = 1
                         exit_price_diff = take_profit
                         index_open_position = arg_sell_tp_cond + 1
                     else:
-                        arg_sell_sl_cond = np.where(pip_diff_high >= stop_loss)[0][0]
+                        arg_sell_sl_cond = np.where(pip_diff_high >= stop_loss-spread_pip)[0][0]
                         swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
                         target = -1
                         exit_price_diff = -stop_loss
                         index_open_position = arg_sell_sl_cond + 1
 
                 elif sell_sl_cond.any():
-                    arg_sell_sl_cond = np.where(pip_diff_high >= stop_loss)[0][0]
+                    arg_sell_sl_cond = np.where(pip_diff_high >= stop_loss-spread_pip)[0][0]
                     swap_days = selected_chunk[1 : arg_sell_sl_cond + 1, 3].sum()
                     target = -1
                     exit_price_diff = -stop_loss
@@ -353,6 +355,7 @@ def cal_backtest_on_raw_cndl(
     take_profit_perc: float,
     stop_loss_perc: float,
     use_perc_levels: bool,
+    spread: int,
     trade_mode: str,
     use_dynamic_sl: bool,
     dynamic_sl_scale_type: str,
@@ -397,6 +400,7 @@ def cal_backtest_on_raw_cndl(
         take_profit_perc=take_profit_perc,
         stop_loss_perc=stop_loss_perc,
         use_perc_levels=use_perc_levels,
+        spread_pip=spread,
         mode=trade_mode,
     )
     df_raw_backtest.dropna(inplace=True)

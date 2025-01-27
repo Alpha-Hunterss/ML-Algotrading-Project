@@ -185,6 +185,7 @@ def main(
             trg_take_profit_perc=trg_take_profit_perc,
             trg_stop_loss_perc=trg_stop_loss_perc,
             use_perc_levels=use_perc_levels,
+            spread=default_spread,
             n_rand_features=n_rand_features,
             target_col=target_col,
             base_time_frame=5,
@@ -209,15 +210,16 @@ def main(
 
         # ______________________________Pre-Backtest: Backtest on all raw data_______________________________
         df_raw_backtest, bt_column_name = cal_backtest_on_raw_cndl(
-            df_raw_path = C5M_data_path,
-            target_symbol = target_symbol,
-            look_ahead= strg_look_ahead,
-            take_profit= strg_take_profit,
-            stop_loss= strg_stop_loss,
-            take_profit_perc= strg_take_profit_perc,
-            stop_loss_perc= strg_stop_loss_perc,
-            use_perc_levels= use_perc_levels,
-            trade_mode= trade_mode,
+            df_raw_path=C5M_data_path,
+            target_symbol=target_symbol,
+            look_ahead=strg_look_ahead,
+            take_profit=strg_take_profit,
+            stop_loss=strg_stop_loss,
+            take_profit_perc=strg_take_profit_perc,
+            stop_loss_perc=strg_stop_loss_perc,
+            use_perc_levels=use_perc_levels,
+            spread=default_spread,
+            trade_mode=trade_mode,
             use_dynamic_sl=use_dynamic_sl,
             dynamic_sl_scale_type=dynamic_sl_scale_type,
             rstd_window_size=rstd_window_size

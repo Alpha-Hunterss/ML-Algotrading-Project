@@ -129,7 +129,7 @@ fe_leg_config = {
 }
 
 general_config = {
-    'base_candle_timeframe': [15, 30, 60, 120, 180, 240, 360, 720, 1440],
+    'base_candle_timeframe': [15, 30, 60, 120, 180, 240, 360, 720, 1380],
 
 
     'fe_GMA': {
@@ -149,7 +149,7 @@ general_config = {
 
 
     'fe_OL': {
-        'timeframe': [5, 60, 240, 1440],
+        'timeframe': [5, 60, 240, 1380],
         'window_size': [1, 7, 21, 33],
         'window_size_SMA': [5, 15, 21, 55],
         'base_columns': ['HIGH', 'LOW']
@@ -199,17 +199,17 @@ general_config = {
 
     'fe_WIN_FREQ': {
         'timeframe': [5],
-        'window_size': [240, 480, 1440],
+        'window_size': [240, 480, 1380],
         'base_columns': ['CLOSE']
     },
 
 
-    'fe_cndl': [5, 15, 30, 60, 240, 1440],
+    'fe_cndl': [5, 15, 30, 60, 240, 1380],
 
 
     'fe_EMA': {
         'timeframe': [5],
-        'window_size': [7, 60, 336, 1440],
+        'window_size': [7, 60, 336, 1380],
         'base_columns': ['CLOSE']
     },
 
@@ -236,7 +236,7 @@ general_config = {
             {'timeframe': 30, 'shift_sizes': [1]},
             {'timeframe': 60, 'shift_sizes': [1]},
             {'timeframe': 240, 'shift_sizes': [1]},
-            {'timeframe': 1440, 'shift_sizes': [1]}
+            {'timeframe': 1380, 'shift_sizes': [1]}
         ]
     },
 
@@ -255,7 +255,7 @@ general_config = {
             'window_size': [
                 (7, 60),
                 (60, 336),
-                (60, 1440),
+                (60, 1380),
             ]
         },
 

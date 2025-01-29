@@ -62,7 +62,7 @@ def cal_window_max(array, window_size, sampling_rate):
 
         wavelet_dec_max = np.max(filtered_coeffs[0])
 
-        wavelet_dec_avg = np.mean(filtered_coeffs[0])        
+        wavelet_dec_avg = np.max(filtered_coeffs[0]) - np.min(filtered_coeffs[0])
 
         # reconstructed_signal = pywt.waverec(filtered_coeffs, "bior4.4")
 

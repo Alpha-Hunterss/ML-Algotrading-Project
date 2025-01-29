@@ -58,11 +58,11 @@ def cal_window_max(array, window_size, sampling_rate):
         filtered_coeffs = pywt.array_to_coeffs(coeff_array, coeff_slices, output_format="wavedec")
 
 
-        wavelet_dec_min= np.min(filtered_coeffs[0])
+        wavelet_dec_std= np.std(filtered_coeffs[0])
 
         wavelet_dec_max = np.max(filtered_coeffs[0])
 
-        wavelet_dec_avg = np.max(filtered_coeffs[0]) - np.min(filtered_coeffs[0])
+        wavelet_dec_range = np.max(filtered_coeffs[0]) - np.min(filtered_coeffs[0])
 
         # reconstructed_signal = pywt.waverec(filtered_coeffs, "bior4.4")
 
@@ -75,9 +75,9 @@ def cal_window_max(array, window_size, sampling_rate):
         # skew_wavelet_Re = skew(Re_positive_magnitude)
         # kurt_wavelet_Re = kurtosis(Re_positive_magnitude, fisher=True)
         #
-        res[i, 0] = wavelet_dec_min
+        res[i, 0] = wavelet_dec_std
         res[i, 1] = wavelet_dec_max
-        res[i, 2] = wavelet_dec_avg
+        res[i, 2] = wavelet_dec_range
 
         res[i, 3] = skew_wavelet_cA
         res[i, 4] = skew_wavelet_cD
@@ -101,9 +101,9 @@ def add_win_fe_base_func(
             assert tf == 5, "!!! For now, this code only works with 5M timeframe; tf must be 5."
 
             # Define feature column names based on updated `cal_window_max` function
-            col_WAVELET_dec_min = [f"{fe_prefix}_WAVELET_dec_min_W{w_size}_M{tf}"]
+            col_WAVELET_dec_std = [f"{fe_prefix}_WAVELET_dec_std_W{w_size}_M{tf}"]
             col_WAVELET_dec_max = [f"{fe_prefix}_WAVELET_dec_max_W{w_size}_M{tf}"]
-            col_WAVELET_dec_mean = [f"{fe_prefix}_WAVELET_dec_mean_W{w_size}_M{tf}"]
+            col_WAVELET_dec_range = [f"{fe_prefix}_WAVELET_dec_range_W{w_size}_M{tf}"]
 
             col_skew_wavelet_cA = [f"{fe_prefix}_skew_cA_W{w_size}_M{tf}"]
             col_skew_wavelet_cD = [f"{fe_prefix}_skew_cD_W{w_size}_M{tf}" ]
@@ -121,9 +121,9 @@ def add_win_fe_base_func(
             res = cal_window_max(array, w_size, sampling_rate)
 
             # Append the calculated results to the new_columns list as DataFrames
-            new_columns.append(pd.DataFrame(res[:, 0].round(round_to), columns=col_WAVELET_dec_min, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 0].round(round_to), columns=col_WAVELET_dec_std, index=df.index))
             new_columns.append(pd.DataFrame(res[:, 1].round(round_to), columns=col_WAVELET_dec_max, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 2].round(round_to), columns=col_WAVELET_dec_mean, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 2].round(round_to), columns=col_WAVELET_dec_range, index=df.index))
             new_columns.append(pd.DataFrame(res[:, 3].round(round_to), columns=col_skew_wavelet_cA, index=df.index))
             new_columns.append(pd.DataFrame(res[:, 4].round(round_to), columns=col_skew_wavelet_cD, index=df.index))
             # new_columns.append(pd.DataFrame(res[:, 5].round(round_to), columns=col_kurt_wavelet_cD, index=df.index))

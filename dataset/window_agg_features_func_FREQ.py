@@ -5,7 +5,7 @@ from dataset.logging_tools import default_logger
 from dataset.configs.history_data_crawlers_config import root_path, symbols_dict
 import pywt  # Add wavelet transform support
 # from scipy.signal import hilbert
-from scipy.stats import skew, kurtosis
+from scipy.stats import skew
 
 def compute_fft(coeffs):
     "Computes the FFT of given cA and cD"
@@ -136,8 +136,8 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
         
         features_folder_path = f"{root_path}/data/features/{fe_prefix}/"
         Path(features_folder_path).mkdir(parents=True, exist_ok=True)
-        base_candle_folder_path = f"{root_path}/data/realtime_candle/"
-        
+        base_candle_folder_path = f"{root_path}/data/features/fe_FFD/" # address fe_FFD parquet
+
         
         round_to = 5
         sampling_rate = 2  # Assumed sampling rate in Hz; adjust if necessary
@@ -149,16 +149,20 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
             base_cols = feature_config[symbol][fe_prefix]["base_columns"]
             raw_features = [f"M5_{base_col}" for base_col in base_cols]
-            needed_columns = ["_time", "minutesPassed", "symbol"] + raw_features
-            file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
-            
-            df = pd.read_parquet(file_name, columns=needed_columns)
-            df.sort_values("_time", inplace=True)
 
-            df["_time"] = df["_time"].dt.tz_localize(None)
-            df.drop(columns=["symbol"])
-            df.sort_values("_time", inplace=True)
+            file_name = base_candle_folder_path + f"fe_FFD_{symbol}.parquet"
+
+            # Read the data using Pandas
+            df = pd.read_parquet(file_name)
+            raw_features = df.columns[1]  # Get the name of the second column
+            needed_columns = ["_time", raw_features]
+            df = pd.read_parquet(file_name, columns=needed_columns).sort_values("_time")
         
+
+            # Ensure `_time` column is a datetime type
+            if not pd.api.types.is_datetime64_any_dtype(df["_time"]):
+                df["_time"] = pd.to_datetime(df["_time"], format="%Y-%m-%d %H:%M:%S")
+
             # Add the window-based features
             df = add_win_fe_base_func(
                 df,
@@ -171,7 +175,9 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
                 fe_prefix=fe_prefix,
             )
 
-            df.drop(columns=raw_features + ["minutesPassed"], inplace=True)
+            # Clean up the DataFrame, dropping the raw features and adding symbol info
+            df = df.drop(columns=[raw_features])
+
             df["symbol"] = symbol
             df.to_parquet(f"{features_folder_path}/{fe_prefix}_{symbol}.parquet", index=False)
         logger.info("--> history_fe_WIN_FREQ_features run successfully.")

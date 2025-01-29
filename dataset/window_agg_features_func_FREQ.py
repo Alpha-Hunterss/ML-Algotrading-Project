@@ -24,7 +24,7 @@ def cal_window_max(array, window_size, sampling_rate):
     Compute various features (FFT, Wavelet, Envelope, Cepstrum) for different windows.
     """
     
-    num_features_wavelet = 6
+    num_features_wavelet = 5
     
     total_features =  num_features_wavelet 
     
@@ -33,49 +33,57 @@ def cal_window_max(array, window_size, sampling_rate):
 
     for i in range(window_size, array.shape[0]):
         selected_slice = array[i - window_size + 1: i + 1]
-        print(f"Selected Slice Shape: {selected_slice.shape}")
         
-        # Compute Wavelet features
 
         cA, cD = pywt.dwt(selected_slice, 'bior4.4')
-        cA_positive_magnitude, cA_positive_freqs = compute_fft(cA)
-        cD_positive_magnitude, cD_positive_freqs = compute_fft(cD)
+        cA_positive_magnitude, _ = compute_fft(cA)
+        cD_positive_magnitude, _ = compute_fft(cD)
 
-        sortinx_wavelet_cA = np.argsort(cA_positive_magnitude)[::-1][0] 
-        sortinx_wavelet_cD = np.argsort(cD_positive_magnitude)[::-1][0] 
-        #
-        sortval_wavelet_cA = cA_positive_freqs[sortinx_wavelet_cA]
-        sortval_wavelet_cD = cD_positive_freqs[sortinx_wavelet_cD]
+        # sortinx_wavelet_cA = np.argsort(cA_positive_magnitude)[::-1][0] 
+        # sortinx_wavelet_cD = np.argsort(cD_positive_magnitude)[::-1][0] 
+        # #
+        # sortval_wavelet_cA = cA_positive_freqs[sortinx_wavelet_cA]
+        # sortval_wavelet_cD = cD_positive_freqs[sortinx_wavelet_cD]
         skew_wavelet_cA = skew(cA_positive_magnitude)
         skew_wavelet_cD = skew(cD_positive_magnitude)
-        # kurt_wavelet_cA = kurtosis(cA_positive_magnitude, fisher=True)
-        # kurt_wavelet_cD = kurtosis(cD_positive_magnitude, fisher=True)
-        #
+        
         coeffs = pywt.wavedec(selected_slice, "bior4.4", level=4)
+
         coeff_array, coeff_slices = pywt.coeffs_to_array(coeffs)
+
         threshold = np.std(coeff_array) * np.sqrt(2 * np.log(len(coeff_array)))
+
         coeff_array[np.abs(coeff_array) < threshold] = 0
 
         filtered_coeffs = pywt.array_to_coeffs(coeff_array, coeff_slices, output_format="wavedec")
-        reconstructed_signal = pywt.waverec(filtered_coeffs, "bior4.4")
 
-        Re_positive_magnitude, Re_positive_freqs = compute_fft(reconstructed_signal)
 
-        sortinx_wavelet_Re = np.argsort(Re_positive_magnitude)[::-1][0] 
-        #
-        sortval_wavelet_Re = Re_positive_freqs[sortinx_wavelet_Re]
-        skew_wavelet_Re = skew(Re_positive_magnitude)
+        wavelet_dec_min= np.min(filtered_coeffs[0])
+
+        wavelet_dec_max = np.max(filtered_coeffs[0])
+
+        wavelet_dec_avg = np.mean(filtered_coeffs[0])        
+
+        # reconstructed_signal = pywt.waverec(filtered_coeffs, "bior4.4")
+
+        # Re_positive_magnitude, Re_positive_freqs = compute_fft(reconstructed_signal)
+
+        # sortinx_wavelet_Re = np.argsort(Re_positive_magnitude)[::-1][0] 
+        
+
+        # sortval_wavelet_Re = Re_positive_freqs[sortinx_wavelet_Re]
+        # skew_wavelet_Re = skew(Re_positive_magnitude)
         # kurt_wavelet_Re = kurtosis(Re_positive_magnitude, fisher=True)
         #
-        res[i, 0] = sortval_wavelet_cA
-        res[i, 1] = sortval_wavelet_cD
-        res[i, 2] = sortval_wavelet_Re
+        res[i, 0] = wavelet_dec_min
+        res[i, 1] = wavelet_dec_max
+        res[i, 2] = wavelet_dec_avg
 
         res[i, 3] = skew_wavelet_cA
         res[i, 4] = skew_wavelet_cD
         # res[i, 5] = kurt_wavelet_cA
         # res[i, 6] = kurt_wavelet_cD
-        res[i, 5] = skew_wavelet_Re
+        # res[i, 5] = skew_wavelet_Re
         # res[i, 8] = kurt_wavelet_Re
         # Print progress every 1000 iterations
         if i % 5000 == 0:
@@ -93,9 +101,9 @@ def add_win_fe_base_func(
             assert tf == 5, "!!! For now, this code only works with 5M timeframe; tf must be 5."
 
             # Define feature column names based on updated `cal_window_max` function
-            col_sortval_wavelet_cA = [f"{fe_prefix}_Val_cA_W{w_size}_M{tf}"]
-            col_sortval_wavelet_cD = [f"{fe_prefix}_Val_cD_W{w_size}_M{tf}"]
-            col_sortval_wavelet_Re = [f"{fe_prefix}_Val_Re_W{w_size}_M{tf}"]
+            col_WAVELET_dec_min = [f"{fe_prefix}_WAVELET_dec_min_W{w_size}_M{tf}"]
+            col_WAVELET_dec_max = [f"{fe_prefix}_WAVELET_dec_max_W{w_size}_M{tf}"]
+            col_WAVELET_dec_mean = [f"{fe_prefix}_WAVELET_dec_mean_W{w_size}_M{tf}"]
 
             col_skew_wavelet_cA = [f"{fe_prefix}_skew_cA_W{w_size}_M{tf}"]
             col_skew_wavelet_cD = [f"{fe_prefix}_skew_cD_W{w_size}_M{tf}" ]
@@ -104,7 +112,7 @@ def add_win_fe_base_func(
             # col_kurt_wavelet_cD = [f"{fe_prefix}_kurt_cD_W{w_size}_M{tf}"]
 
             
-            col_skew_wavelet_Re = [f"{fe_prefix}_skew_Re_W{w_size}_M{tf}"]
+            # col_skew_wavelet_Re = [f"{fe_prefix}_skew_Re_W{w_size}_M{tf}"]
             # col_kurt_wavelet_Re = [f"{fe_prefix}_kurt_Re_W{w_size}_M{tf}"]
 
 
@@ -113,14 +121,14 @@ def add_win_fe_base_func(
             res = cal_window_max(array, w_size, sampling_rate)
 
             # Append the calculated results to the new_columns list as DataFrames
-            new_columns.append(pd.DataFrame(res[:, 0].round(round_to), columns=col_sortval_wavelet_cA, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 1].round(round_to), columns=col_sortval_wavelet_cD, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 2].round(round_to), columns=col_skew_wavelet_cA, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 3].round(round_to), columns=col_skew_wavelet_cD, index=df.index))
-            # new_columns.append(pd.DataFrame(res[:, 4].round(round_to), columns=col_kurt_wavelet_cA, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 0].round(round_to), columns=col_WAVELET_dec_min, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 1].round(round_to), columns=col_WAVELET_dec_max, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 2].round(round_to), columns=col_WAVELET_dec_mean, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 3].round(round_to), columns=col_skew_wavelet_cA, index=df.index))
+            new_columns.append(pd.DataFrame(res[:, 4].round(round_to), columns=col_skew_wavelet_cD, index=df.index))
             # new_columns.append(pd.DataFrame(res[:, 5].round(round_to), columns=col_kurt_wavelet_cD, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 4].round(round_to), columns=col_sortval_wavelet_Re, index=df.index))
-            new_columns.append(pd.DataFrame(res[:, 5].round(round_to), columns=col_skew_wavelet_Re, index=df.index))
+            # new_columns.append(pd.DataFrame(res[:, 4].round(round_to), columns=col_sortval_wavelet_Re, index=df.index))
+            # new_columns.append(pd.DataFrame(res[:, 5].round(round_to), columns=col_skew_wavelet_Re, index=df.index))
             # new_columns.append(pd.DataFrame(res[:, 8].round(round_to), columns=col_kurt_wavelet_Re, index=df.index))
             
 

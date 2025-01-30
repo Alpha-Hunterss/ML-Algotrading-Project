@@ -421,6 +421,9 @@ def cal_backtest_on_raw_cndl(
     if use_dynamic_sl and dynamic_sl_type=="atr":
         col_name = f"fe_ATR_{target_symbol}_W{atr_window_size}_M5"
 
+        if col_name not in df.columns:
+            raise ValueError(f"{col_name} col not in the dataset.")
+
         array = df.merge(df_raw_backtest, on='_time', how='left')[
             [
                 f"{target_symbol}_M5_CLOSE",
@@ -457,6 +460,8 @@ def cal_backtest_on_raw_cndl(
             ]
         ].to_numpy()
 
+    print(f"The array shape is: {array.shape}")
+    print(f"A few rows of the array: \n{array[:5]}")
     (
         df_raw_backtest[bt_column_name],
         df_raw_backtest["pip_diff"],

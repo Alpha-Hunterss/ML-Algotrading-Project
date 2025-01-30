@@ -43,6 +43,9 @@ def main(
             strg_stop_loss_perc = man_params["strg_stop_loss_perc"]
             use_perc_levels = man_params["use_perc_levels"]
             use_dynamic_sl = man_params["use_dynamic_sl"]
+            dynamic_sl_type = man_params["dynamic_sl_type"]
+            atr_window_size = man_params["atr_window_size"]
+            atr_level_multiplication = man_params["atr_level_multiplication"]
             dynamic_sl_scale_type = man_params["dynamic_sl_scale_type"]
             rstd_window_size = man_params["rstd_window_size"]
             confidence_levels = man_params["confidence_levels"]
@@ -89,6 +92,9 @@ def main(
                 "strg_stop_loss_perc",
                 "use_perc_levels",
                 "use_dynamic_sl",
+                "dynamic_sl_type",
+                "atr_window_size",
+                "atr_level_multiplication",
                 "dynamic_sl_scale_type",
                 "rstd_window_size",
                 "confidence_levels",
@@ -135,6 +141,9 @@ def main(
             strg_stop_loss_perc = wandb.config.strg_stop_loss_perc
             use_perc_levels = wandb.config.use_perc_levels
             use_dynamic_sl = wandb.config.use_dynamic_sl
+            dynamic_sl_type = wandb.config.dynamic_sl_type
+            atr_window_size = wandb.config.atr_window_size
+            atr_level_multiplication = wandb.config.atr_level_multiplication
             dynamic_sl_scale_type = wandb.config.dynamic_sl_scale_type
             rstd_window_size = wandb.config.rstd_window_size
             confidence_levels = wandb.config.confidence_levels
@@ -185,6 +194,10 @@ def main(
             trg_take_profit_perc=trg_take_profit_perc,
             trg_stop_loss_perc=trg_stop_loss_perc,
             use_perc_levels=use_perc_levels,
+            use_dynamic_sl=use_dynamic_sl,
+            dynamic_sl_type=dynamic_sl_type,
+            atr_window_size=atr_window_size,
+            atr_level_multiplication=atr_level_multiplication,
             spread=default_spread,
             n_rand_features=n_rand_features,
             target_col=target_col,
@@ -210,6 +223,7 @@ def main(
 
         # ______________________________Pre-Backtest: Backtest on all raw data_______________________________
         df_raw_backtest, bt_column_name = cal_backtest_on_raw_cndl(
+            path=dataset_path,
             df_raw_path=C5M_data_path,
             target_symbol=target_symbol,
             look_ahead=strg_look_ahead,
@@ -218,6 +232,9 @@ def main(
             take_profit_perc=strg_take_profit_perc,
             stop_loss_perc=strg_stop_loss_perc,
             use_perc_levels=use_perc_levels,
+            dynamic_sl_type=dynamic_sl_type,
+            atr_window_size=atr_window_size,
+            atr_level_multiplication=atr_level_multiplication,
             spread=default_spread,
             trade_mode=trade_mode,
             use_dynamic_sl=use_dynamic_sl,

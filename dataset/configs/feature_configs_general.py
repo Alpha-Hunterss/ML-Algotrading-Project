@@ -177,22 +177,23 @@ general_config = {
 
 
     'fe_ATR': {
-        'timeframe': [240, 60],
-        'window_size': [30, 14, 7],
+        'timeframe': [5, 60, 240],
+        'window_size': [7, 14, 30],
         'base_columns': ['HIGH', 'CLOSE', 'LOW']
     },
 
 
     'fe_RSTD': {
         'timeframe': [240],
-        'window_size': [30, 14, 7],
+        'window_size': [7, 14, 30],
         'base_columns': ['CLOSE']
     },
 
 
+    # Support & Resistance Levels
     'fe_WIN': {
         'timeframe': [5],
-        'window_size': [5, 10, 48, 288, 480],
+        'window_size': [6, 12, 48, 276, 480],
         'base_columns': ['CLOSE']
     },
 
@@ -215,15 +216,15 @@ general_config = {
 
 
     'fe_SMA': {
-        'base_columns': ['CLOSE'],
         'timeframe': [5],
-        'window_size': [240, 360, 720]
+        'window_size': [20, 60, 240, 360, 720],
+        'base_columns': ['CLOSE']
     },
 
 
     'fe_RSI': {
         'timeframe': [5, 60, 240],
-        'window_size': [30, 14, 7],
+        'window_size': [7, 14, 30],
         'base_columns': ['CLOSE']
     },
 

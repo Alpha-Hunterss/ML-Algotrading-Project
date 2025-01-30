@@ -42,6 +42,10 @@ def ETL(
     trg_take_profit_perc,
     trg_stop_loss_perc,
     use_perc_levels,
+    use_dynamic_sl,
+    dynamic_sl_type,
+    atr_window_size,
+    atr_level_multiplication,
     spread,
     n_rand_features,
     target_col, # name of target column
@@ -67,9 +71,42 @@ def ETL(
         "low": f"{target_symbol}_M5_LOW",
     })
 
-    array = df.merge(df_raw, on = '_time', how = 'left')[
-        [f"{target_symbol}_M5_CLOSE", f"{target_symbol}_M5_HIGH", f"{target_symbol}_M5_LOW"]
-    ].to_numpy()
+    if use_dynamic_sl and dynamic_sl_type=="atr":
+        print("Dynamic sl atr being used (ETL-1) ...")
+        col_name = f"fe_ATR_W{atr_window_size}_M5"
+
+        if col_name not in df.columns:
+            raise ValueError(f"{col_name} col not in the dataset.")
+
+        array = df.merge(df_raw, on='_time', how='left')[
+            [
+                f"{target_symbol}_M5_CLOSE",
+                f"{target_symbol}_M5_HIGH",
+                f"{target_symbol}_M5_LOW",
+                col_name
+            ]
+        ].to_numpy()
+
+    elif use_dynamic_sl and dynamic_sl_type=="etr":
+        col_name = f"fe_ETR_W{atr_window_size}_M5"
+
+        if col_name not in df.columns:
+            raise ValueError(f"{col_name} col not in the dataset.")
+
+        array = df.merge(df_raw, on='_time', how='left')[
+            [
+                f"{target_symbol}_M5_CLOSE",
+                f"{target_symbol}_M5_HIGH",
+                f"{target_symbol}_M5_LOW",
+                col_name
+            ]
+        ].to_numpy()
+
+    else:
+        array = df.merge(df_raw, on='_time', how='left')[
+            [f"{target_symbol}_M5_CLOSE", f"{target_symbol}_M5_HIGH", f"{target_symbol}_M5_LOW"]
+        ].to_numpy()
+
     tic = time.time()
     df["target"] = calculate_classification_target_numpy_ver(
         array,
@@ -80,6 +117,9 @@ def ETL(
         take_profit_perc=trg_take_profit_perc,
         stop_loss_perc=trg_stop_loss_perc,
         use_perc_levels=use_perc_levels,
+        use_dynamic_sl=use_dynamic_sl,
+        dynamic_sl_type=dynamic_sl_type,
+        atr_level_multiplication=atr_level_multiplication,
         spread_pip=spread,
         mode=trade_mode,
     )

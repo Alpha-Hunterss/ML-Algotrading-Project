@@ -38,6 +38,8 @@ def calculate_classification_target_backtest(
     take_profit_perc: float = 0.1,
     stop_loss_perc: float = 0.033,
     use_perc_levels: bool = False,
+    dynamic_sl_type: str = None,
+    atr_level_multiplication: float = 1.5,
     spread_pip: int = 5,
     mode: str = "long",
 ):
@@ -52,6 +54,7 @@ def calculate_classification_target_backtest(
     exit_price_diff_list = []
     time_open_position_list = []
     stop_losses_list = []
+    take_profits_list = []
     date_column = np.array(
         [np.datetime64(datetime, 'D') for datetime in array[:, 4]]
     )
@@ -60,24 +63,27 @@ def calculate_classification_target_backtest(
     spread = spread_pip * symbol_decimal_multiply
 
     if use_dynamic_sl:
-        rstds = [
-            calculate_rstd(array[i - rstd_window_size: i], symbol_decimal_multiply)
-            for i in range(rstd_window_size, array.shape[0] - window_size)
-        ]
+        if dynamic_sl_type=="rstd":
+            rstds = [
+                calculate_rstd(array[i - rstd_window_size: i], symbol_decimal_multiply)
+                for i in range(rstd_window_size, array.shape[0] - window_size)
+            ]
 
-        if dynamic_sl_scale_type == 'third_quartile':
-            third_quartile = np.percentile(rstds, 75)
-            rstd_exponent = stop_loss/third_quartile
-        elif dynamic_sl_scale_type == 'second_tercile':
-            second_tercile = np.percentile(rstds, 66)
-            rstd_exponent = stop_loss/second_tercile
-        elif dynamic_sl_scale_type == 'median':
-            median = np.percentile(rstds, 50)
-            rstd_exponent = stop_loss/median
-        else:
-            raise ValueError("The scale type should be either `third_quartile`, `second_tercile` or `median`")
+            if dynamic_sl_scale_type == 'third_quartile':
+                third_quartile = np.percentile(rstds, 75)
+                rstd_exponent = stop_loss/third_quartile
+            elif dynamic_sl_scale_type == 'second_tercile':
+                second_tercile = np.percentile(rstds, 66)
+                rstd_exponent = stop_loss/second_tercile
+            elif dynamic_sl_scale_type == 'median':
+                median = np.percentile(rstds, 50)
+                rstd_exponent = stop_loss/median
+            else:
+                raise ValueError(
+                    "The scale type should be either `third_quartile`, `second_tercile` or `median`"
+                )
 
-        rstds_norm = np.array(rstds) * rstd_exponent
+            rstds_norm = np.array(rstds) * rstd_exponent
 
         if use_perc_levels:
             reward = take_profit_perc/stop_loss_perc
@@ -98,13 +104,18 @@ def calculate_classification_target_backtest(
                     curr_date = dates[0]
                     selected_chunk = selected_chunk[dates == curr_date]
 
-                if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
-                    rstd_sl = rstds_norm[i-rstd_window_size]
-                    calc_sl = -max(stop_loss/4, min(stop_loss, rstd_sl))
-                    calc_tp = -reward * calc_sl
-                else:
-                    calc_sl = -stop_loss
-                    calc_tp = take_profit
+                if dynamic_sl_type in ["atr", "etr"]:
+                    print("Dynamic sl atr being used (BT-2) ...")
+                    calc_sl = -selected_chunk[0, 5]*atr_level_multiplication
+                    calc_tp = -reward*calc_sl
+                elif dynamic_sl_type=="rstd":
+                    if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
+                        rstd_sl = rstds_norm[i-rstd_window_size]
+                        calc_sl = -max(stop_loss/4, min(stop_loss, rstd_sl))
+                        calc_tp = -reward * calc_sl
+                    else:
+                        calc_sl = -stop_loss
+                        calc_tp = take_profit
 
                 # Calculate pip differences
                 pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
@@ -144,7 +155,8 @@ def calculate_classification_target_backtest(
                 swap_days_list.append(swap_days)
                 exit_price_diff_list.append(exit_price_diff)
                 time_open_position_list.append(index_open_position)
-                stop_losses_list.append(stop_loss)
+                stop_losses_list.append(-calc_sl)
+                take_profits_list.append(calc_tp)
 
         elif mode == "short":
             for i in range(array.shape[0] - window_size):
@@ -160,13 +172,17 @@ def calculate_classification_target_backtest(
                     curr_date = dates[0]
                     selected_chunk = selected_chunk[dates == curr_date]
 
-                if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
-                    rstd_sl = rstds_norm[i-rstd_window_size]
-                    calc_sl = max(stop_loss/4, min(stop_loss, rstd_sl))
-                    calc_tp = -reward * calc_sl
-                else:
-                    calc_sl = stop_loss
-                    calc_tp = -take_profit
+                if dynamic_sl_type in ["atr", "etr"]:
+                    calc_sl = selected_chunk[0, 5]*atr_level_multiplication
+                    calc_tp = -reward*calc_sl
+                elif dynamic_sl_type=="rstd":
+                    if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
+                        rstd_sl = rstds_norm[i-rstd_window_size]
+                        calc_sl = max(stop_loss/4, min(stop_loss, rstd_sl))
+                        calc_tp = -reward * calc_sl
+                    else:
+                        calc_sl = stop_loss
+                        calc_tp = -take_profit
 
                 pip_diff_high = (selected_chunk[1:, 1] - (selected_chunk[0, 0]+spread)) / symbol_decimal_multiply
                 pip_diff_low = (selected_chunk[1:, 2] - (selected_chunk[0, 0]+spread)) / symbol_decimal_multiply
@@ -205,7 +221,8 @@ def calculate_classification_target_backtest(
                 swap_days_list.append(swap_days)
                 exit_price_diff_list.append(exit_price_diff)
                 time_open_position_list.append(index_open_position)
-                stop_losses_list.append(stop_loss)
+                stop_losses_list.append(calc_sl)
+                take_profits_list.append(-calc_tp)
 
     else:
         if mode == "long":
@@ -261,6 +278,7 @@ def calculate_classification_target_backtest(
                 exit_price_diff_list.append(exit_price_diff)
                 time_open_position_list.append(index_open_position)
                 stop_losses_list.append(stop_loss)
+                take_profits_list.append(take_profit)
 
         elif mode == "short":
             for i in range(array.shape[0] - window_size):
@@ -314,6 +332,7 @@ def calculate_classification_target_backtest(
                 exit_price_diff_list.append(exit_price_diff)
                 time_open_position_list.append(index_open_position)
                 stop_losses_list.append(stop_loss)
+                take_profits_list.append(take_profit)
 
     for _ in range(window_size):
         swap_days_list.append(None)
@@ -321,8 +340,9 @@ def calculate_classification_target_backtest(
         exit_price_diff_list.append(None)
         time_open_position_list.append(None)
         stop_losses_list.append(None)
+        take_profits_list.append(None)
 
-    return target_list, exit_price_diff_list, swap_days_list, time_open_position_list, stop_losses_list
+    return target_list, exit_price_diff_list, swap_days_list, time_open_position_list, stop_losses_list, take_profits_list
 
 
 def calculate_max_drawdown(balance_series, init_balance):
@@ -347,6 +367,7 @@ def calculate_max_drawdown(balance_series, init_balance):
 
 
 def cal_backtest_on_raw_cndl(
+    path: str,
     df_raw_path: str,
     target_symbol: str,
     look_ahead: int,
@@ -355,6 +376,9 @@ def cal_backtest_on_raw_cndl(
     take_profit_perc: float,
     stop_loss_perc: float,
     use_perc_levels: bool,
+    dynamic_sl_type: str,
+    atr_window_size: int,
+    atr_level_multiplication: float,
     spread: int,
     trade_mode: str,
     use_dynamic_sl: bool,
@@ -371,6 +395,7 @@ def cal_backtest_on_raw_cndl(
     bt_column_name = (
         f"trg_clf_{trade_mode}_{target_symbol}_M{look_ahead}_TP{take_profit}_SL{stop_loss}"
     )
+    df = pd.read_parquet(path)
 
     df_raw_backtest = pd.read_parquet(
         f"{df_raw_path}/{target_symbol}_stage_one.parquet",
@@ -383,12 +408,51 @@ def cal_backtest_on_raw_cndl(
     })
 
     df_raw_backtest.sort_values("_time", inplace=True)
-    df_raw_backtest['days_diff'] = (df_raw_backtest['_time'].dt.date - df_raw_backtest['_time'].dt.date.shift()).bfill().dt.days
-    array = df_raw_backtest[
-        [f"{target_symbol}_M5_CLOSE", f"{target_symbol}_M5_HIGH", f"{target_symbol}_M5_LOW", "days_diff", "_time"]
-    ].to_numpy()
+    df_raw_backtest['days_diff'] = (
+        df_raw_backtest['_time'].dt.date - df_raw_backtest['_time'].dt.date.shift()
+    ).bfill().dt.days
 
-    df_raw_backtest[bt_column_name], df_raw_backtest["pip_diff"], df_raw_backtest["swap_days"], df_raw_backtest["time_open_position"], df_raw_backtest["stop_losses"] = calculate_classification_target_backtest(
+    if use_dynamic_sl and dynamic_sl_type=="atr":
+        print("Dynamic sl atr being used (BT-1) ...")
+        col_name = f"fe_ATR_W{atr_window_size}_M5"
+
+        array = df.merge(df_raw_backtest, on='_time', how='left')[
+            [
+                f"{target_symbol}_M5_CLOSE",
+                f"{target_symbol}_M5_HIGH",
+                f"{target_symbol}_M5_LOW",
+                "days_diff",
+                "_time",
+                col_name
+            ]
+        ].to_numpy()
+
+    if use_dynamic_sl and dynamic_sl_type=="etr":
+        col_name = f"fe_ETR_W{atr_window_size}_M5"
+
+        array = df.merge(df_raw_backtest, on='_time', how='left')[
+            [
+                f"{target_symbol}_M5_CLOSE",
+                f"{target_symbol}_M5_HIGH",
+                f"{target_symbol}_M5_LOW",
+                "days_diff",
+                "_time",
+                col_name
+            ]
+        ].to_numpy()
+
+    else:
+        array = df_raw_backtest[
+            [
+                f"{target_symbol}_M5_CLOSE",
+                f"{target_symbol}_M5_HIGH",
+                f"{target_symbol}_M5_LOW",
+                "days_diff",
+                "_time"
+            ]
+        ].to_numpy()
+
+    df_raw_backtest[bt_column_name], df_raw_backtest["pip_diff"], df_raw_backtest["swap_days"], df_raw_backtest["time_open_position"], df_raw_backtest["stop_losses"], df_raw_backtest["take_profits"] = calculate_classification_target_backtest(
         array,
         window_size,
         use_dynamic_sl=use_dynamic_sl,
@@ -400,6 +464,8 @@ def cal_backtest_on_raw_cndl(
         take_profit_perc=take_profit_perc,
         stop_loss_perc=stop_loss_perc,
         use_perc_levels=use_perc_levels,
+        dynamic_sl_type=dynamic_sl_type,
+        atr_level_multiplication=atr_level_multiplication,
         spread_pip=spread,
         mode=trade_mode,
     )
@@ -731,7 +797,9 @@ def do_backtest(
                 "net_profit",
                 "balance",
                 "volume",
-                "confidence_levels"
+                "confidence_levels",
+                "stop_losses",
+                "take_profits"
             ]
         ],
     )

@@ -46,7 +46,6 @@ def calculate_classification_target_numpy_ver(
                 stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
             if use_dynamic_sl and dynamic_sl_type in ["atr", "etr"]:
-                print("Dynamic sl atr being used (ETL-2) ...")
                 stop_loss = selected_chunk[0, 3]*atr_level_multiplication
                 take_profit = reward*stop_loss
 

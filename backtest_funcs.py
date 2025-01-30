@@ -105,7 +105,6 @@ def calculate_classification_target_backtest(
                     selected_chunk = selected_chunk[dates == curr_date]
 
                 if dynamic_sl_type in ["atr", "etr"]:
-                    print("Dynamic sl atr being used (BT-2) ...")
                     calc_sl = -selected_chunk[0, 5]*atr_level_multiplication
                     calc_tp = -reward*calc_sl
                 elif dynamic_sl_type=="rstd":
@@ -420,7 +419,6 @@ def cal_backtest_on_raw_cndl(
     ).bfill().dt.days
 
     if use_dynamic_sl and dynamic_sl_type=="atr":
-        print("Dynamic sl atr being used (BT-1) ...")
         col_name = f"fe_ATR_{target_symbol}_W{atr_window_size}_M5"
 
         array = df.merge(df_raw_backtest, on='_time', how='left')[

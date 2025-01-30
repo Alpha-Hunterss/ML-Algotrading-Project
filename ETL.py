@@ -72,7 +72,6 @@ def ETL(
     })
 
     if use_dynamic_sl and dynamic_sl_type=="atr":
-        print("Dynamic sl atr being used (ETL-1) ...")
         col_name = f"fe_ATR_{target_symbol}_W{atr_window_size}_M5"
 
         if col_name not in df.columns:

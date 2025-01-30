@@ -342,7 +342,14 @@ def calculate_classification_target_backtest(
         stop_losses_list.append(None)
         take_profits_list.append(None)
 
-    return target_list, exit_price_diff_list, swap_days_list, time_open_position_list, stop_losses_list, take_profits_list
+    return (
+        target_list,
+        exit_price_diff_list,
+        swap_days_list,
+        time_open_position_list,
+        stop_losses_list,
+        take_profits_list
+    )
 
 
 def calculate_max_drawdown(balance_series, init_balance):
@@ -452,7 +459,14 @@ def cal_backtest_on_raw_cndl(
             ]
         ].to_numpy()
 
-    df_raw_backtest[bt_column_name], df_raw_backtest["pip_diff"], df_raw_backtest["swap_days"], df_raw_backtest["time_open_position"], df_raw_backtest["stop_losses"], df_raw_backtest["take_profits"] = calculate_classification_target_backtest(
+    (
+        df_raw_backtest[bt_column_name],
+        df_raw_backtest["pip_diff"],
+        df_raw_backtest["swap_days"],
+        df_raw_backtest["time_open_position"],
+        df_raw_backtest["stop_losses"],
+        df_raw_backtest["take_profits"]
+    ) = calculate_classification_target_backtest(
         array,
         window_size,
         use_dynamic_sl=use_dynamic_sl,

@@ -233,7 +233,7 @@ def cal_cndl_shape_n_cntxt_func(
         ])
 
     # Calculate rounded price distances for different decimal places
-    for i in range(1, 4):  # For n-1, n-2, n-3
+    for i in range(2, 4):  # For n-2, n-3
         calcs.extend([
             # Calculate decimal places dynamically based on number of digits
             (

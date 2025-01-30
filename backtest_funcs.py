@@ -421,7 +421,7 @@ def cal_backtest_on_raw_cndl(
 
     if use_dynamic_sl and dynamic_sl_type=="atr":
         print("Dynamic sl atr being used (BT-1) ...")
-        col_name = f"fe_ATR_W{atr_window_size}_M5"
+        col_name = f"fe_ATR_{target_symbol}_W{atr_window_size}_M5"
 
         array = df.merge(df_raw_backtest, on='_time', how='left')[
             [
@@ -435,7 +435,7 @@ def cal_backtest_on_raw_cndl(
         ].to_numpy()
 
     if use_dynamic_sl and dynamic_sl_type=="etr":
-        col_name = f"fe_ETR_W{atr_window_size}_M5"
+        col_name = f"fe_ETR_{target_symbol}_W{atr_window_size}_M5"
 
         array = df.merge(df_raw_backtest, on='_time', how='left')[
             [

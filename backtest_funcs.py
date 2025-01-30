@@ -419,6 +419,7 @@ def cal_backtest_on_raw_cndl(
     ).bfill().dt.days
 
     if use_dynamic_sl and dynamic_sl_type=="atr":
+        print("Here dynamic atr backtest.")
         col_name = f"fe_ATR_{target_symbol}_W{atr_window_size}_M5"
 
         if col_name not in df.columns:

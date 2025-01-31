@@ -272,7 +272,7 @@ def main(
             max_floating_dd=max_floating_dd,
             max_daily_dd=max_daily_dd,
             use_floating_risk=use_floating_risk,
-            use_perc_levels=use_perc_levels,
+            use_dynamic_sl=use_dynamic_sl,
         )
 
         # ______________________________Retrain Last Model to Save___________________________________________

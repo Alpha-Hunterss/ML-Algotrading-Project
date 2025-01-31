@@ -66,7 +66,7 @@ def quant_CV(
     max_floating_dd: float,
     max_daily_dd: float,
     use_floating_risk: bool,
-    use_perc_levels: bool,
+    use_dynamic_sl: bool,
 ):
     """
     This function runs Time Series CV with available embargo/purge 
@@ -568,7 +568,7 @@ def quant_CV(
                         max_floating_dd=max_floating_dd,
                         max_daily_dd=max_daily_dd,
                         use_floating_risk=use_floating_risk,
-                        use_perc_levels=use_perc_levels,
+                        use_dynamic_sl=use_dynamic_sl,
                         confidence_levels=confidence_levels,
                         model=model,
                         is_final_bt=False,
@@ -595,7 +595,7 @@ def quant_CV(
                         max_floating_dd=max_floating_dd,
                         max_daily_dd=max_daily_dd,
                         use_floating_risk=use_floating_risk,
-                        use_perc_levels=use_perc_levels,
+                        use_dynamic_sl=use_dynamic_sl,
                         confidence_levels=confidence_levels,
                         model=model,
                         is_final_bt=False,
@@ -669,7 +669,7 @@ def quant_CV(
             max_floating_dd=max_floating_dd,
             max_daily_dd=max_daily_dd,
             use_floating_risk=use_floating_risk,
-            use_perc_levels=use_perc_levels,
+            use_dynamic_sl=use_dynamic_sl,
             confidence_levels=confidence_levels,
             model=model,
             is_final_bt=True,

@@ -557,7 +557,7 @@ def money_management(
     max_floating_dd: float,
     max_daily_dd: float,
     use_floating_risk: bool,
-    use_perc_levels: bool,
+    use_dynamic_sl: bool,
 ):
     symbols_base_lot = {
         'EURUSD': 0.01,
@@ -640,7 +640,7 @@ def money_management(
             array[i, 3] = volumes[i]
             continue
 
-        if use_perc_levels:
+        if use_dynamic_sl:
             pip_risk = chunk[-1, 7] + spread
 
         used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
@@ -688,7 +688,7 @@ def do_backtest(
     max_floating_dd: float,
     max_daily_dd: float,
     use_floating_risk: bool,
-    use_perc_levels: bool,
+    use_dynamic_sl: bool,
     confidence_levels: np.ndarray,
     model,
     is_final_bt: bool,
@@ -736,7 +736,7 @@ def do_backtest(
             max_exp_daily_dd, new_trg_df = money_management(
                 new_trg_df, stop_loss, spread, initial_balance,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
-                max_daily_dd, use_floating_risk, use_perc_levels
+                max_daily_dd, use_floating_risk, use_dynamic_sl
             )
 
             ##? calculate balance
@@ -759,7 +759,7 @@ def do_backtest(
             max_exp_daily_dd, new_trg_df = money_management(
                 new_trg_df, stop_loss, spread, initial_balance,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
-                max_daily_dd, use_floating_risk, use_perc_levels
+                max_daily_dd, use_floating_risk, use_dynamic_sl
             )
 
         ##? calculate balance

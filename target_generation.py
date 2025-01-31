@@ -11,6 +11,7 @@ def calculate_classification_target_numpy_ver(
     stop_loss_perc: float = 0.033,
     use_perc_levels: bool = False,
     use_dynamic_sl: bool = False,
+    apply_static_sl_trg: bool = True,
     dynamic_sl_type: str = None,
     atr_level_multiplication: float = 1.5,
     trg_sl_exponent: float = 0.5,
@@ -41,12 +42,12 @@ def calculate_classification_target_numpy_ver(
             # BUY CLASS
             target = 0
 
-            if use_perc_levels and not use_dynamic_sl:
+            if use_perc_levels:
                 curr_close = selected_chunk[0, 0]
                 take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
                 stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
-            if use_dynamic_sl and dynamic_sl_type in ["atr", "etr"]:
+            if use_dynamic_sl and (dynamic_sl_type in ["atr", "etr"] and not apply_static_sl_trg):
                 stop_loss = selected_chunk[0, 3]*atr_level_multiplication*trg_sl_exponent
                 take_profit = reward*stop_loss
 
@@ -74,12 +75,12 @@ def calculate_classification_target_numpy_ver(
             # BUY CLASS
             target = 0
 
-            if use_perc_levels and not use_dynamic_sl:
+            if use_perc_levels:
                 curr_close = selected_chunk[0, 0]
                 take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
                 stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
-            if use_dynamic_sl and dynamic_sl_type in ["atr", "etr"]:
+            if use_dynamic_sl and (dynamic_sl_type in ["atr", "etr"] and not apply_static_sl_trg):
                 stop_loss = selected_chunk[0, 3]*atr_level_multiplication*trg_sl_exponent
                 take_profit = reward*stop_loss
 

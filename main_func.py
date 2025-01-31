@@ -43,6 +43,7 @@ def main(
             strg_stop_loss_perc = man_params["strg_stop_loss_perc"]
             use_perc_levels = man_params["use_perc_levels"]
             use_dynamic_sl = man_params["use_dynamic_sl"]
+            apply_static_sl_trg = man_params["apply_static_sl_trg"]
             dynamic_sl_type = man_params["dynamic_sl_type"]
             atr_window_size = man_params["atr_window_size"]
             atr_level_multiplication = man_params["atr_level_multiplication"]
@@ -93,6 +94,7 @@ def main(
                 "strg_stop_loss_perc",
                 "use_perc_levels",
                 "use_dynamic_sl",
+                "apply_static_sl_trg",
                 "dynamic_sl_type",
                 "atr_window_size",
                 "atr_level_multiplication",
@@ -143,6 +145,7 @@ def main(
             strg_stop_loss_perc = wandb.config.strg_stop_loss_perc
             use_perc_levels = wandb.config.use_perc_levels
             use_dynamic_sl = wandb.config.use_dynamic_sl
+            apply_static_sl_trg = wandb.config.apply_static_sl_trg
             dynamic_sl_type = wandb.config.dynamic_sl_type
             atr_window_size = wandb.config.atr_window_size
             atr_level_multiplication = wandb.config.atr_level_multiplication
@@ -198,6 +201,7 @@ def main(
             trg_stop_loss_perc=trg_stop_loss_perc,
             use_perc_levels=use_perc_levels,
             use_dynamic_sl=use_dynamic_sl,
+            apply_static_sl_trg=apply_static_sl_trg,
             dynamic_sl_type=dynamic_sl_type,
             atr_window_size=atr_window_size,
             atr_level_multiplication=atr_level_multiplication,

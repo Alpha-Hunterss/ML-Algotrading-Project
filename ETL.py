@@ -46,6 +46,7 @@ def ETL(
     dynamic_sl_type,
     atr_window_size,
     atr_level_multiplication,
+    trg_sl_exponent,
     spread,
     n_rand_features,
     target_col, # name of target column
@@ -119,6 +120,7 @@ def ETL(
         use_dynamic_sl=use_dynamic_sl,
         dynamic_sl_type=dynamic_sl_type,
         atr_level_multiplication=atr_level_multiplication,
+        trg_sl_exponent=trg_sl_exponent,
         spread_pip=spread,
         mode=trade_mode,
     )

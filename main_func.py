@@ -46,6 +46,7 @@ def main(
             dynamic_sl_type = man_params["dynamic_sl_type"]
             atr_window_size = man_params["atr_window_size"]
             atr_level_multiplication = man_params["atr_level_multiplication"]
+            trg_sl_exponent = man_params["trg_sl_exponent"]
             dynamic_sl_scale_type = man_params["dynamic_sl_scale_type"]
             rstd_window_size = man_params["rstd_window_size"]
             confidence_levels = man_params["confidence_levels"]
@@ -95,6 +96,7 @@ def main(
                 "dynamic_sl_type",
                 "atr_window_size",
                 "atr_level_multiplication",
+                "trg_sl_exponent",
                 "dynamic_sl_scale_type",
                 "rstd_window_size",
                 "confidence_levels",
@@ -144,6 +146,7 @@ def main(
             dynamic_sl_type = wandb.config.dynamic_sl_type
             atr_window_size = wandb.config.atr_window_size
             atr_level_multiplication = wandb.config.atr_level_multiplication
+            trg_sl_exponent = wandb.config.trg_sl_exponent
             dynamic_sl_scale_type = wandb.config.dynamic_sl_scale_type
             rstd_window_size = wandb.config.rstd_window_size
             confidence_levels = wandb.config.confidence_levels
@@ -198,6 +201,7 @@ def main(
             dynamic_sl_type=dynamic_sl_type,
             atr_window_size=atr_window_size,
             atr_level_multiplication=atr_level_multiplication,
+            trg_sl_exponent=trg_sl_exponent,
             spread=default_spread,
             n_rand_features=n_rand_features,
             target_col=target_col,

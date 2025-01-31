@@ -13,6 +13,7 @@ def calculate_classification_target_numpy_ver(
     use_dynamic_sl: bool = False,
     dynamic_sl_type: str = None,
     atr_level_multiplication: float = 1.5,
+    trg_sl_exponent: float = 0.5,
     spread_pip: int = 5,
     mode: str = "long",
 ):
@@ -46,7 +47,7 @@ def calculate_classification_target_numpy_ver(
                 stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
             if use_dynamic_sl and dynamic_sl_type in ["atr", "etr"]:
-                stop_loss = selected_chunk[0, 3]*atr_level_multiplication
+                stop_loss = selected_chunk[0, 3]*atr_level_multiplication*trg_sl_exponent
                 take_profit = reward*stop_loss
 
             buy_tp_cond = pip_diff_close >= take_profit
@@ -79,7 +80,7 @@ def calculate_classification_target_numpy_ver(
                 stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
             if use_dynamic_sl and dynamic_sl_type in ["atr", "etr"]:
-                stop_loss = selected_chunk[0, 3]*atr_level_multiplication
+                stop_loss = selected_chunk[0, 3]*atr_level_multiplication*trg_sl_exponent
                 take_profit = reward*stop_loss
 
             sell_tp_cond = pip_diff_close <= -take_profit-spread_pip

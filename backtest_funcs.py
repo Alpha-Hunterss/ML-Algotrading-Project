@@ -419,7 +419,6 @@ def cal_backtest_on_raw_cndl(
     ).bfill().dt.days
 
     if use_dynamic_sl and dynamic_sl_type=="atr":
-        print("Here dynamic atr backtest.")
         col_name = f"fe_ATR_{target_symbol}_W{atr_window_size}_M5"
 
         if col_name not in df.columns:
@@ -436,7 +435,7 @@ def cal_backtest_on_raw_cndl(
             ]
         ].to_numpy()
 
-    if use_dynamic_sl and dynamic_sl_type=="etr":
+    elif use_dynamic_sl and dynamic_sl_type=="etr":
         col_name = f"fe_ETR_{target_symbol}_W{atr_window_size}_M5"
 
         array = df.merge(df_raw_backtest, on='_time', how='left')[
@@ -461,8 +460,6 @@ def cal_backtest_on_raw_cndl(
             ]
         ].to_numpy()
 
-    print(f"The array shape is: {array.shape}")
-    print(f"A few rows of the array: \n{array[:5]}")
     (
         df_raw_backtest[bt_column_name],
         df_raw_backtest["pip_diff"],

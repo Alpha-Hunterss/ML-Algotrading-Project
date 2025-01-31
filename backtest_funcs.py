@@ -94,19 +94,19 @@ def calculate_classification_target_backtest(
             for i in range(array.shape[0] - window_size):
                 selected_chunk = array[i : i + window_size]
 
-                if use_perc_levels:
-                    curr_close = selected_chunk[0, 0]
-                    take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
-                    stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
-
                 if close_positions_at_midnight:
                     dates = date_column[i: i + window_size]
                     curr_date = dates[0]
                     selected_chunk = selected_chunk[dates == curr_date]
 
                 if dynamic_sl_type in ["atr", "etr"]:
-                    calc_sl = -selected_chunk[0, 5]*atr_level_multiplication
-                    calc_tp = -reward*calc_sl
+                    if selected_chunk[0, 5] is not None:
+                        calc_sl = -selected_chunk[0, 5]*atr_level_multiplication
+                        calc_tp = -reward*calc_sl
+                    else:
+                        curr_close = selected_chunk[0, 0]
+                        calc_sl = -(curr_close / symbol_decimal_multiply) * stop_loss_ratio
+                        calc_tp = (curr_close / symbol_decimal_multiply) * take_profit_ratio
                 elif dynamic_sl_type=="rstd":
                     if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
                         rstd_sl = rstds_norm[i-rstd_window_size]
@@ -161,19 +161,19 @@ def calculate_classification_target_backtest(
             for i in range(array.shape[0] - window_size):
                 selected_chunk = array[i : i + window_size]
 
-                if use_perc_levels:
-                    curr_close = selected_chunk[0, 0]
-                    take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
-                    stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
-
                 if close_positions_at_midnight:
                     dates = date_column[i: i + window_size]
                     curr_date = dates[0]
                     selected_chunk = selected_chunk[dates == curr_date]
 
                 if dynamic_sl_type in ["atr", "etr"]:
-                    calc_sl = selected_chunk[0, 5]*atr_level_multiplication
-                    calc_tp = -reward*calc_sl
+                    if selected_chunk[0, 5] is not None:
+                        calc_sl = selected_chunk[0, 5]*atr_level_multiplication
+                        calc_tp = -reward*calc_sl
+                    else:
+                        curr_close = selected_chunk[0, 0]
+                        calc_sl = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
+                        calc_tp = -(curr_close / symbol_decimal_multiply) * take_profit_ratio
                 elif dynamic_sl_type=="rstd":
                     if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
                         rstd_sl = rstds_norm[i-rstd_window_size]
@@ -424,7 +424,7 @@ def cal_backtest_on_raw_cndl(
         if col_name not in df.columns:
             raise ValueError(f"{col_name} col not in the dataset.")
 
-        array = df.merge(df_raw_backtest, on='_time', how='left')[
+        array = df.merge(df_raw_backtest, on='_time', how='right')[
             [
                 f"{target_symbol}_M5_CLOSE",
                 f"{target_symbol}_M5_HIGH",
@@ -438,7 +438,7 @@ def cal_backtest_on_raw_cndl(
     elif use_dynamic_sl and dynamic_sl_type=="etr":
         col_name = f"fe_ETR_{target_symbol}_W{atr_window_size}_M5"
 
-        array = df.merge(df_raw_backtest, on='_time', how='left')[
+        array = df.merge(df_raw_backtest, on='_time', how='right')[
             [
                 f"{target_symbol}_M5_CLOSE",
                 f"{target_symbol}_M5_HIGH",

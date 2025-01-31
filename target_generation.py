@@ -40,7 +40,7 @@ def calculate_classification_target_numpy_ver(
             # BUY CLASS
             target = 0
 
-            if use_perc_levels:
+            if use_perc_levels and not use_dynamic_sl:
                 curr_close = selected_chunk[0, 0]
                 take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
                 stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
@@ -73,7 +73,7 @@ def calculate_classification_target_numpy_ver(
             # BUY CLASS
             target = 0
 
-            if use_perc_levels:
+            if use_perc_levels and not use_dynamic_sl:
                 curr_close = selected_chunk[0, 0]
                 take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
                 stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio

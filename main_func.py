@@ -43,6 +43,7 @@ def main(
             strg_stop_loss_perc = man_params["strg_stop_loss_perc"]
             use_perc_levels = man_params["use_perc_levels"]
             use_dynamic_sl = man_params["use_dynamic_sl"]
+            max_strg_sl_dynamic = man_params["max_strg_sl_dynamic"]
             apply_static_sl_trg = man_params["apply_static_sl_trg"]
             dynamic_sl_type = man_params["dynamic_sl_type"]
             atr_window_size = man_params["atr_window_size"]
@@ -53,6 +54,7 @@ def main(
             confidence_levels = man_params["confidence_levels"]
             use_money_management = man_params["use_money_management"]
             initial_balance = man_params["initial_balance"]
+            accounts_leverage = man_params["accounts_leverage"]
             default_volume = man_params["default_volume"]
             default_spread = man_params["default_spread"]
             n_max_OP = man_params["n_max_OP"]
@@ -94,6 +96,7 @@ def main(
                 "strg_stop_loss_perc",
                 "use_perc_levels",
                 "use_dynamic_sl",
+                "max_strg_sl_dynamic",
                 "apply_static_sl_trg",
                 "dynamic_sl_type",
                 "atr_window_size",
@@ -104,6 +107,7 @@ def main(
                 "confidence_levels",
                 "use_money_management",
                 "initial_balance",
+                "accounts_leverage",
                 "default_volume",
                 "default_spread",
                 "n_max_OP",
@@ -145,6 +149,7 @@ def main(
             strg_stop_loss_perc = wandb.config.strg_stop_loss_perc
             use_perc_levels = wandb.config.use_perc_levels
             use_dynamic_sl = wandb.config.use_dynamic_sl
+            max_strg_sl_dynamic = wandb.config.max_strg_sl_dynamic
             apply_static_sl_trg = wandb.config.apply_static_sl_trg
             dynamic_sl_type = wandb.config.dynamic_sl_type
             atr_window_size = wandb.config.atr_window_size
@@ -155,6 +160,7 @@ def main(
             confidence_levels = wandb.config.confidence_levels
             use_money_management = wandb.config.use_money_management
             initial_balance = wandb.config.initial_balance
+            accounts_leverage = wandb.config.accounts_leverage
             default_volume = wandb.config.default_volume
             default_spread = wandb.config.default_spread
             n_max_OP = wandb.config.n_max_OP
@@ -246,6 +252,7 @@ def main(
             spread=default_spread,
             trade_mode=trade_mode,
             use_dynamic_sl=use_dynamic_sl,
+            max_strg_sl_dynamic=max_strg_sl_dynamic,
             dynamic_sl_scale_type=dynamic_sl_scale_type,
             rstd_window_size=rstd_window_size
         )
@@ -263,6 +270,7 @@ def main(
             use_cudf=use_cudf,
             cnf_levels=confidence_levels,
             initial_balance=initial_balance,
+            accounts_leverage=accounts_leverage,
             default_volume=default_volume,
             default_spread=default_spread,
             early_stopping_rounds=early_stopping_rounds,
@@ -277,6 +285,7 @@ def main(
             max_daily_dd=max_daily_dd,
             use_floating_risk=use_floating_risk,
             use_dynamic_sl=use_dynamic_sl,
+            max_strg_sl_dynamic=max_strg_sl_dynamic,
         )
 
         # ______________________________Retrain Last Model to Save___________________________________________

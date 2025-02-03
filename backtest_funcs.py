@@ -29,6 +29,7 @@ def calculate_classification_target_backtest(
     array,
     window_size,
     use_dynamic_sl: bool = False,
+    max_strg_sl_dynamic: int = 20,
     dynamic_sl_scale_type: str = "third_quartile",
     rstd_window_size: int = 12,
     close_positions_at_midnight: bool = False,
@@ -107,6 +108,8 @@ def calculate_classification_target_backtest(
                         curr_close = selected_chunk[0, 0]
                         calc_sl = -(curr_close / symbol_decimal_multiply) * stop_loss_ratio
                         calc_tp = (curr_close / symbol_decimal_multiply) * take_profit_ratio
+
+                    calc_sl = max(calc_sl, -max_strg_sl_dynamic)
                 elif dynamic_sl_type=="rstd":
                     if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
                         rstd_sl = rstds_norm[i-rstd_window_size]
@@ -174,6 +177,8 @@ def calculate_classification_target_backtest(
                         curr_close = selected_chunk[0, 0]
                         calc_sl = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
                         calc_tp = -(curr_close / symbol_decimal_multiply) * take_profit_ratio
+
+                    calc_sl = min(calc_sl, max_strg_sl_dynamic)
                 elif dynamic_sl_type=="rstd":
                     if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
                         rstd_sl = rstds_norm[i-rstd_window_size]
@@ -388,6 +393,7 @@ def cal_backtest_on_raw_cndl(
     spread: int,
     trade_mode: str,
     use_dynamic_sl: bool,
+    max_strg_sl_dynamic: int,
     dynamic_sl_scale_type: str,
     rstd_window_size: int
 )-> pd.DataFrame:
@@ -471,6 +477,7 @@ def cal_backtest_on_raw_cndl(
         array,
         window_size,
         use_dynamic_sl=use_dynamic_sl,
+        max_strg_sl_dynamic=max_strg_sl_dynamic,
         dynamic_sl_scale_type=dynamic_sl_scale_type,
         rstd_window_size=rstd_window_size,
         symbol_decimal_multiply=symbols_dict[target_symbol]["pip_size"],
@@ -551,6 +558,7 @@ def money_management(
     stop_loss: int,
     spread: int,
     initial_balance: int,
+    accounts_leverage: int,
     target_symbol: str,
     pip_value: dict[str, float],
     n_max_OP: int,
@@ -558,6 +566,7 @@ def money_management(
     max_daily_dd: float,
     use_floating_risk: bool,
     use_dynamic_sl: bool,
+    max_strg_sl_dynamic: int,
 ):
     symbols_base_lot = {
         'EURUSD': 0.01,
@@ -568,6 +577,16 @@ def money_management(
         'US100': 0.01,
         'SPX500': 0.01,
         'BTCUSD': 0.01,
+    }
+    symbols_max_lot = {
+        'EURUSD': (0.99*accounts_leverage) / 100000,
+        'GBPUSD': (0.99*accounts_leverage) / 100000,
+        'USDJPY': (0.99*accounts_leverage) / 100000,
+        'XAUUSD': (0.99*accounts_leverage) / 100,
+        'US30': (0.99*accounts_leverage) / 1,
+        'US100': (0.99*accounts_leverage) / 1,
+        'SPX500': (0.99*accounts_leverage) / 1,
+        'BTCUSD': (0.99*accounts_leverage) / 1,
     }
     weights = {
         0: 0.0,
@@ -586,7 +605,7 @@ def money_management(
     array = df[
         [
             'index', '_time', 'close_position', 'volume', 'net_profit',
-            'position_closed', 'confidence_levels', 'stop_losses'
+            'position_closed', 'confidence_levels', 'stop_losses', f"{target_symbol}_M5_CLOSE"
         ]
     ].to_numpy()
 
@@ -594,12 +613,18 @@ def money_management(
         [np.datetime64(datetime, 'D') for datetime in array[:, 1]]
     )
     symbols_exp = 1/symbols_base_lot.get(target_symbol)
+    max_open_volume_possible = symbols_max_lot.get(target_symbol)
     pip_risk = stop_loss + spread
+    max_pip_risk = max_strg_sl_dynamic + spread
     start_day_balance = initial_balance
     floating_balance = initial_balance
+    variable_balance = initial_balance
     n_open_position = []
     total_open_volume = []
     prev_date = np.datetime64(array[0, 1], 'D')
+    day_before_prev_date = np.datetime64(array[0, 1], 'D')
+    historic_closed_pos_cond = None
+    aug_closed_pos_cond = None
     volumes = []
     max_exp_daily_dd = 0
 
@@ -616,54 +641,94 @@ def money_management(
         total_open_volume.append(open_volumes.sum())
 
         closed_pos_cond = (chunk[:-1, 5] == True) & (dates[:-1] == prev_date)
+
+        if day_before_prev_date != prev_date:
+            historic_closed_pos_cond = (chunk[:-1, 5] == True) & (dates[:-1] == day_before_prev_date)
+            historic_closed_pos_cond = historic_closed_pos_cond ^ aug_closed_pos_cond
+            aug_closed_pos_cond = (chunk[:, 5] == True) & (dates[:] == day_before_prev_date)
+
+            if historic_closed_pos_cond.any():
+                profits_n_losses = chunk[:-1, 3][historic_closed_pos_cond] * (
+                    pip_value[target_symbol] * chunk[:-1, 4][historic_closed_pos_cond]
+                )
+                added_balance = profits_n_losses.sum()
+                variable_balance += added_balance
+
         profits_n_losses = chunk[:-1, 3][closed_pos_cond] * (
             pip_value[target_symbol] * chunk[:-1, 4][closed_pos_cond]
         )
         added_balance = profits_n_losses.sum()
-        if added_balance < 0:
-            dd = added_balance / start_day_balance
+
+        used_balance = (variable_balance-start_day_balance) + added_balance
+        if used_balance < 0:
+            dd = used_balance / start_day_balance
             if dd < max_exp_daily_dd:
                 max_exp_daily_dd = dd
 
-        if use_floating_risk:
-            floating_balance = start_day_balance + added_balance
+        floating_balance = start_day_balance + used_balance
 
         curr_date = np.datetime64(chunk[-1, 1], 'D')
         if curr_date != prev_date:
-            start_day_balance += added_balance
+            start_day_balance += used_balance
+            variable_balance = start_day_balance
+            day_before_prev_date = prev_date
             prev_date = curr_date
             added_balance = 0
 
+            if aug_closed_pos_cond is None:
+                aug_closed_pos_cond = (chunk[:, 5] == True) & (dates[:] == day_before_prev_date)
+
         remaining_pos = n_max_OP - cond_len
+
+        if target_symbol == 'USDJPY':
+            max_vol = max_open_volume_possible * floating_balance
+        else:
+            max_vol = (max_open_volume_possible * floating_balance) / chunk[-1, 8]
+
         if remaining_pos <= 0:
             volumes.append(0.0)
             array[i, 3] = volumes[i]
             continue
 
+        daily_dd_budget = (start_day_balance * max_daily_dd) + used_balance
+
         if use_dynamic_sl:
-            pip_risk = chunk[-1, 7] + spread
+            used_dd_budget = chunk[:-1, 3][open_cond] * (pip_value[target_symbol] * chunk[:-1, 7][open_cond])
+            used_dd_budget = used_dd_budget.sum()
 
-        used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
-        daily_dd_budget = (start_day_balance * max_daily_dd) + added_balance
+            base_lot = (
+                (daily_dd_budget - used_dd_budget) / remaining_pos
+            ) / (pip_value[target_symbol] * max_pip_risk)
+        else:
+            used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
 
-        base_lot = (
-            (daily_dd_budget - used_dd_budget) / remaining_pos
-        ) / (pip_value[target_symbol] * pip_risk)
+            base_lot = (
+                (daily_dd_budget - used_dd_budget) / remaining_pos
+            ) / (pip_value[target_symbol] * pip_risk)
 
         if use_floating_risk:
             floating_dd_budget = floating_balance * max_floating_dd
-            floating_base_lot = (
-                (floating_dd_budget - used_dd_budget) / remaining_pos
-            ) / (pip_value[target_symbol] * pip_risk)
+
+            if use_dynamic_sl:
+                floating_base_lot = (
+                    (floating_dd_budget - used_dd_budget) / remaining_pos
+                ) / (pip_value[target_symbol] * max_pip_risk)
+            else:
+                floating_base_lot = (
+                    (floating_dd_budget - used_dd_budget) / remaining_pos
+                ) / (pip_value[target_symbol] * pip_risk)
+
             base_lot = min(base_lot, floating_base_lot)
 
-        if base_lot <= 0:
+        floored_base_lot = math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp
+
+        if (floored_base_lot <= 0) or (total_open_volume[i]+floored_base_lot >= max_vol):
             volumes.append(0.0)
             array[i, 3] = volumes[i]
             continue
 
         cnf_level_exp = weights.get(chunk[-1, 6])
-        volumes.append(math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp)
+        volumes.append(floored_base_lot)
         array[i, 3] = volumes[i]
 
     df["volume"] = np.array(volumes)
@@ -679,6 +744,7 @@ def do_backtest(
     spread: float,
     volume: float,
     initial_balance: int,
+    accounts_leverage: int,
     df_raw_backtest: pd.DataFrame,
     bt_column_name:   str,
     swap_rate: float,
@@ -689,6 +755,7 @@ def do_backtest(
     max_daily_dd: float,
     use_floating_risk: bool,
     use_dynamic_sl: bool,
+    max_strg_sl_dynamic: int,
     confidence_levels: np.ndarray,
     model,
     is_final_bt: bool,
@@ -734,9 +801,9 @@ def do_backtest(
 
         if use_money_management:
             max_exp_daily_dd, new_trg_df = money_management(
-                new_trg_df, stop_loss, spread, initial_balance,
+                new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
-                max_daily_dd, use_floating_risk, use_dynamic_sl
+                max_daily_dd, use_floating_risk, use_dynamic_sl, max_strg_sl_dynamic
             )
 
             ##? calculate balance
@@ -757,9 +824,9 @@ def do_backtest(
 
         if use_money_management:
             max_exp_daily_dd, new_trg_df = money_management(
-                new_trg_df, stop_loss, spread, initial_balance,
+                new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
-                max_daily_dd, use_floating_risk, use_dynamic_sl
+                max_daily_dd, use_floating_risk, use_dynamic_sl, max_strg_sl_dynamic
             )
 
         ##? calculate balance

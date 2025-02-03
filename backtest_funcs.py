@@ -395,7 +395,8 @@ def cal_backtest_on_raw_cndl(
     use_dynamic_sl: bool,
     max_strg_sl_dynamic: int,
     dynamic_sl_scale_type: str,
-    rstd_window_size: int
+    rstd_window_size: int,
+    close_positions_at_midnight: bool,
 )-> pd.DataFrame:
     """
     This function is basicaly a pre-backtest fucntion that calculates Backtest on all raw data (all times) based on strategy. 
@@ -480,6 +481,7 @@ def cal_backtest_on_raw_cndl(
         max_strg_sl_dynamic=max_strg_sl_dynamic,
         dynamic_sl_scale_type=dynamic_sl_scale_type,
         rstd_window_size=rstd_window_size,
+        close_positions_at_midnight=close_positions_at_midnight,
         symbol_decimal_multiply=symbols_dict[target_symbol]["pip_size"],
         take_profit=take_profit,
         stop_loss=stop_loss,

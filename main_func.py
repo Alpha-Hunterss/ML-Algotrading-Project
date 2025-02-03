@@ -61,6 +61,7 @@ def main(
             max_floating_dd = man_params["max_floating_dd"]
             max_daily_dd = man_params["max_daily_dd"]
             use_floating_risk = man_params["use_floating_risk"]
+            close_positions_at_midnight = man_params["close_positions_at_midnight"]
             # Output Model:
             save_model_mode = man_params["save_model_mode"]
             use_cudf = man_params["use_cudf"]
@@ -114,6 +115,7 @@ def main(
                 "max_floating_dd",
                 "max_daily_dd",
                 "use_floating_risk",
+                "close_positions_at_midnight",
                 "save_model_mode",
                 "use_cudf",
                 "feature_set",
@@ -167,6 +169,7 @@ def main(
             max_floating_dd = wandb.config.max_floating_dd
             max_daily_dd = wandb.config.max_daily_dd
             use_floating_risk = wandb.config.use_floating_risk
+            close_positions_at_midnight = wandb.config.close_positions_at_midnight
             # Output Model:
             save_model_mode = wandb.config.save_model_mode
             use_cudf = wandb.config.use_cudf
@@ -254,7 +257,8 @@ def main(
             use_dynamic_sl=use_dynamic_sl,
             max_strg_sl_dynamic=max_strg_sl_dynamic,
             dynamic_sl_scale_type=dynamic_sl_scale_type,
-            rstd_window_size=rstd_window_size
+            rstd_window_size=rstd_window_size,
+            close_positions_at_midnight=close_positions_at_midnight,
         )
 
         # ______________________________RUN Quant Cross-Validation and Backtest on Folds_____________________

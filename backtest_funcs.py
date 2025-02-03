@@ -722,6 +722,7 @@ def money_management(
 
             base_lot = min(base_lot, floating_base_lot)
 
+        cnf_level_exp = weights.get(chunk[-1, 6])
         floored_base_lot = math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp
 
         if (floored_base_lot <= 0) or (total_open_volume[i]+floored_base_lot >= max_vol):
@@ -729,7 +730,6 @@ def money_management(
             array[i, 3] = volumes[i]
             continue
 
-        cnf_level_exp = weights.get(chunk[-1, 6])
         volumes.append(floored_base_lot)
         array[i, 3] = volumes[i]
 

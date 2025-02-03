@@ -628,7 +628,15 @@ def money_management(
     historic_closed_pos_cond = None
     aug_closed_pos_cond = None
     volumes = []
+    start_day_balances = []
+    floating_balances = []
+    daily_dds = []
+    daily_dd_exp = []
+    used_balances = []
+    remaining_positions = []
+    used_dd_budgets = []
     max_exp_daily_dd = 0
+    todays_exp_daily_dd = 0
 
     for i in range(array.shape[0]):
         chunk = array[:i+1]
@@ -664,6 +672,10 @@ def money_management(
         used_balance = (variable_balance-start_day_balance) + added_balance
         if used_balance < 0:
             dd = used_balance / start_day_balance
+
+            if dd < todays_exp_daily_dd:
+                todays_exp_daily_dd = dd
+
             if dd < max_exp_daily_dd:
                 max_exp_daily_dd = dd
 
@@ -676,11 +688,20 @@ def money_management(
             day_before_prev_date = prev_date
             prev_date = curr_date
             added_balance = 0
+            todays_exp_daily_dd = 0
 
             if aug_closed_pos_cond is None:
                 aug_closed_pos_cond = (chunk[:, 5] == True) & (dates[:] == day_before_prev_date)
 
         remaining_pos = n_max_OP - cond_len
+        daily_dd_budget = (start_day_balance * max_daily_dd) + used_balance
+
+        start_day_balances.append(start_day_balance)
+        floating_balances.append(floating_balance)
+        daily_dds.append(start_day_balance * max_daily_dd)
+        daily_dd_exp.append(todays_exp_daily_dd)
+        used_balances.append(used_balance)
+        remaining_positions.append(remaining_pos)
 
         if target_symbol == 'USDJPY':
             max_vol = max_open_volume_possible * floating_balance
@@ -689,10 +710,9 @@ def money_management(
 
         if remaining_pos <= 0:
             volumes.append(0.0)
+            used_dd_budgets.append(0.0)
             array[i, 3] = volumes[i]
             continue
-
-        daily_dd_budget = (start_day_balance * max_daily_dd) + used_balance
 
         if use_dynamic_sl:
             used_dd_budget = chunk[:-1, 3][open_cond] * (pip_value[target_symbol] * chunk[:-1, 7][open_cond])
@@ -707,6 +727,8 @@ def money_management(
             base_lot = (
                 (daily_dd_budget - used_dd_budget) / remaining_pos
             ) / (pip_value[target_symbol] * pip_risk)
+
+        used_dd_budgets.append(used_dd_budget)
 
         if use_floating_risk:
             floating_dd_budget = floating_balance * max_floating_dd
@@ -736,6 +758,13 @@ def money_management(
     df["volume"] = np.array(volumes)
     df["n_open_position"] = np.array(n_open_position)
     df["volume_open_position"] = np.array(total_open_volume)
+    df["start_day_balances"] = np.array(start_day_balances)
+    df["floating_balances"] = np.array(floating_balances)
+    df["daily_dds"] = np.array(daily_dds)
+    df["daily_dd_exp"] = np.array(daily_dd_exp)
+    df["used_balances"] = np.array(used_balances)
+    df["remaining_positions"] = np.array(remaining_positions)
+    df["used_dd_budgets"] = np.array(used_dd_budgets)
 
     return max_exp_daily_dd, df
 
@@ -780,6 +809,13 @@ def do_backtest(
     new_trg_df["volume"] = volume
     new_trg_df["n_open_position"] = 0
     new_trg_df["volume_open_position"] = 0.0
+    new_trg_df["start_day_balances"] = 0.0
+    new_trg_df["floating_balances"] = 0.0
+    new_trg_df["daily_dds"] = 0.0
+    new_trg_df["daily_dd_exp"] = 0.0
+    new_trg_df["used_balances"] = 0.0
+    new_trg_df["remaining_positions"] = 0
+    new_trg_df["used_dd_budgets"] = 0.0
     max_exp_daily_dd = 0.0
 
     plot_profit_distribution(new_trg_df)
@@ -809,12 +845,12 @@ def do_backtest(
             )
 
             ##? calculate balance
-            new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * pip_value[
+            new_trg_df["profits_n_losses"] = new_trg_df["net_profit"] * new_trg_df["volume"] * pip_value[
                 target_symbol
             ] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
         else:
             ##? calculate balance
-            new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * new_trg_df[
+            new_trg_df["profits_n_losses"] = new_trg_df["net_profit"] * new_trg_df["volume"] * new_trg_df[
                 "confidence_levels"
             ] * pip_value[target_symbol] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
 
@@ -832,11 +868,11 @@ def do_backtest(
             )
 
         ##? calculate balance
-        new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * pip_value[
+        new_trg_df["profits_n_losses"] = new_trg_df["net_profit"] * new_trg_df["volume"] * pip_value[
             target_symbol
         ] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
 
-    new_trg_df["balance"] = new_trg_df["balance"].cumsum()
+    new_trg_df["balance"] = new_trg_df["profits_n_losses"].cumsum()
     new_trg_df["balance"] += initial_balance
 
     ##? calculate max_drawdown
@@ -879,11 +915,20 @@ def do_backtest(
                 f"{bt_column_name}",
                 "pip_diff",
                 "net_profit",
+                "profits_n_losses",
                 "balance",
                 "volume",
+                "volume_open_position",
                 "confidence_levels",
                 "stop_losses",
-                "take_profits"
+                "take_profits",
+                "start_day_balances",
+                "floating_balances",
+                "daily_dds",
+                "daily_dd_exp",
+                "used_balances",
+                "remaining_positions",
+                "used_dd_budgets",
             ]
         ],
     )

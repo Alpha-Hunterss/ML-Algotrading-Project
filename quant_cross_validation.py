@@ -69,6 +69,7 @@ def quant_CV(
     use_floating_risk: bool,
     use_dynamic_sl: bool,
     max_strg_sl_dynamic: int,
+    trade_mode: str,
 ):
     """
     This function runs Time Series CV with available embargo/purge 
@@ -577,6 +578,7 @@ def quant_CV(
                         model=model,
                         is_final_bt=False,
                         is_cf_model=True,
+                        trade_mode=trade_mode,
                     )
                 else:
                     #? Backtest
@@ -606,6 +608,7 @@ def quant_CV(
                         model=model,
                         is_final_bt=False,
                         is_cf_model=False,
+                        trade_mode=trade_mode,
                     )
 
                 fold_profit_percent = bt_report['profit_percent']
@@ -682,6 +685,7 @@ def quant_CV(
             model=model,
             is_final_bt=True,
             is_cf_model=is_cf_model,
+            trade_mode=trade_mode,
         )
         general_backtest_report[f"profit_percent_{pred_name}"] = bt_report['profit_percent']
         general_backtest_report[f"max_dd_{pred_name}"] = bt_report['max_draw_down']

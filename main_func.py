@@ -290,6 +290,7 @@ def main(
             use_floating_risk=use_floating_risk,
             use_dynamic_sl=use_dynamic_sl,
             max_strg_sl_dynamic=max_strg_sl_dynamic,
+            trade_mode=trade_mode,
         )
 
         # ______________________________Retrain Last Model to Save___________________________________________

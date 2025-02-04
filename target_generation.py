@@ -51,8 +51,8 @@ def calculate_classification_target_numpy_ver(
                 stop_loss = selected_chunk[0, 3]*atr_level_multiplication*trg_sl_exponent
                 take_profit = reward*stop_loss
 
-            buy_tp_cond = pip_diff_close >= take_profit
-            buy_sl_cond = pip_diff_low <= -stop_loss
+            buy_tp_cond = pip_diff_close >= take_profit+spread_pip
+            buy_sl_cond = pip_diff_low <= -stop_loss+spread_pip
 
             if buy_tp_cond.any():
                 arg_buy_tp_cond = np.where((pip_diff_close >= take_profit))[0][0]

@@ -123,8 +123,8 @@ def calculate_classification_target_backtest(
                 pip_diff_high = (selected_chunk[1:, 1] - selected_chunk[0, 0]) / symbol_decimal_multiply
                 pip_diff_low = (selected_chunk[1:, 2] - selected_chunk[0, 0]) / symbol_decimal_multiply
 
-                buy_tp_cond = pip_diff_high >= calc_tp
-                buy_sl_cond = pip_diff_low <= calc_sl
+                buy_tp_cond = pip_diff_high >= calc_tp+spread_pip
+                buy_sl_cond = pip_diff_low <= calc_sl+spread_pip
 
                 if buy_tp_cond.any():
                     arg_buy_tp_cond = np.where(pip_diff_high >= calc_tp)[0][0]
@@ -247,8 +247,8 @@ def calculate_classification_target_backtest(
                     take_profit = (curr_close / symbol_decimal_multiply) * take_profit_ratio
                     stop_loss = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
 
-                buy_tp_cond = pip_diff_high >= take_profit
-                buy_sl_cond = pip_diff_low <= -stop_loss
+                buy_tp_cond = pip_diff_high >= take_profit+spread_pip
+                buy_sl_cond = pip_diff_low <= -stop_loss+spread_pip
 
                 if buy_tp_cond.any():
                     arg_buy_tp_cond = np.where(pip_diff_high >= take_profit)[0][0]
@@ -791,6 +791,7 @@ def do_backtest(
     model,
     is_final_bt: bool,
     is_cf_model: bool,
+    trade_mode: str,
 ):
     pip_value = {
         'EURUSD': 10,
@@ -874,6 +875,13 @@ def do_backtest(
 
     new_trg_df["balance"] = new_trg_df["profits_n_losses"].cumsum()
     new_trg_df["balance"] += initial_balance
+
+    if trade_mode == 'long':
+        new_trg_df["stop_losses"] = (new_trg_df[f"{target_symbol}_M5_CLOSE"] + spread) - new_trg_df["stop_losses"]
+        new_trg_df["take_profits"] = (new_trg_df[f"{target_symbol}_M5_CLOSE"] + spread) + new_trg_df["take_profits"]
+    elif trade_mode == 'short':
+        new_trg_df["stop_losses"] = new_trg_df[f"{target_symbol}_M5_CLOSE"] + new_trg_df["stop_losses"]
+        new_trg_df["take_profits"] = new_trg_df[f"{target_symbol}_M5_CLOSE"] - new_trg_df["take_profits"]
 
     ##? calculate max_drawdown
     max_drawdown, max_overall_dd = calculate_max_drawdown(new_trg_df["balance"], initial_balance)

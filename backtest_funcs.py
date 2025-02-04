@@ -103,13 +103,14 @@ def calculate_classification_target_backtest(
                 if dynamic_sl_type in ["atr", "etr"]:
                     if selected_chunk[0, 5] is not None:
                         calc_sl = -selected_chunk[0, 5]*atr_level_multiplication
+                        calc_sl = max(calc_sl, -max_strg_sl_dynamic)
                         calc_tp = -reward*calc_sl
                     else:
                         curr_close = selected_chunk[0, 0]
                         calc_sl = -(curr_close / symbol_decimal_multiply) * stop_loss_ratio
+                        calc_sl = max(calc_sl, -max_strg_sl_dynamic)
                         calc_tp = (curr_close / symbol_decimal_multiply) * take_profit_ratio
 
-                    calc_sl = max(calc_sl, -max_strg_sl_dynamic)
                 elif dynamic_sl_type=="rstd":
                     if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
                         rstd_sl = rstds_norm[i-rstd_window_size]
@@ -176,13 +177,14 @@ def calculate_classification_target_backtest(
                 if dynamic_sl_type in ["atr", "etr"]:
                     if selected_chunk[0, 5] is not None:
                         calc_sl = selected_chunk[0, 5]*atr_level_multiplication
+                        calc_sl = min(calc_sl, max_strg_sl_dynamic)
                         calc_tp = -reward*calc_sl
                     else:
                         curr_close = selected_chunk[0, 0]
                         calc_sl = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
+                        calc_sl = min(calc_sl, max_strg_sl_dynamic)
                         calc_tp = -(curr_close / symbol_decimal_multiply) * take_profit_ratio
 
-                    calc_sl = min(calc_sl, max_strg_sl_dynamic)
                 elif dynamic_sl_type=="rstd":
                     if i >= rstd_window_size:  # Ensure that there's enough data for RSTD calculation
                         rstd_sl = rstds_norm[i-rstd_window_size]

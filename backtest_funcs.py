@@ -594,6 +594,7 @@ def money_management(
     use_floating_risk: bool,
     use_dynamic_sl: bool,
     max_strg_sl_dynamic_perc: int,
+    symbol_decimal_multiply: float,
 ):
     symbols_base_lot = {
         'EURUSD': 0.01,
@@ -636,7 +637,6 @@ def money_management(
         ]
     ].to_numpy()
 
-    symbol_decimal_multiply = symbols_dict[target_symbol]["pip_size"]
     max_strg_sl_dynamic_ratio = max_strg_sl_dynamic_perc / 100
     date_column = np.array(
         [np.datetime64(datetime, 'D') for datetime in array[:, 1]]
@@ -839,6 +839,7 @@ def do_backtest(
         'BTCUSD': 0.01
     }
 
+    symbol_decimal_multiply = symbols_dict[target_symbol]["pip_size"]
     df_model_signal = df_model_signal.reset_index().rename(columns={'index': '_time'})
     new_trg_df = df_model_signal.merge(df_raw_backtest, on="_time", how="inner")
     new_trg_df["net_profit"] = new_trg_df.pip_diff - spread
@@ -878,7 +879,8 @@ def do_backtest(
             max_exp_daily_dd, no_exceeding_dds, new_trg_df = money_management(
                 new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
-                max_daily_dd, use_floating_risk, use_dynamic_sl, max_strg_sl_dynamic_perc
+                max_daily_dd, use_floating_risk, use_dynamic_sl,
+                max_strg_sl_dynamic_perc, symbol_decimal_multiply
             )
 
             ##? calculate balance
@@ -901,7 +903,8 @@ def do_backtest(
             max_exp_daily_dd, no_exceeding_dds, new_trg_df = money_management(
                 new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
-                max_daily_dd, use_floating_risk, use_dynamic_sl, max_strg_sl_dynamic_perc
+                max_daily_dd, use_floating_risk, use_dynamic_sl,
+                max_strg_sl_dynamic_perc, symbol_decimal_multiply
             )
 
         ##? calculate balance
@@ -912,9 +915,14 @@ def do_backtest(
     new_trg_df["balance"] = new_trg_df["profits_n_losses"].cumsum()
     new_trg_df["balance"] += initial_balance
 
+    new_trg_df["stop_losses"] *= symbol_decimal_multiply
+    new_trg_df["take_profits"] *= symbol_decimal_multiply
+
     if trade_mode == 'long':
-        new_trg_df["stop_losses"] = (new_trg_df[f"{target_symbol}_M5_CLOSE"] + spread) - new_trg_df["stop_losses"]
-        new_trg_df["take_profits"] = (new_trg_df[f"{target_symbol}_M5_CLOSE"] + spread) + new_trg_df["take_profits"]
+        price_spread = spread * symbol_decimal_multiply
+
+        new_trg_df["stop_losses"] = (new_trg_df[f"{target_symbol}_M5_CLOSE"] + price_spread) - new_trg_df["stop_losses"]
+        new_trg_df["take_profits"] = (new_trg_df[f"{target_symbol}_M5_CLOSE"] + price_spread) + new_trg_df["take_profits"]
     elif trade_mode == 'short':
         new_trg_df["stop_losses"] = new_trg_df[f"{target_symbol}_M5_CLOSE"] + new_trg_df["stop_losses"]
         new_trg_df["take_profits"] = new_trg_df[f"{target_symbol}_M5_CLOSE"] - new_trg_df["take_profits"]

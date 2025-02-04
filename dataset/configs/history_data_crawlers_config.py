@@ -60,7 +60,7 @@ symbols_dict = {
     # ? metals
     # "XAGUSD":{"decimal_divide":1e+3,"pip_size":0.1,"metatrader_id":"XAGUSD","dukascopy_id":"XAGUSD"}, # Spot silver
     "XAUUSD": {
-        "decimal_divide": 1e2,
+        "decimal_divide": 1e3,
         "pip_size": 0.01,
         "yahoo_finance": ["GC=F"],
         "metatrader_id": "XAUUSD",

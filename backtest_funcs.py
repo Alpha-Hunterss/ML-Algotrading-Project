@@ -468,7 +468,6 @@ def plot_profit_distribution(df, bins=100, figsize=(9, 7)):
 
     return plt.gcf()
 
-
 def money_management(
     df: pd.DataFrame,
     stop_loss: int,
@@ -481,7 +480,9 @@ def money_management(
     max_daily_dd: float,
     use_floating_risk: bool,
     use_perc_levels: bool,
-    sampled_times:list = [] ,
+    use_dynamic_sl: bool =False,
+    accounts_leverage: int = 100,
+    max_strg_sl_dynamic: int = 15,
 ):
     symbols_base_lot = {
         'EURUSD': 0.01,
@@ -492,6 +493,16 @@ def money_management(
         'US100': 0.01,
         'SPX500': 0.01,
         'BTCUSD': 0.01,
+    }
+    symbols_max_lot = {
+        'EURUSD': (0.99*accounts_leverage) / 100000,
+        'GBPUSD': (0.99*accounts_leverage) / 100000,
+        'USDJPY': (0.99*accounts_leverage) / 100000,
+        'XAUUSD': (0.99*accounts_leverage) / 100,
+        'US30': (0.99*accounts_leverage) / 1,
+        'US100': (0.99*accounts_leverage) / 1,
+        'SPX500': (0.99*accounts_leverage) / 1,
+        'BTCUSD': (0.99*accounts_leverage) / 1,
     }
     weights = {
         0: 0.0,
@@ -510,7 +521,7 @@ def money_management(
     array = df[
         [
             'index', '_time', 'close_position', 'volume', 'net_profit',
-            'position_closed', 'confidence_levels', 'stop_losses'
+            'position_closed', 'confidence_levels', 'stop_losses', f"{target_symbol}_M5_CLOSE"
         ]
     ].to_numpy()
 
@@ -518,15 +529,28 @@ def money_management(
         [np.datetime64(datetime, 'D') for datetime in array[:, 1]]
     )
     symbols_exp = 1/symbols_base_lot.get(target_symbol)
+    max_open_volume_possible = symbols_max_lot.get(target_symbol)
     pip_risk = stop_loss + spread
+    max_pip_risk = max_strg_sl_dynamic + spread
     start_day_balance = initial_balance
     floating_balance = initial_balance
+    variable_balance = initial_balance
     n_open_position = []
     total_open_volume = []
     prev_date = np.datetime64(array[0, 1], 'D')
+    day_before_prev_date = np.datetime64(array[0, 1], 'D')
+    historic_closed_pos_cond = None
+    aug_closed_pos_cond = None
     volumes = []
-    label_position = []
+    start_day_balances = []
+    floating_balances = []
+    daily_dds = []
+    daily_dd_exp = []
+    used_balances = []
+    remaining_positions = []
+    used_dd_budgets = []
     max_exp_daily_dd = 0
+    todays_exp_daily_dd = 0
 
     for i in range(array.shape[0]):
         chunk = array[:i+1]
@@ -541,78 +565,269 @@ def money_management(
         total_open_volume.append(open_volumes.sum())
 
         closed_pos_cond = (chunk[:-1, 5] == True) & (dates[:-1] == prev_date)
+
+        if day_before_prev_date != prev_date:
+            historic_closed_pos_cond = (chunk[:-1, 5] == True) & (dates[:-1] == day_before_prev_date)
+            historic_closed_pos_cond = historic_closed_pos_cond ^ aug_closed_pos_cond
+            aug_closed_pos_cond = (chunk[:, 5] == True) & (dates[:] == day_before_prev_date)
+
+            if historic_closed_pos_cond.any():
+                profits_n_losses = chunk[:-1, 3][historic_closed_pos_cond] * (
+                    pip_value[target_symbol] * chunk[:-1, 4][historic_closed_pos_cond]
+                )
+                added_balance = profits_n_losses.sum()
+                variable_balance += added_balance
+
         profits_n_losses = chunk[:-1, 3][closed_pos_cond] * (
             pip_value[target_symbol] * chunk[:-1, 4][closed_pos_cond]
         )
         added_balance = profits_n_losses.sum()
-        if added_balance < 0:
-            dd = added_balance / start_day_balance
+
+        used_balance = (variable_balance-start_day_balance) + added_balance
+        if used_balance < 0:
+            dd = used_balance / start_day_balance
+
+            if dd < todays_exp_daily_dd:
+                todays_exp_daily_dd = dd
+
             if dd < max_exp_daily_dd:
                 max_exp_daily_dd = dd
 
-        if use_floating_risk:
-            floating_balance = start_day_balance + added_balance
+        floating_balance = start_day_balance + used_balance
 
         curr_date = np.datetime64(chunk[-1, 1], 'D')
         if curr_date != prev_date:
-            start_day_balance += added_balance
+            start_day_balance += used_balance
+            variable_balance = start_day_balance
+            day_before_prev_date = prev_date
             prev_date = curr_date
             added_balance = 0
-        
-        if pd.Timestamp(chunk[-1, 1]).to_pydatetime() in sampled_times :
-            volumes.append(0.0)
-            array[i, 3] = volumes[i]
-            label_position.append('by_sampling')
-            continue
-        
+            todays_exp_daily_dd = 0
+
+            if aug_closed_pos_cond is None:
+                aug_closed_pos_cond = (chunk[:, 5] == True) & (dates[:] == day_before_prev_date)
+
         remaining_pos = n_max_OP - cond_len
+        daily_dd_budget = (start_day_balance * max_daily_dd) + used_balance
+
+        start_day_balances.append(start_day_balance)
+        floating_balances.append(floating_balance)
+        daily_dds.append(start_day_balance * max_daily_dd)
+        daily_dd_exp.append(todays_exp_daily_dd)
+        used_balances.append(used_balance)
+        remaining_positions.append(remaining_pos)
+
+        if target_symbol == 'USDJPY':
+            max_vol = max_open_volume_possible * floating_balance
+        else:
+            max_vol = (max_open_volume_possible * floating_balance) / chunk[-1, 8]
+
         if remaining_pos <= 0:
             volumes.append(0.0)
+            used_dd_budgets.append(0.0)
             array[i, 3] = volumes[i]
-            label_position.append('by_max-n-op')
             continue
 
-        if use_perc_levels:
-            pip_risk = chunk[-1, 7] + spread
+        if use_dynamic_sl:
+            used_dd_budget = chunk[:-1, 3][open_cond] * (pip_value[target_symbol] * chunk[:-1, 7][open_cond])
+            used_dd_budget = used_dd_budget.sum()
 
-        used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
-        daily_dd_budget = (start_day_balance * max_daily_dd) + added_balance
+            base_lot = (
+                (daily_dd_budget - used_dd_budget) / remaining_pos
+            ) / (pip_value[target_symbol] * max_pip_risk)
+        else:
+            used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
 
-        base_lot = (
-            (daily_dd_budget - used_dd_budget) / remaining_pos
-        ) / (pip_value[target_symbol] * pip_risk)
+            base_lot = (
+                (daily_dd_budget - used_dd_budget) / remaining_pos
+            ) / (pip_value[target_symbol] * pip_risk)
+
+        used_dd_budgets.append(used_dd_budget)
 
         if use_floating_risk:
             floating_dd_budget = floating_balance * max_floating_dd
-            floating_base_lot = (
-                (floating_dd_budget - used_dd_budget) / remaining_pos
-            ) / (pip_value[target_symbol] * pip_risk)
+
+            if use_dynamic_sl:
+                floating_base_lot = (
+                    (floating_dd_budget - used_dd_budget) / remaining_pos
+                ) / (pip_value[target_symbol] * max_pip_risk)
+            else:
+                floating_base_lot = (
+                    (floating_dd_budget - used_dd_budget) / remaining_pos
+                ) / (pip_value[target_symbol] * pip_risk)
+
             base_lot = min(base_lot, floating_base_lot)
 
-        if base_lot <= 0:
+        cnf_level_exp = weights.get(chunk[-1, 6])
+        floored_base_lot = math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp
+
+        if (floored_base_lot <= 0) or (total_open_volume[i]+floored_base_lot >= max_vol):
             volumes.append(0.0)
             array[i, 3] = volumes[i]
-            label_position.append('by_floating-dd')
             continue
 
-        cnf_level_exp = weights.get(round(chunk[-1, 6], 2))
-        volumes.append(math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp)
+        volumes.append(floored_base_lot)
         array[i, 3] = volumes[i]
-        if volumes[i] == 0:
-            if (cnf_level_exp*base_lot)<symbols_base_lot.get(target_symbol) :
-                label_position.append('by_base symbol lot')
-            else:
-                label_position.append('by_daily dd')
-        else:
-            label_position.append('')
-
 
     df["volume"] = np.array(volumes)
     df["n_open_position"] = np.array(n_open_position)
     df["volume_open_position"] = np.array(total_open_volume)
-    df['label_position'] = np.array(label_position)
+    df["start_day_balances"] = np.array(start_day_balances)
+    df["floating_balances"] = np.array(floating_balances)
+    df["daily_dds"] = np.array(daily_dds)
+    df["daily_dd_exp"] = np.array(daily_dd_exp)
+    df["used_balances"] = np.array(used_balances)
+    df["remaining_positions"] = np.array(remaining_positions)
+    df["used_dd_budgets"] = np.array(used_dd_budgets)
 
     return max_exp_daily_dd, df
+
+
+
+# def money_management(
+#     df: pd.DataFrame,
+#     stop_loss: int,
+#     spread: int,
+#     initial_balance: int,
+#     target_symbol: str,
+#     pip_value: dict[str, float],
+#     n_max_OP: int,
+#     max_floating_dd: float,
+#     max_daily_dd: float,
+#     use_floating_risk: bool,
+#     use_perc_levels: bool,
+#     sampled_times:list = [] ,
+# ):
+#     symbols_base_lot = {
+#         'EURUSD': 0.01,
+#         'GBPUSD': 0.01,
+#         'USDJPY': 0.01,
+#         'XAUUSD': 0.01,
+#         'US30': 0.01,
+#         'US100': 0.01,
+#         'SPX500': 0.01,
+#         'BTCUSD': 0.01,
+#     }
+#     weights = {
+#         0: 0.0,
+#         0.5: 1.0,
+#         0.6: 1.0,
+#         0.7: 1.0,
+#         0.8: 1.25,
+#         0.9: 1.25,
+#         1: 1.0,
+#     }
+
+#     df['index'] = df.index
+#     df = df.sort_values(by="_time")
+#     df['close_position'] = df['index'] + df['time_open_position']
+#     df['position_closed'] = False
+#     array = df[
+#         [
+#             'index', '_time', 'close_position', 'volume', 'net_profit',
+#             'position_closed', 'confidence_levels', 'stop_losses'
+#         ]
+#     ].to_numpy()
+
+#     date_column = np.array(
+#         [np.datetime64(datetime, 'D') for datetime in array[:, 1]]
+#     )
+#     symbols_exp = 1/symbols_base_lot.get(target_symbol)
+#     pip_risk = stop_loss + spread
+#     start_day_balance = initial_balance
+#     floating_balance = initial_balance
+#     n_open_position = []
+#     total_open_volume = []
+#     prev_date = np.datetime64(array[0, 1], 'D')
+#     volumes = []
+#     label_position = []
+#     max_exp_daily_dd = 0
+
+#     for i in range(array.shape[0]):
+#         chunk = array[:i+1]
+#         dates = date_column[:i+1]
+#         cond = chunk[:-1, 2] > chunk[-1, 0]
+#         open_cond = cond & (chunk[:-1, 3] != 0.0)
+#         cond_len = len(np.where(open_cond)[0])
+#         n_open_position.append(cond_len)
+#         chunk[:-1, 5][~cond] = True
+
+#         open_volumes = chunk[:-1, 3][open_cond]
+#         total_open_volume.append(open_volumes.sum())
+
+#         closed_pos_cond = (chunk[:-1, 5] == True) & (dates[:-1] == prev_date)
+#         profits_n_losses = chunk[:-1, 3][closed_pos_cond] * (
+#             pip_value[target_symbol] * chunk[:-1, 4][closed_pos_cond]
+#         )
+#         added_balance = profits_n_losses.sum()
+#         if added_balance < 0:
+#             dd = added_balance / start_day_balance
+#             if dd < max_exp_daily_dd:
+#                 max_exp_daily_dd = dd
+
+#         if use_floating_risk:
+#             floating_balance = start_day_balance + added_balance
+
+#         curr_date = np.datetime64(chunk[-1, 1], 'D')
+#         if curr_date != prev_date:
+#             start_day_balance += added_balance
+#             prev_date = curr_date
+#             added_balance = 0
+        
+#         if pd.Timestamp(chunk[-1, 1]).to_pydatetime() in sampled_times :
+#             volumes.append(0.0)
+#             array[i, 3] = volumes[i]
+#             label_position.append('by_sampling')
+#             continue
+        
+#         remaining_pos = n_max_OP - cond_len
+#         if remaining_pos <= 0:
+#             volumes.append(0.0)
+#             array[i, 3] = volumes[i]
+#             label_position.append('by_max-n-op')
+#             continue
+
+#         if use_perc_levels:
+#             pip_risk = chunk[-1, 7] + spread
+
+#         used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
+#         daily_dd_budget = (start_day_balance * max_daily_dd) + added_balance
+
+#         base_lot = (
+#             (daily_dd_budget - used_dd_budget) / remaining_pos
+#         ) / (pip_value[target_symbol] * pip_risk)
+
+#         if use_floating_risk:
+#             floating_dd_budget = floating_balance * max_floating_dd
+#             floating_base_lot = (
+#                 (floating_dd_budget - used_dd_budget) / remaining_pos
+#             ) / (pip_value[target_symbol] * pip_risk)
+#             base_lot = min(base_lot, floating_base_lot)
+
+#         if base_lot <= 0:
+#             volumes.append(0.0)
+#             array[i, 3] = volumes[i]
+#             label_position.append('by_floating-dd')
+#             continue
+
+#         cnf_level_exp = weights.get(round(chunk[-1, 6], 2))
+#         volumes.append(math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp)
+#         array[i, 3] = volumes[i]
+#         if volumes[i] == 0:
+#             if (cnf_level_exp*base_lot)<symbols_base_lot.get(target_symbol) :
+#                 label_position.append('by_base symbol lot')
+#             else:
+#                 label_position.append('by_daily dd')
+#         else:
+#             label_position.append('')
+
+
+#     df["volume"] = np.array(volumes)
+#     df["n_open_position"] = np.array(n_open_position)
+#     df["volume_open_position"] = np.array(total_open_volume)
+#     df['label_position'] = np.array(label_position)
+
+#     return max_exp_daily_dd, df
 def cal_n_open_position(df:pd.DataFrame):
     df['index'] = df.index
     df = df.sort_values(by="_time")
@@ -804,7 +1019,17 @@ def do_backtest(
                 "balance",
                 "volume",
                 'confidence_levels',
-                'label_position'
+                # 'label_position',
+                "volume_open_position",
+                "stop_losses",
+                "take_profits",
+                "start_day_balances",
+                "floating_balances",
+                "daily_dds",
+                "daily_dd_exp",
+                "used_balances",
+                "remaining_positions",
+                "used_dd_budgets",
             ]
         ],
     )

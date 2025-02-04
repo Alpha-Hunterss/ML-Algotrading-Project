@@ -151,7 +151,11 @@ def calculate_classification_target_backtest(
                     target = 0
                     swap_days = selected_chunk[1:, 3].sum()
                     exit_price_diff = (selected_chunk[-1, 0] - selected_chunk[0, 0]) / symbol_decimal_multiply
-                    index_open_position = window_size
+
+                    if close_positions_at_midnight:
+                        index_open_position = selected_chunk.shape[0]
+                    else:
+                        index_open_position = window_size
 
                 target_list.append(target)
                 swap_days_list.append(swap_days)
@@ -219,7 +223,11 @@ def calculate_classification_target_backtest(
                     target = 0
                     swap_days = selected_chunk[1:, 3].sum()
                     exit_price_diff = (selected_chunk[0, 0] - selected_chunk[-1, 0]) / symbol_decimal_multiply
-                    index_open_position = window_size
+
+                    if close_positions_at_midnight:
+                        index_open_position = selected_chunk.shape[0]
+                    else:
+                        index_open_position = window_size
 
                 target_list.append(target)
                 swap_days_list.append(swap_days)
@@ -275,7 +283,11 @@ def calculate_classification_target_backtest(
                     target = 0
                     swap_days = selected_chunk[1:, 3].sum()
                     exit_price_diff = (selected_chunk[-1, 0] - selected_chunk[0, 0]) / symbol_decimal_multiply
-                    index_open_position = window_size
+
+                    if close_positions_at_midnight:
+                        index_open_position = selected_chunk.shape[0]
+                    else:
+                        index_open_position = window_size
 
                 target_list.append(target)
                 swap_days_list.append(swap_days)
@@ -329,7 +341,11 @@ def calculate_classification_target_backtest(
                     target = 0
                     swap_days = selected_chunk[1:, 3].sum()
                     exit_price_diff = (selected_chunk[0, 0] - selected_chunk[-1, 0]) / symbol_decimal_multiply
-                    index_open_position = window_size
+
+                    if close_positions_at_midnight:
+                        index_open_position = selected_chunk.shape[0]
+                    else:
+                        index_open_position = window_size
 
                 target_list.append(target)
                 swap_days_list.append(swap_days)

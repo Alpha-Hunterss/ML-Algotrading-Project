@@ -736,12 +736,12 @@ def money_management(
         else:
             max_vol = (max_open_volume_possible * floating_balance) / chunk[-1, 8]
 
-        if (remaining_pos <= 0) or (-todays_exp_daily_dd >= max_daily_dd*100):
+        if (remaining_pos <= 0) or (-todays_exp_daily_dd >= max_daily_dd):
             volumes.append(0.0)
             used_dd_budgets.append(0.0)
             array[i, 3] = volumes[i]
 
-            if -todays_exp_daily_dd >= max_daily_dd*100:
+            if -todays_exp_daily_dd >= max_daily_dd:
                 no_exceeding_dds += 1
 
             continue

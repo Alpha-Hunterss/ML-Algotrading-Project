@@ -55,7 +55,7 @@ def calculate_classification_target_numpy_ver(
             buy_sl_cond = pip_diff_low <= -stop_loss+spread_pip
 
             if buy_tp_cond.any():
-                arg_buy_tp_cond = np.where((pip_diff_close >= take_profit))[0][0]
+                arg_buy_tp_cond = np.where((pip_diff_close >= take_profit+spread_pip))[0][0]
                 if not buy_sl_cond[0 : arg_buy_tp_cond + 1].any():
                     target = 1
 

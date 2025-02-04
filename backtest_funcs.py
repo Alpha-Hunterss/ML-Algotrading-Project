@@ -127,21 +127,21 @@ def calculate_classification_target_backtest(
                 buy_sl_cond = pip_diff_low <= calc_sl+spread_pip
 
                 if buy_tp_cond.any():
-                    arg_buy_tp_cond = np.where(pip_diff_high >= calc_tp)[0][0]
+                    arg_buy_tp_cond = np.where(pip_diff_high >= calc_tp+spread_pip)[0][0]
                     if not buy_sl_cond[: arg_buy_tp_cond + 1].any():
                         swap_days = selected_chunk[1 : arg_buy_tp_cond + 1, 3].sum()
                         target = 1
                         exit_price_diff = calc_tp
                         index_open_position = arg_buy_tp_cond + 1
                     else:
-                        arg_buy_sl_cond = np.where(pip_diff_low <= calc_sl)[0][0]
+                        arg_buy_sl_cond = np.where(pip_diff_low <= calc_sl+spread_pip)[0][0]
                         swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
                         target = -1
                         exit_price_diff = calc_sl
                         index_open_position = arg_buy_sl_cond + 1
 
                 elif buy_sl_cond.any():
-                    arg_buy_sl_cond = np.where(pip_diff_low <= calc_sl)[0][0]
+                    arg_buy_sl_cond = np.where(pip_diff_low <= calc_sl+spread_pip)[0][0]
                     swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
                     target = -1
                     exit_price_diff = calc_sl
@@ -251,21 +251,21 @@ def calculate_classification_target_backtest(
                 buy_sl_cond = pip_diff_low <= -stop_loss+spread_pip
 
                 if buy_tp_cond.any():
-                    arg_buy_tp_cond = np.where(pip_diff_high >= take_profit)[0][0]
+                    arg_buy_tp_cond = np.where(pip_diff_high >= take_profit+spread_pip)[0][0]
                     if not buy_sl_cond[: arg_buy_tp_cond + 1].any():
                         swap_days = selected_chunk[1 : arg_buy_tp_cond + 1, 3].sum()
                         target = 1
                         exit_price_diff = take_profit
                         index_open_position = arg_buy_tp_cond + 1
                     else:
-                        arg_buy_sl_cond = np.where(pip_diff_low <= -stop_loss)[0][0]
+                        arg_buy_sl_cond = np.where(pip_diff_low <= -stop_loss+spread_pip)[0][0]
                         swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
                         target = -1
                         exit_price_diff = -stop_loss
                         index_open_position = arg_buy_sl_cond + 1
 
                 elif buy_sl_cond.any():
-                    arg_buy_sl_cond = np.where(pip_diff_low <= -stop_loss)[0][0]
+                    arg_buy_sl_cond = np.where(pip_diff_low <= -stop_loss+spread_pip)[0][0]
                     swap_days = selected_chunk[1 : arg_buy_sl_cond + 1, 3].sum()
                     target = -1
                     exit_price_diff = -stop_loss

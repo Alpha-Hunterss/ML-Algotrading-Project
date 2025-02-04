@@ -595,6 +595,7 @@ def money_management(
     use_dynamic_sl: bool,
     max_strg_sl_dynamic_perc: int,
     symbol_decimal_multiply: float,
+    close_positions_at_midnight: bool,
 ):
     symbols_base_lot = {
         'EURUSD': 0.01,
@@ -680,17 +681,18 @@ def money_management(
 
         closed_pos_cond = (chunk[:-1, 5] == True) & (dates[:-1] == prev_date)
 
-        if day_before_prev_date != prev_date:
-            historic_closed_pos_cond = (chunk[:-1, 5] == True) & (dates[:-1] == day_before_prev_date)
-            historic_closed_pos_cond = historic_closed_pos_cond ^ aug_closed_pos_cond
-            aug_closed_pos_cond = (chunk[:, 5] == True) & (dates[:] == day_before_prev_date)
+        if not close_positions_at_midnight:
+            if day_before_prev_date != prev_date:
+                historic_closed_pos_cond = (chunk[:-1, 5] == True) & (dates[:-1] == day_before_prev_date)
+                historic_closed_pos_cond = historic_closed_pos_cond ^ aug_closed_pos_cond
+                aug_closed_pos_cond = (chunk[:, 5] == True) & (dates[:] == day_before_prev_date)
 
-            if historic_closed_pos_cond.any():
-                profits_n_losses = chunk[:-1, 3][historic_closed_pos_cond] * (
-                    pip_value[target_symbol] * chunk[:-1, 4][historic_closed_pos_cond]
-                )
-                added_balance = profits_n_losses.sum()
-                variable_balance += added_balance
+                if historic_closed_pos_cond.any():
+                    profits_n_losses = chunk[:-1, 3][historic_closed_pos_cond] * (
+                        pip_value[target_symbol] * chunk[:-1, 4][historic_closed_pos_cond]
+                    )
+                    added_balance = profits_n_losses.sum()
+                    variable_balance += added_balance
 
         profits_n_losses = chunk[:-1, 3][closed_pos_cond] * (
             pip_value[target_symbol] * chunk[:-1, 4][closed_pos_cond]
@@ -736,16 +738,6 @@ def money_management(
         else:
             max_vol = (max_open_volume_possible * floating_balance) / chunk[-1, 8]
 
-        if (remaining_pos <= 0) or (-todays_exp_daily_dd >= max_daily_dd):
-            volumes.append(0.0)
-            used_dd_budgets.append(0.0)
-            array[i, 3] = volumes[i]
-
-            if -todays_exp_daily_dd >= max_daily_dd:
-                no_exceeding_dds += 1
-
-            continue
-
         if use_dynamic_sl:
             used_dd_budget = chunk[:-1, 3][open_cond] * (pip_value[target_symbol] * chunk[:-1, 7][open_cond])
             used_dd_budget = used_dd_budget.sum()
@@ -764,6 +756,16 @@ def money_management(
             ) / (pip_value[target_symbol] * pip_risk)
 
         used_dd_budgets.append(used_dd_budget)
+        potential_dd = (used_balance - used_dd_budget) / start_day_balance
+
+        if (remaining_pos <= 0) or (potential_dd <= -max_daily_dd):
+            volumes.append(0.0)
+            array[i, 3] = volumes[i]
+
+            if potential_dd <= -max_daily_dd:
+                no_exceeding_dds += 1
+
+            continue
 
         if use_floating_risk:
             floating_dd_budget = floating_balance * max_floating_dd
@@ -827,6 +829,7 @@ def do_backtest(
     is_final_bt: bool,
     is_cf_model: bool,
     trade_mode: str,
+    close_positions_at_midnight: bool,
 ):
     pip_value = {
         'EURUSD': 10,
@@ -880,7 +883,7 @@ def do_backtest(
                 new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
                 max_daily_dd, use_floating_risk, use_dynamic_sl,
-                max_strg_sl_dynamic_perc, symbol_decimal_multiply
+                max_strg_sl_dynamic_perc, symbol_decimal_multiply, close_positions_at_midnight
             )
 
             ##? calculate balance
@@ -904,7 +907,7 @@ def do_backtest(
                 new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
                 max_daily_dd, use_floating_risk, use_dynamic_sl,
-                max_strg_sl_dynamic_perc, symbol_decimal_multiply
+                max_strg_sl_dynamic_perc, symbol_decimal_multiply, close_positions_at_midnight
             )
 
         ##? calculate balance

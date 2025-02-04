@@ -291,6 +291,7 @@ def main(
             use_dynamic_sl=use_dynamic_sl,
             max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
             trade_mode=trade_mode,
+            close_positions_at_midnight=close_positions_at_midnight,
         )
 
         # ______________________________Retrain Last Model to Save___________________________________________

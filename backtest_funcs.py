@@ -106,12 +106,12 @@ def calculate_classification_target_backtest(
 
                     if selected_chunk[0, 5] is not None:
                         calc_sl = -selected_chunk[0, 5]*atr_level_multiplication
-                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_perc
+                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_ratio
                         calc_sl = max(calc_sl, -max_strg_sl)
                         calc_tp = -reward*calc_sl
                     else:
                         calc_sl = -(curr_close / symbol_decimal_multiply) * stop_loss_ratio
-                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_perc
+                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_ratio
                         calc_sl = max(calc_sl, -max_strg_sl)
                         calc_tp = (curr_close / symbol_decimal_multiply) * take_profit_ratio
 
@@ -183,12 +183,12 @@ def calculate_classification_target_backtest(
 
                     if selected_chunk[0, 5] is not None:
                         calc_sl = selected_chunk[0, 5]*atr_level_multiplication
-                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_perc
+                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_ratio
                         calc_sl = min(calc_sl, max_strg_sl)
                         calc_tp = -reward*calc_sl
                     else:
                         calc_sl = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
-                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_perc
+                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_ratio
                         calc_sl = min(calc_sl, max_strg_sl)
                         calc_tp = -(curr_close / symbol_decimal_multiply) * take_profit_ratio
 
@@ -637,6 +637,7 @@ def money_management(
     ].to_numpy()
 
     symbol_decimal_multiply = symbols_dict[target_symbol]["pip_size"]
+    max_strg_sl_dynamic_ratio = max_strg_sl_dynamic_perc / 100
     date_column = np.array(
         [np.datetime64(datetime, 'D') for datetime in array[:, 1]]
     )
@@ -749,7 +750,7 @@ def money_management(
             used_dd_budget = chunk[:-1, 3][open_cond] * (pip_value[target_symbol] * chunk[:-1, 7][open_cond])
             used_dd_budget = used_dd_budget.sum()
 
-            max_pip_risk = (chunk[-1, 8] / symbol_decimal_multiply) * max_strg_sl_dynamic_perc
+            max_pip_risk = (chunk[-1, 8] / symbol_decimal_multiply) * max_strg_sl_dynamic_ratio
             max_pip_risk += spread
 
             base_lot = (

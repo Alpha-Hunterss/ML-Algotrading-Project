@@ -29,7 +29,7 @@ def calculate_classification_target_backtest(
     array,
     window_size,
     use_dynamic_sl: bool = False,
-    max_strg_sl_dynamic: int = 20,
+    max_strg_sl_dynamic_perc: int = 20,
     dynamic_sl_scale_type: str = "third_quartile",
     rstd_window_size: int = 12,
     close_positions_at_midnight: bool = False,
@@ -59,6 +59,7 @@ def calculate_classification_target_backtest(
     date_column = np.array(
         [np.datetime64(datetime, 'D') for datetime in array[:, 4]]
     )
+    max_strg_sl_dynamic_ratio = max_strg_sl_dynamic_perc / 100
     take_profit_ratio = take_profit_perc / 100
     stop_loss_ratio = stop_loss_perc / 100
     spread = spread_pip * symbol_decimal_multiply
@@ -101,14 +102,17 @@ def calculate_classification_target_backtest(
                     selected_chunk = selected_chunk[dates == curr_date]
 
                 if dynamic_sl_type in ["atr", "etr"]:
+                    curr_close = selected_chunk[0, 0]
+
                     if selected_chunk[0, 5] is not None:
                         calc_sl = -selected_chunk[0, 5]*atr_level_multiplication
-                        calc_sl = max(calc_sl, -max_strg_sl_dynamic)
+                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_perc
+                        calc_sl = max(calc_sl, -max_strg_sl)
                         calc_tp = -reward*calc_sl
                     else:
-                        curr_close = selected_chunk[0, 0]
                         calc_sl = -(curr_close / symbol_decimal_multiply) * stop_loss_ratio
-                        calc_sl = max(calc_sl, -max_strg_sl_dynamic)
+                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_perc
+                        calc_sl = max(calc_sl, -max_strg_sl)
                         calc_tp = (curr_close / symbol_decimal_multiply) * take_profit_ratio
 
                 elif dynamic_sl_type=="rstd":
@@ -175,14 +179,17 @@ def calculate_classification_target_backtest(
                     selected_chunk = selected_chunk[dates == curr_date]
 
                 if dynamic_sl_type in ["atr", "etr"]:
+                    curr_close = selected_chunk[0, 0]
+
                     if selected_chunk[0, 5] is not None:
                         calc_sl = selected_chunk[0, 5]*atr_level_multiplication
-                        calc_sl = min(calc_sl, max_strg_sl_dynamic)
+                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_perc
+                        calc_sl = min(calc_sl, max_strg_sl)
                         calc_tp = -reward*calc_sl
                     else:
-                        curr_close = selected_chunk[0, 0]
                         calc_sl = (curr_close / symbol_decimal_multiply) * stop_loss_ratio
-                        calc_sl = min(calc_sl, max_strg_sl_dynamic)
+                        max_strg_sl = (curr_close / symbol_decimal_multiply) * max_strg_sl_dynamic_perc
+                        calc_sl = min(calc_sl, max_strg_sl)
                         calc_tp = -(curr_close / symbol_decimal_multiply) * take_profit_ratio
 
                 elif dynamic_sl_type=="rstd":
@@ -411,7 +418,7 @@ def cal_backtest_on_raw_cndl(
     spread: int,
     trade_mode: str,
     use_dynamic_sl: bool,
-    max_strg_sl_dynamic: int,
+    max_strg_sl_dynamic_perc: int,
     dynamic_sl_scale_type: str,
     rstd_window_size: int,
     close_positions_at_midnight: bool,
@@ -496,7 +503,7 @@ def cal_backtest_on_raw_cndl(
         array,
         window_size,
         use_dynamic_sl=use_dynamic_sl,
-        max_strg_sl_dynamic=max_strg_sl_dynamic,
+        max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
         dynamic_sl_scale_type=dynamic_sl_scale_type,
         rstd_window_size=rstd_window_size,
         close_positions_at_midnight=close_positions_at_midnight,
@@ -586,7 +593,7 @@ def money_management(
     max_daily_dd: float,
     use_floating_risk: bool,
     use_dynamic_sl: bool,
-    max_strg_sl_dynamic: int,
+    max_strg_sl_dynamic_perc: int,
 ):
     symbols_base_lot = {
         'EURUSD': 0.01,
@@ -629,13 +636,14 @@ def money_management(
         ]
     ].to_numpy()
 
+    symbol_decimal_multiply = symbols_dict[target_symbol]["pip_size"]
     date_column = np.array(
         [np.datetime64(datetime, 'D') for datetime in array[:, 1]]
     )
     symbols_exp = 1/symbols_base_lot.get(target_symbol)
     max_open_volume_possible = symbols_max_lot.get(target_symbol)
     pip_risk = stop_loss + spread
-    max_pip_risk = max_strg_sl_dynamic + spread
+    # max_pip_risk = max_strg_sl_dynamic_perc + spread
     start_day_balance = initial_balance
     floating_balance = initial_balance
     variable_balance = initial_balance
@@ -654,6 +662,7 @@ def money_management(
     remaining_positions = []
     used_dd_budgets = []
     max_exp_daily_dd = 0
+    no_exceeding_dds = 0
     todays_exp_daily_dd = 0
 
     for i in range(array.shape[0]):
@@ -726,15 +735,22 @@ def money_management(
         else:
             max_vol = (max_open_volume_possible * floating_balance) / chunk[-1, 8]
 
-        if remaining_pos <= 0:
+        if (remaining_pos <= 0) or (-todays_exp_daily_dd >= max_daily_dd*100):
             volumes.append(0.0)
             used_dd_budgets.append(0.0)
             array[i, 3] = volumes[i]
+
+            if -todays_exp_daily_dd >= max_daily_dd*100:
+                no_exceeding_dds += 1
+
             continue
 
         if use_dynamic_sl:
             used_dd_budget = chunk[:-1, 3][open_cond] * (pip_value[target_symbol] * chunk[:-1, 7][open_cond])
             used_dd_budget = used_dd_budget.sum()
+
+            max_pip_risk = (chunk[-1, 8] / symbol_decimal_multiply) * max_strg_sl_dynamic_perc
+            max_pip_risk += spread
 
             base_lot = (
                 (daily_dd_budget - used_dd_budget) / remaining_pos
@@ -784,7 +800,7 @@ def money_management(
     df["remaining_positions"] = np.array(remaining_positions)
     df["used_dd_budgets"] = np.array(used_dd_budgets)
 
-    return max_exp_daily_dd, df
+    return max_exp_daily_dd, no_exceeding_dds, df
 
 
 def do_backtest(
@@ -804,7 +820,7 @@ def do_backtest(
     max_daily_dd: float,
     use_floating_risk: bool,
     use_dynamic_sl: bool,
-    max_strg_sl_dynamic: int,
+    max_strg_sl_dynamic_perc: int,
     confidence_levels: np.ndarray,
     model,
     is_final_bt: bool,
@@ -836,6 +852,7 @@ def do_backtest(
     new_trg_df["remaining_positions"] = 0
     new_trg_df["used_dd_budgets"] = 0.0
     max_exp_daily_dd = 0.0
+    no_exceeding_dds = 0
 
     plot_profit_distribution(new_trg_df)
     plt.show()
@@ -857,10 +874,10 @@ def do_backtest(
         print('==========')
 
         if use_money_management:
-            max_exp_daily_dd, new_trg_df = money_management(
+            max_exp_daily_dd, no_exceeding_dds, new_trg_df = money_management(
                 new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
-                max_daily_dd, use_floating_risk, use_dynamic_sl, max_strg_sl_dynamic
+                max_daily_dd, use_floating_risk, use_dynamic_sl, max_strg_sl_dynamic_perc
             )
 
             ##? calculate balance
@@ -880,10 +897,10 @@ def do_backtest(
             new_trg_df["confidence_levels"] = 1.0
 
         if use_money_management:
-            max_exp_daily_dd, new_trg_df = money_management(
+            max_exp_daily_dd, no_exceeding_dds, new_trg_df = money_management(
                 new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
-                max_daily_dd, use_floating_risk, use_dynamic_sl, max_strg_sl_dynamic
+                max_daily_dd, use_floating_risk, use_dynamic_sl, max_strg_sl_dynamic_perc
             )
 
         ##? calculate balance
@@ -915,6 +932,7 @@ def do_backtest(
             "max_overall_dd": 0.0,
             "max_n_open_position": 0,
             "max_vol_open_positions": 0.0,
+            "no_iters_exceeding_dd": 0,
         }
     else:
         backtest_report = {
@@ -930,6 +948,7 @@ def do_backtest(
             "max_overall_dd": round(max_overall_dd, 2),
             "max_n_open_position": new_trg_df["n_open_position"].max(),
             "max_vol_open_positions": new_trg_df["volume_open_position"].max(),
+            "no_iters_exceeding_dd": no_exceeding_dds,
         }
 
     return (

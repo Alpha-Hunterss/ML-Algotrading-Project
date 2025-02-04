@@ -43,7 +43,7 @@ def main(
             strg_stop_loss_perc = man_params["strg_stop_loss_perc"]
             use_perc_levels = man_params["use_perc_levels"]
             use_dynamic_sl = man_params["use_dynamic_sl"]
-            max_strg_sl_dynamic = man_params["max_strg_sl_dynamic"]
+            max_strg_sl_dynamic_perc = man_params["max_strg_sl_dynamic_perc"]
             apply_static_sl_trg = man_params["apply_static_sl_trg"]
             dynamic_sl_type = man_params["dynamic_sl_type"]
             atr_window_size = man_params["atr_window_size"]
@@ -97,7 +97,7 @@ def main(
                 "strg_stop_loss_perc",
                 "use_perc_levels",
                 "use_dynamic_sl",
-                "max_strg_sl_dynamic",
+                "max_strg_sl_dynamic_perc",
                 "apply_static_sl_trg",
                 "dynamic_sl_type",
                 "atr_window_size",
@@ -151,7 +151,7 @@ def main(
             strg_stop_loss_perc = wandb.config.strg_stop_loss_perc
             use_perc_levels = wandb.config.use_perc_levels
             use_dynamic_sl = wandb.config.use_dynamic_sl
-            max_strg_sl_dynamic = wandb.config.max_strg_sl_dynamic
+            max_strg_sl_dynamic_perc = wandb.config.max_strg_sl_dynamic_perc
             apply_static_sl_trg = wandb.config.apply_static_sl_trg
             dynamic_sl_type = wandb.config.dynamic_sl_type
             atr_window_size = wandb.config.atr_window_size
@@ -255,7 +255,7 @@ def main(
             spread=default_spread,
             trade_mode=trade_mode,
             use_dynamic_sl=use_dynamic_sl,
-            max_strg_sl_dynamic=max_strg_sl_dynamic,
+            max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
             dynamic_sl_scale_type=dynamic_sl_scale_type,
             rstd_window_size=rstd_window_size,
             close_positions_at_midnight=close_positions_at_midnight,
@@ -289,7 +289,7 @@ def main(
             max_daily_dd=max_daily_dd,
             use_floating_risk=use_floating_risk,
             use_dynamic_sl=use_dynamic_sl,
-            max_strg_sl_dynamic=max_strg_sl_dynamic,
+            max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
             trade_mode=trade_mode,
         )
 

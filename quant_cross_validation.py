@@ -68,7 +68,7 @@ def quant_CV(
     max_daily_dd: float,
     use_floating_risk: bool,
     use_dynamic_sl: bool,
-    max_strg_sl_dynamic: int,
+    max_strg_sl_dynamic_perc: int,
     trade_mode: str,
 ):
     """
@@ -98,6 +98,7 @@ def quant_CV(
             "meta_model_pos_label_perc",
             "max_n_open_position",
             "max_vol_open_positions",
+            "no_iters_exceeding_dd",
         ]
     )
     df["pred_as_val"] = -1
@@ -573,7 +574,7 @@ def quant_CV(
                         max_daily_dd=max_daily_dd,
                         use_floating_risk=use_floating_risk,
                         use_dynamic_sl=use_dynamic_sl,
-                        max_strg_sl_dynamic=max_strg_sl_dynamic,
+                        max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
                         confidence_levels=confidence_levels,
                         model=model,
                         is_final_bt=False,
@@ -603,7 +604,7 @@ def quant_CV(
                         max_daily_dd=max_daily_dd,
                         use_floating_risk=use_floating_risk,
                         use_dynamic_sl=use_dynamic_sl,
-                        max_strg_sl_dynamic=max_strg_sl_dynamic,
+                        max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
                         confidence_levels=confidence_levels,
                         model=model,
                         is_final_bt=False,
@@ -617,6 +618,7 @@ def quant_CV(
                 fold_max_overall_dd = bt_report["max_overall_dd"]
                 fold_max_n_open_position = bt_report["max_n_open_position"]
                 fold_max_vol_open_positions = bt_report["max_vol_open_positions"]
+                fold_no_iters_exceeding_dd = bt_report["no_iters_exceeding_dd"]
 
                 general_backtest_df.update({f"bt_df_fold{i}_{set_name}": bt_df})
 
@@ -631,6 +633,7 @@ def quant_CV(
                 fold_max_daily_sig = None
                 fold_max_n_open_position = None
                 fold_max_vol_open_positions = None
+                fold_no_iters_exceeding_dd = None
 
             pong = time.time()
 
@@ -651,7 +654,7 @@ def quant_CV(
                 + [fold_profit_percent, fold_max_dd, fold_max_exp_daily_dd]
                 + [fold_max_overall_dd, fold_unique_days, fold_max_daily_sig]
                 + [meta_model_pos_label_perc, fold_max_n_open_position]
-                + [fold_max_vol_open_positions]
+                + [fold_max_vol_open_positions, fold_no_iters_exceeding_dd]
             )
 
             evals.loc[len(evals)] = eval_list
@@ -680,7 +683,7 @@ def quant_CV(
             max_daily_dd=max_daily_dd,
             use_floating_risk=use_floating_risk,
             use_dynamic_sl=use_dynamic_sl,
-            max_strg_sl_dynamic=max_strg_sl_dynamic,
+            max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
             confidence_levels=confidence_levels,
             model=model,
             is_final_bt=True,

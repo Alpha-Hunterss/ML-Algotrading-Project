@@ -670,7 +670,9 @@ def quant_CV(
 
             evals.loc[len(evals)] = eval_list
 
-        print(evals.iloc[-3:])
+        with pd.option_context('display.max_columns', None):
+            print(evals.iloc[-3:])
+
         input_cols_and_type = dict(df[input_cols].dtypes)
 
     # Backtest on the whole test & valid set

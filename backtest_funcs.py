@@ -758,15 +758,17 @@ def money_management(
             max_pip_risk = (chunk[-1, 8] / symbol_decimal_multiply) * max_strg_sl_dynamic_ratio
             max_pip_risk += spread
 
-            base_lot = (
-                (daily_dd_budget - used_dd_budget) / remaining_pos
-            ) / (pip_value[target_symbol] * max_pip_risk)
+            if remaining_pos > 0:
+                base_lot = (
+                    (daily_dd_budget - used_dd_budget) / remaining_pos
+                ) / (pip_value[target_symbol] * max_pip_risk)
         else:
             used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
 
-            base_lot = (
-                (daily_dd_budget - used_dd_budget) / remaining_pos
-            ) / (pip_value[target_symbol] * pip_risk)
+            if remaining_pos > 0:
+                base_lot = (
+                    (daily_dd_budget - used_dd_budget) / remaining_pos
+                ) / (pip_value[target_symbol] * pip_risk)
 
         used_dd_budgets.append(used_dd_budget)
         potential_dd = (used_balance - used_dd_budget) / start_day_balance

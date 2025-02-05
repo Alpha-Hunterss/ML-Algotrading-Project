@@ -92,11 +92,13 @@ def quant_CV(
             "train_duration",
             "profit_percent",
             "max_dd",
+            "sortino",
+            "win_rate(%)",
             "max_exp_daily_dd",
             "max_overall_dd",
             "n_unique_days",
             "n_max_daily_sig",
-            "meta_model_pos_label_perc",
+            # "meta_model_pos_label_perc",
             "max_n_open_position",
             "max_vol_open_positions",
             "no_iters_exceeding_dd",
@@ -617,6 +619,8 @@ def quant_CV(
 
                 fold_profit_percent = bt_report['profit_percent']
                 fold_max_dd = bt_report['max_draw_down']
+                fold_sortino = bt_report["sortino"]
+                fold_win_rate = bt_report["win_rate(%)"]
                 fold_max_exp_daily_dd = bt_report["max_exp_daily_dd"]
                 fold_max_overall_dd = bt_report["max_overall_dd"]
                 fold_max_n_open_position = bt_report["max_n_open_position"]
@@ -630,6 +634,8 @@ def quant_CV(
             else:
                 fold_profit_percent = None
                 fold_max_dd = None
+                fold_sortino = None
+                fold_win_rate = None
                 fold_max_exp_daily_dd = None
                 fold_max_overall_dd = None
                 fold_unique_days = None
@@ -642,21 +648,23 @@ def quant_CV(
 
             if set_name == "train_dates":
                 time_taken = f"{round(toc - tic, 1)} + {round(pong - ping, 1)}"
-                meta_model_pos_label_perc = None
+                # meta_model_pos_label_perc = None
             else:
                 time_taken = str(round(pong - ping, 1))
-                if is_cf_model:
-                    if model.prob_estimator == "meta":
-                        meta_model_pos_label_perc = model.meta_pos_label_perc
+                # if is_cf_model:
+                #     if model.prob_estimator == "meta":
+                #         meta_model_pos_label_perc = model.meta_pos_label_perc
 
             eval_list = (
                 [set_name_dict[set_name], i]
                 + cal_eval(y_real=y_real, y_pred=y_pred)
                 + min_max_dates[set_name]
                 + [time_taken]
-                + [fold_profit_percent, fold_max_dd, fold_max_exp_daily_dd]
+                + [fold_profit_percent, fold_max_dd]
+                + [fold_sortino, fold_win_rate, fold_max_exp_daily_dd]
                 + [fold_max_overall_dd, fold_unique_days, fold_max_daily_sig]
-                + [meta_model_pos_label_perc, fold_max_n_open_position]
+                # + [meta_model_pos_label_perc]
+                + [fold_max_n_open_position]
                 + [fold_max_vol_open_positions, fold_no_iters_exceeding_dd]
             )
 

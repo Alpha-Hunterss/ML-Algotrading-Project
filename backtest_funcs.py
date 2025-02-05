@@ -523,6 +523,19 @@ def cal_backtest_on_raw_cndl(
     return df_raw_backtest, bt_column_name
 
 
+def cal_sortino_ratio(balance: pd.Series):
+    """
+    This function calculates the sortino ratio of a given balance"""
+    return_balance = balance.pct_change()
+    mean_portfolio_return = return_balance.mean()
+    risk_free_rate = 0
+    downside_returns = np.minimum(return_balance - risk_free_rate, 0)
+    downside_deviation = np.maximum(np.sqrt((downside_returns**2).mean()), 1e-5)
+    sortino_ratio = (mean_portfolio_return - risk_free_rate) / downside_deviation
+
+    return sortino_ratio
+
+
 def plot_profit_distribution(df, bins=100, figsize=(9, 7)):
     """
     Plot the distribution of net profits from trading data.
@@ -541,7 +554,7 @@ def plot_profit_distribution(df, bins=100, figsize=(9, 7)):
     plt.figure(figsize=figsize)
 
     # Plot histogram
-    n, bins, patches = plt.hist(df['net_profit'], bins=bins, 
+    _, bins, _ = plt.hist(df['net_profit'], bins=bins, 
                                edgecolor='black', alpha=0.7)
 
     # Add mean and median lines
@@ -939,6 +952,8 @@ def do_backtest(
             "balance_cash": initial_balance,
             "profit_pips": 0,
             "max_draw_down": 0,
+            "sortino": 0.0,
+            "win_rate(%)": 0.0,
             "profit_percent": 0,
             "max_exp_daily_dd": 0.0,
             "max_overall_dd": 0.0,
@@ -951,6 +966,14 @@ def do_backtest(
             "balance_cash": int(new_trg_df.iloc[-1]["balance"]),
             "profit_pips": int(new_trg_df["net_profit"].sum()),
             "max_draw_down": round(max_drawdown, 2),
+            "sortino": round(cal_sortino_ratio(new_trg_df["balance"]), 2),
+            "win_rate(%)": round(
+                (
+                    len(
+                        new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df['net_profit'] > 0)]
+                        ) / len(new_trg_df[new_trg_df['volume'] > 0])
+                ) * 100, 2
+            ),
             "profit_percent": round(
                 ((new_trg_df.iloc[-1]["balance"] - initial_balance) / initial_balance)
                 * 100,

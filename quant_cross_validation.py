@@ -25,7 +25,7 @@ def split_time_series(
         gap=train_test_gap,
         max_train_size=max_train_size,
         n_splits=n_splits,
-        test_size=test_size*3,
+        test_size=test_size*2,
     )
     folds = {}
     for i, (train_index, test_valid_index) in enumerate(tscv.split(all_dates[0])):
@@ -38,8 +38,8 @@ def split_time_series(
             "train_dates": train_dates,
             "pre_eval_dates": train_dates[:split_idx],
             "eval_dates": train_dates[split_idx+(10*276):],
-            "valid_dates": all_dates[0][test_valid_index[:2*test_size]],
-            "test_dates": all_dates[0][test_valid_index[2*test_size:]],
+            "valid_dates": all_dates[0][test_valid_index[:test_size]],
+            "test_dates": all_dates[0][test_valid_index[test_size:]],
         }
 
     return folds

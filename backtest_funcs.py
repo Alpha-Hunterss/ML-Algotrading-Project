@@ -974,6 +974,7 @@ def do_backtest(
                     len(
                         new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df['net_profit'] > 0)]
                         ) / len(new_trg_df[new_trg_df['volume'] > 0])
+                    if len(new_trg_df[new_trg_df['volume'] > 0]) > 0 else 0.0
                 ) * 100, 2
             ),
             "profit_percent": round(

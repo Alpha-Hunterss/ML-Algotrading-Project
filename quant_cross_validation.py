@@ -71,6 +71,7 @@ def quant_CV(
     max_strg_sl_dynamic_perc: int,
     trade_mode: str,
     close_positions_at_midnight: bool,
+    use_perc_levels: bool,
 ):
     """
     This function runs Time Series CV with available embargo/purge 
@@ -584,6 +585,7 @@ def quant_CV(
                         is_cf_model=True,
                         trade_mode=trade_mode,
                         close_positions_at_midnight=close_positions_at_midnight,
+                        use_perc_levels=use_perc_levels,
                     )
                 else:
                     #? Backtest
@@ -615,6 +617,7 @@ def quant_CV(
                         is_cf_model=False,
                         trade_mode=trade_mode,
                         close_positions_at_midnight=close_positions_at_midnight,
+                        use_perc_levels=use_perc_levels,
                     )
 
                 fold_profit_percent = bt_report['profit_percent']
@@ -703,6 +706,7 @@ def quant_CV(
             is_cf_model=is_cf_model,
             trade_mode=trade_mode,
             close_positions_at_midnight=close_positions_at_midnight,
+            use_perc_levels=use_perc_levels,
         )
         general_backtest_report[f"profit_percent_{pred_name}"] = bt_report['profit_percent']
         general_backtest_report[f"max_dd_{pred_name}"] = bt_report['max_draw_down']

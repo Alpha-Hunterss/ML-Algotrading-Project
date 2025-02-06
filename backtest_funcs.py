@@ -609,6 +609,7 @@ def money_management(
     max_strg_sl_dynamic_perc: int,
     symbol_decimal_multiply: float,
     close_positions_at_midnight: bool,
+    use_perc_levels: bool,
 ):
     symbols_base_lot = {
         'EURUSD': 0.01,
@@ -751,7 +752,7 @@ def money_management(
         else:
             max_vol = (max_open_volume_possible * floating_balance) / chunk[-1, 8]
 
-        if use_dynamic_sl:
+        if use_dynamic_sl or use_perc_levels:
             used_dd_budget = chunk[:-1, 3][open_cond] * (pip_value[target_symbol] * chunk[:-1, 7][open_cond])
             used_dd_budget = used_dd_budget.sum()
 
@@ -785,7 +786,7 @@ def money_management(
         if use_floating_risk:
             floating_dd_budget = floating_balance * max_floating_dd
 
-            if use_dynamic_sl:
+            if use_dynamic_sl or use_perc_levels:
                 floating_base_lot = (
                     (floating_dd_budget - used_dd_budget) / remaining_pos
                 ) / (pip_value[target_symbol] * max_pip_risk)
@@ -845,6 +846,7 @@ def do_backtest(
     is_cf_model: bool,
     trade_mode: str,
     close_positions_at_midnight: bool,
+    use_perc_levels: bool,
 ):
     pip_value = {
         'EURUSD': 10,
@@ -898,7 +900,8 @@ def do_backtest(
                 new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
                 max_daily_dd, use_floating_risk, use_dynamic_sl,
-                max_strg_sl_dynamic_perc, symbol_decimal_multiply, close_positions_at_midnight
+                max_strg_sl_dynamic_perc, symbol_decimal_multiply,
+                close_positions_at_midnight, use_perc_levels
             )
 
             ##? calculate balance
@@ -922,7 +925,8 @@ def do_backtest(
                 new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
                 target_symbol, pip_value, n_max_OP, max_floating_dd,
                 max_daily_dd, use_floating_risk, use_dynamic_sl,
-                max_strg_sl_dynamic_perc, symbol_decimal_multiply, close_positions_at_midnight
+                max_strg_sl_dynamic_perc, symbol_decimal_multiply,
+                close_positions_at_midnight, use_perc_levels
             )
 
         ##? calculate balance

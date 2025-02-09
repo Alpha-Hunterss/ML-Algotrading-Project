@@ -1242,7 +1242,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
             }
             self.stacked_model = model_class(**parameters)
 
-            if self.use_pca_stacked_model:
+            if self.use_pca_stacked_model and X.shape[1]>0:
                 X = MetaFeaEng(df=X, n_components=self.pca_n_components)
 
             self.stacked_model.fit(X, y)

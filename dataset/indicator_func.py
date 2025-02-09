@@ -1567,7 +1567,7 @@ def cal_FFD_func(
     features: List[str],
     time_frame: int,
     n_splits: List[int],
-    Auto_optimaze_d : bool|List[int] = True,  
+    Auto_optimaze_d : bool|List[float] = True,  
     prefix: str = "fe_FFD",
 ) -> pl.DataFrame:
     

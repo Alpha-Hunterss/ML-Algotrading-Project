@@ -971,7 +971,7 @@ def MetaFeaEng(df, n_components):
     from sklearn.preprocessing import StandardScaler
 
     model_columns = df.columns.tolist()
-    col_prob = [col for col in model_columns if "th_est_pos_label_proba" in col]
+    col_prob = [col for col in model_columns if "est_pos_label_proba" in col]
 
     # Calculate statistics on probability columns
     df['mean'] = df[col_prob].mean(axis=1)

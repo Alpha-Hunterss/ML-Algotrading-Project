@@ -609,9 +609,6 @@ def money_management(
     symbol_decimal_multiply: float,
     close_positions_at_midnight: bool,
     use_perc_levels: bool,
-    use_dynamic_sl: bool =False,
-    accounts_leverage: int = 100,
-    max_strg_sl_dynamic: int = 15,
 ):
     symbols_base_lot = {
         'EURUSD': 0.01,
@@ -622,16 +619,6 @@ def money_management(
         'US100': 0.01,
         'SPX500': 0.01,
         'BTCUSD': 0.01,
-    }
-    symbols_max_lot = {
-        'EURUSD': (0.99*accounts_leverage) / 100000,
-        'GBPUSD': (0.99*accounts_leverage) / 100000,
-        'USDJPY': (0.99*accounts_leverage) / 100000,
-        'XAUUSD': (0.99*accounts_leverage) / 100,
-        'US30': (0.99*accounts_leverage) / 1,
-        'US100': (0.99*accounts_leverage) / 1,
-        'SPX500': (0.99*accounts_leverage) / 1,
-        'BTCUSD': (0.99*accounts_leverage) / 1,
     }
     symbols_max_lot = {
         'EURUSD': (0.99*accounts_leverage) / 100000,
@@ -661,7 +648,6 @@ def money_management(
         [
             'index', '_time', 'close_position', 'volume', 'net_profit',
             'position_closed', 'confidence_levels', 'stop_losses', f"{target_symbol}_M5_CLOSE"
-            'position_closed', 'confidence_levels', 'stop_losses', f"{target_symbol}_M5_CLOSE"
         ]
     ].to_numpy()
 
@@ -671,12 +657,10 @@ def money_management(
     )
     symbols_exp = 1/symbols_base_lot.get(target_symbol)
     max_open_volume_possible = symbols_max_lot.get(target_symbol)
-    max_open_volume_possible = symbols_max_lot.get(target_symbol)
     pip_risk = stop_loss + spread
     # max_pip_risk = max_strg_sl_dynamic_perc + spread
     start_day_balance = initial_balance
     floating_balance = initial_balance
-    variable_balance = initial_balance
     variable_balance = initial_balance
     n_open_position = []
     total_open_volume = []
@@ -684,17 +668,7 @@ def money_management(
     day_before_prev_date = np.datetime64(array[0, 1], 'D')
     historic_closed_pos_cond = None
     aug_closed_pos_cond = None
-    day_before_prev_date = np.datetime64(array[0, 1], 'D')
-    historic_closed_pos_cond = None
-    aug_closed_pos_cond = None
     volumes = []
-    start_day_balances = []
-    floating_balances = []
-    daily_dds = []
-    daily_dd_exp = []
-    used_balances = []
-    remaining_positions = []
-    used_dd_budgets = []
     start_day_balances = []
     floating_balances = []
     daily_dds = []
@@ -745,18 +719,9 @@ def money_management(
             if dd < todays_exp_daily_dd:
                 todays_exp_daily_dd = dd
 
-
-        used_balance = (variable_balance-start_day_balance) + added_balance
-        if used_balance < 0:
-            dd = used_balance / start_day_balance
-
-            if dd < todays_exp_daily_dd:
-                todays_exp_daily_dd = dd
-
             if dd < max_exp_daily_dd:
                 max_exp_daily_dd = dd
 
-        floating_balance = start_day_balance + used_balance
         floating_balance = start_day_balance + used_balance
 
         curr_date = np.datetime64(chunk[-1, 1], 'D')
@@ -764,15 +729,8 @@ def money_management(
             start_day_balance += used_balance
             variable_balance = start_day_balance
             day_before_prev_date = prev_date
-            start_day_balance += used_balance
-            variable_balance = start_day_balance
-            day_before_prev_date = prev_date
             prev_date = curr_date
             added_balance = 0
-            todays_exp_daily_dd = 0
-
-            if aug_closed_pos_cond is None:
-                aug_closed_pos_cond = (chunk[:, 5] == True) & (dates[:] == day_before_prev_date)
             todays_exp_daily_dd = 0
 
             if aug_closed_pos_cond is None:
@@ -838,10 +796,6 @@ def money_management(
 
             base_lot = min(base_lot, floating_base_lot)
 
-        cnf_level_exp = weights.get(chunk[-1, 6])
-        floored_base_lot = math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp
-
-        if (floored_base_lot <= 0) or (total_open_volume[i]+floored_base_lot >= max_vol):
         cnf_level_exp = weights.get(chunk[-1, 6])
         floored_base_lot = math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp
 
@@ -1030,167 +984,6 @@ def cal_n_open_position(df:pd.DataFrame):
     return n_open_position , total_open_volume
 
 
-# def money_management(
-#     df: pd.DataFrame,
-#     stop_loss: int,
-#     spread: int,
-#     initial_balance: int,
-#     target_symbol: str,
-#     pip_value: dict[str, float],
-#     n_max_OP: int,
-#     max_floating_dd: float,
-#     max_daily_dd: float,
-#     use_floating_risk: bool,
-#     use_perc_levels: bool,
-#     sampled_times:list = [] ,
-# ):
-#     symbols_base_lot = {
-#         'EURUSD': 0.01,
-#         'GBPUSD': 0.01,
-#         'USDJPY': 0.01,
-#         'XAUUSD': 0.01,
-#         'US30': 0.01,
-#         'US100': 0.01,
-#         'SPX500': 0.01,
-#         'BTCUSD': 0.01,
-#     }
-#     weights = {
-#         0: 0.0,
-#         0.5: 1.0,
-#         0.6: 1.0,
-#         0.7: 1.0,
-#         0.8: 1.25,
-#         0.9: 1.25,
-#         1: 1.0,
-#     }
-
-#     df['index'] = df.index
-#     df = df.sort_values(by="_time")
-#     df['close_position'] = df['index'] + df['time_open_position']
-#     df['position_closed'] = False
-#     array = df[
-#         [
-#             'index', '_time', 'close_position', 'volume', 'net_profit',
-#             'position_closed', 'confidence_levels', 'stop_losses'
-#         ]
-#     ].to_numpy()
-
-#     date_column = np.array(
-#         [np.datetime64(datetime, 'D') for datetime in array[:, 1]]
-#     )
-#     symbols_exp = 1/symbols_base_lot.get(target_symbol)
-#     pip_risk = stop_loss + spread
-#     start_day_balance = initial_balance
-#     floating_balance = initial_balance
-#     n_open_position = []
-#     total_open_volume = []
-#     prev_date = np.datetime64(array[0, 1], 'D')
-#     volumes = []
-#     label_position = []
-#     max_exp_daily_dd = 0
-
-#     for i in range(array.shape[0]):
-#         chunk = array[:i+1]
-#         dates = date_column[:i+1]
-#         cond = chunk[:-1, 2] > chunk[-1, 0]
-#         open_cond = cond & (chunk[:-1, 3] != 0.0)
-#         cond_len = len(np.where(open_cond)[0])
-#         n_open_position.append(cond_len)
-#         chunk[:-1, 5][~cond] = True
-
-#         open_volumes = chunk[:-1, 3][open_cond]
-#         total_open_volume.append(open_volumes.sum())
-
-#         closed_pos_cond = (chunk[:-1, 5] == True) & (dates[:-1] == prev_date)
-#         profits_n_losses = chunk[:-1, 3][closed_pos_cond] * (
-#             pip_value[target_symbol] * chunk[:-1, 4][closed_pos_cond]
-#         )
-#         added_balance = profits_n_losses.sum()
-#         if added_balance < 0:
-#             dd = added_balance / start_day_balance
-#             if dd < max_exp_daily_dd:
-#                 max_exp_daily_dd = dd
-
-#         if use_floating_risk:
-#             floating_balance = start_day_balance + added_balance
-
-#         curr_date = np.datetime64(chunk[-1, 1], 'D')
-#         if curr_date != prev_date:
-#             start_day_balance += added_balance
-#             prev_date = curr_date
-#             added_balance = 0
-        
-#         if pd.Timestamp(chunk[-1, 1]).to_pydatetime() in sampled_times :
-#             volumes.append(0.0)
-#             array[i, 3] = volumes[i]
-#             label_position.append('by_sampling')
-#             continue
-        
-#         remaining_pos = n_max_OP - cond_len
-#         if remaining_pos <= 0:
-#             volumes.append(0.0)
-#             array[i, 3] = volumes[i]
-#             label_position.append('by_max-n-op')
-#             continue
-
-#         if use_perc_levels:
-#             pip_risk = chunk[-1, 7] + spread
-
-#         used_dd_budget = total_open_volume[i] * (pip_value[target_symbol] * pip_risk)
-#         daily_dd_budget = (start_day_balance * max_daily_dd) + added_balance
-
-#         base_lot = (
-#             (daily_dd_budget - used_dd_budget) / remaining_pos
-#         ) / (pip_value[target_symbol] * pip_risk)
-
-#         if use_floating_risk:
-#             floating_dd_budget = floating_balance * max_floating_dd
-#             floating_base_lot = (
-#                 (floating_dd_budget - used_dd_budget) / remaining_pos
-#             ) / (pip_value[target_symbol] * pip_risk)
-#             base_lot = min(base_lot, floating_base_lot)
-
-#         if base_lot <= 0:
-#             volumes.append(0.0)
-#             array[i, 3] = volumes[i]
-#             label_position.append('by_floating-dd')
-#             continue
-
-#         cnf_level_exp = weights.get(round(chunk[-1, 6], 2))
-#         volumes.append(math.floor((cnf_level_exp*base_lot)*symbols_exp)/symbols_exp)
-#         array[i, 3] = volumes[i]
-#         if volumes[i] == 0:
-#             if (cnf_level_exp*base_lot)<symbols_base_lot.get(target_symbol) :
-#                 label_position.append('by_base symbol lot')
-#             else:
-#                 label_position.append('by_daily dd')
-#         else:
-#             label_position.append('')
-
-
-#     df["volume"] = np.array(volumes)
-#     df["n_open_position"] = np.array(n_open_position)
-#     df["volume_open_position"] = np.array(total_open_volume)
-#     df['label_position'] = np.array(label_position)
-
-#     return max_exp_daily_dd, df
-def cal_n_open_position(df:pd.DataFrame):
-    df['index'] = df.index
-    df = df.sort_values(by="_time")
-    df['close_position'] = df['index'] + df['time_open_position']
-    array = df[['index' , 'close_position' , 'volume']].to_numpy()
-    n_open_position = []
-    total_open_volume = []
-    for i in range(array.shape[0]):
-        chunk = array[:i+1]
-        cond = (chunk[:, 1] >= chunk[-1, 0]) & (chunk[:, 2] > 0)
-        cond_len = len(np.where(cond)[0]) 
-        n_open_position.append(cond_len)
-        open_volumes = chunk[:, 2][cond]
-        total_volume = open_volumes.sum()
-        total_open_volume.append(total_volume)
-    return n_open_position , total_open_volume
-
 def do_backtest(
     df_model_signal: pd.DataFrame,
     target_symbol: str,
@@ -1254,7 +1047,6 @@ def do_backtest(
     if is_cf_model:
         if model.use_meta_labeling and not is_final_bt:
             new_trg_df["confidence_levels"] = confidence_levels
-
     if 'confidence_levels' in new_trg_df.columns:
         positive_profits = new_trg_df[new_trg_df['net_profit'] > 0]
         negative_profits = new_trg_df[new_trg_df['net_profit'] < 0]
@@ -1266,26 +1058,20 @@ def do_backtest(
         print('**')
         print(f"loss trade:\n {result_negative}")
         print('==========')
-        
-    else:
-        new_trg_df["confidence_levels"] = 1
 
-    if use_money_management:
-        if sampling['use'] and sampling['method'] == 'befor_backtest':
-            max_exp_daily_dd, new_trg_df = money_management(
-                df = new_trg_df ,
-                stop_loss = stop_loss , 
-                spread = spread ,
-                initial_balance=initial_balance ,
-                target_symbol=target_symbol ,
-                pip_value=pip_value ,
-                n_max_OP=n_max_OP ,
-                max_floating_dd=max_floating_dd ,
-                max_daily_dd=max_daily_dd ,
-                use_floating_risk=use_floating_risk ,
-                use_perc_levels=use_perc_levels ,
-                sampled_times=sampled_times,
+        if use_money_management:
+            max_exp_daily_dd, no_exceeding_dds, new_trg_df = money_management(
+                new_trg_df, stop_loss, spread, initial_balance, accounts_leverage,
+                target_symbol, pip_value, n_max_OP, max_floating_dd,
+                max_daily_dd, use_floating_risk, use_dynamic_sl,
+                max_strg_sl_dynamic_perc, symbol_decimal_multiply,
+                close_positions_at_midnight, use_perc_levels
             )
+
+            ##? calculate balance
+            new_trg_df["profits_n_losses"] = new_trg_df["net_profit"] * new_trg_df["volume"] * pip_value[
+                target_symbol
+            ] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
         else:
             ##? calculate balance
             new_trg_df["profits_n_losses"] = new_trg_df["net_profit"] * new_trg_df["volume"] * new_trg_df[
@@ -1306,15 +1092,14 @@ def do_backtest(
                 max_strg_sl_dynamic_perc, symbol_decimal_multiply,
                 close_positions_at_midnight, use_perc_levels
             )
-    else:
-        if sampling['use'] and sampling['method'] == 'befor_backtest':
-            new_trg_df.loc[new_trg_df['_time'].isin(sampled_times), 'volume'] = 0
-            new_trg_df.loc[new_trg_df['_time'].isin(sampled_times), 'label_position'] = 'by_sampling'
-        new_trg_df["n_open_position"] , new_trg_df["volume_open_position"] = cal_n_open_position(new_trg_df)        
+
+        ##? calculate balance
+        new_trg_df["profits_n_losses"] = new_trg_df["net_profit"] * new_trg_df["volume"] * pip_value[
+            target_symbol
+        ] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
     
     ##? calculate balance
-    new_trg_df["balance"] = new_trg_df["net_profit"] * new_trg_df["volume"] * pip_value[target_symbol] + (new_trg_df["swap_days"] * new_trg_df["volume"] * swap_rate)
-    new_trg_df["balance"] = new_trg_df["balance"].cumsum()
+    new_trg_df["balance"] = new_trg_df["profits_n_losses"].cumsum()
     new_trg_df["balance"] += initial_balance
 
     new_trg_df["stop_losses"] *= symbol_decimal_multiply
@@ -1326,11 +1111,14 @@ def do_backtest(
         new_trg_df["stop_losses"] = (new_trg_df[f"{target_symbol}_M5_CLOSE"] + price_spread) - new_trg_df["stop_losses"]
         new_trg_df["take_profits"] = (new_trg_df[f"{target_symbol}_M5_CLOSE"] + price_spread) + new_trg_df["take_profits"]
     elif trade_mode == 'short':
-        new_trg_df["stop_losses"] = new_trg_df[f"{target_symbol}_M5_CLOSE"] + new_trg_df["stop_losses"]
-        new_trg_df["take_profits"] = new_trg_df[f"{target_symbol}_M5_CLOSE"] - new_trg_df["take_profits"]
+        price_spread = spread * symbol_decimal_multiply
+
+        new_trg_df["stop_losses"] = (new_trg_df[f"{target_symbol}_M5_CLOSE"] + price_spread) + new_trg_df["stop_losses"]
+        new_trg_df["take_profits"] = (new_trg_df[f"{target_symbol}_M5_CLOSE"] + price_spread) - new_trg_df["take_profits"]
 
     ##? calculate max_drawdown
     max_drawdown, max_overall_dd = calculate_max_drawdown(new_trg_df["balance"], initial_balance)
+
     loss_streaks = (new_trg_df['balance'].diff() < 0).astype(int).groupby((new_trg_df['balance'].diff() > 0).cumsum()).cumsum().loc[lambda x: x > 0]    
     q1_cons_loss = q2_cons_loss = q3_cons_loss = mean_cons_loss = 0
     if not loss_streaks.empty:
@@ -1360,7 +1148,6 @@ def do_backtest(
             "mean_cons_loss": 0.0,
             "Tp(%)": 0.0,
             "Sl(%)": 0.0,
-            "WinRate(%)" : 0.0,
             'n_trades':0.0
         }
     else:
@@ -1394,7 +1181,6 @@ def do_backtest(
             "mean_cons_loss": mean_cons_loss,
             "Tp(%)": round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df[bt_column_name] == 1)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
             "Sl(%)": round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df[bt_column_name] == -1)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
-            "WinRate(%)" : round((len(new_trg_df[(new_trg_df['volume'] > 0) & (new_trg_df['net_profit'] > 0)]) / len(new_trg_df[new_trg_df['volume'] > 0])) * 100, 2),
             'n_trades' : new_trg_df[new_trg_df['volume'] > 0].shape[0],
         }
 

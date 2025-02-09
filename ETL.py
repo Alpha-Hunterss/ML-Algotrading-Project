@@ -42,6 +42,13 @@ def ETL(
     trg_take_profit_perc,
     trg_stop_loss_perc,
     use_perc_levels,
+    use_dynamic_sl,
+    apply_static_sl_trg,
+    dynamic_sl_type,
+    atr_window_size,
+    atr_level_multiplication,
+    trg_sl_exponent,
+    spread,
     n_rand_features,
     target_col, # name of target column
     base_time_frame, # for calculating targets
@@ -66,21 +73,59 @@ def ETL(
         "low": f"{target_symbol}_M5_LOW",
     })
 
-    array = df.merge(df_raw, on = '_time', how = 'left')[
-        [f"{target_symbol}_M5_CLOSE", f"{target_symbol}_M5_HIGH", f"{target_symbol}_M5_LOW"]
-    ].to_numpy()
+    if use_dynamic_sl and dynamic_sl_type=="atr":
+        col_name = f"fe_ATR_{target_symbol}_W{atr_window_size}_M5"
+
+        if col_name not in df.columns:
+            raise ValueError(f"{col_name} col not in the dataset.")
+
+        array = df.merge(df_raw, on='_time', how='left')[
+            [
+                f"{target_symbol}_M5_CLOSE",
+                f"{target_symbol}_M5_HIGH",
+                f"{target_symbol}_M5_LOW",
+                col_name
+            ]
+        ].to_numpy()
+
+    elif use_dynamic_sl and dynamic_sl_type=="etr":
+        col_name = f"fe_ETR_{target_symbol}_W{atr_window_size}_M5"
+
+        if col_name not in df.columns:
+            raise ValueError(f"{col_name} col not in the dataset.")
+
+        array = df.merge(df_raw, on='_time', how='left')[
+            [
+                f"{target_symbol}_M5_CLOSE",
+                f"{target_symbol}_M5_HIGH",
+                f"{target_symbol}_M5_LOW",
+                col_name
+            ]
+        ].to_numpy()
+
+    else:
+        array = df.merge(df_raw, on='_time', how='left')[
+            [f"{target_symbol}_M5_CLOSE", f"{target_symbol}_M5_HIGH", f"{target_symbol}_M5_LOW"]
+        ].to_numpy()
+
     tic = time.time()
     df["target"] = calculate_classification_target_numpy_ver(
-            array,
-            window_size,
-            symbol_decimal_multiply = symbols_dict[target_symbol]["pip_size"],
-            take_profit = trg_take_profit,
-            stop_loss = trg_stop_loss,
-            take_profit_perc = trg_take_profit_perc,
-            stop_loss_perc = trg_stop_loss_perc,
-            use_perc_levels = use_perc_levels,
-            mode = trade_mode,
-        )
+        array,
+        window_size,
+        symbol_decimal_multiply=symbols_dict[target_symbol]["pip_size"],
+        take_profit=trg_take_profit,
+        stop_loss=trg_stop_loss,
+        take_profit_perc=trg_take_profit_perc,
+        stop_loss_perc=trg_stop_loss_perc,
+        use_perc_levels=use_perc_levels,
+        use_dynamic_sl=use_dynamic_sl,
+        apply_static_sl_trg=apply_static_sl_trg,
+        dynamic_sl_type=dynamic_sl_type,
+        atr_level_multiplication=atr_level_multiplication,
+        trg_sl_exponent=trg_sl_exponent,
+        spread_pip=spread,
+        mode=trade_mode,
+    )
     toc = time.time()
     df.dropna(inplace = True)
     print(f"---> Target {target_col} has been generated in {toc-tic:.2f} seconds")

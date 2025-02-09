@@ -28,6 +28,7 @@ prefixes = [
     "fe_WIN_max",
     "fe_WIN_min",
     "fe_WIN",
+    # "fe_WIN_FREQ",
     "fe_ratio_RSI",
     "fe_ratio_EMA",
     "fe_ratio_RSTD",
@@ -40,6 +41,7 @@ prefixes = [
     "fe_SMA",
     "fe_ATR",
     "fe_leg",
+    "fe_supertrend",
     "fe_cndl_shape_n_cntxt",
     "fe_market_close",
 
@@ -130,7 +132,7 @@ def group_by_symbol_and_rename(df, symbol_col="symbol"):
 
     return result_df
 
-def history_columns_merge(feature_config, logger=default_logger, general_mode=False, pca=True):
+def history_columns_merge(feature_config, fe_removal_list, logger=default_logger, general_mode=False, pca=True):
     logger.info("- " * 25)
     logger.info("--> start history_columns_merge func:")
 
@@ -144,6 +146,7 @@ def history_columns_merge(feature_config, logger=default_logger, general_mode=Fa
         "fe_cndl",
         'fe_cndl_shape_n_cntxt',
         'fe_leg',
+        'fe_supertrend',
         "fe_RSI",
         "fe_RSTD",
         "fe_ATR",
@@ -152,6 +155,7 @@ def history_columns_merge(feature_config, logger=default_logger, general_mode=Fa
         "fe_ratio",
         "fe_cndl_shift",
         "fe_WIN",
+        # "fe_WIN_FREQ",
         "fe_cndl_ptrn",
         "fe_market_close",
         "fe_GMA",
@@ -187,13 +191,16 @@ def history_columns_merge(feature_config, logger=default_logger, general_mode=Fa
         sy_fe = list(
             set(list(feature_config[symbol].keys())) & set(fe_refrece_list)
         )
+
         if symbol not in CRYPTO:
             sy_fe.append("fe_market_close")
-        sy_fe = list(set(sy_fe))
+
+        sy_fe = list(set(sy_fe) - set(fe_removal_list))
+
         for feture in sy_fe:
             try:
                 logger.info(f"--> {symbol} | {feture}")
-                logger.info(f"--> {symbol} | -->{feture}<---- --------------------------")
+                logger.info(f"--> {symbol} | -->{feture}<-------------------------------")
                 df = pl.read_parquet(
                     f"{feature_folder}/{feture}/{feture}_{symbol}.parquet"
                 )

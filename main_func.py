@@ -44,11 +44,18 @@ def main(
             strg_stop_loss_perc = man_params["strg_stop_loss_perc"]
             use_perc_levels = man_params["use_perc_levels"]
             use_dynamic_sl = man_params["use_dynamic_sl"]
+            max_strg_sl_dynamic_perc = man_params["max_strg_sl_dynamic_perc"]
+            apply_static_sl_trg = man_params["apply_static_sl_trg"]
+            dynamic_sl_type = man_params["dynamic_sl_type"]
+            atr_window_size = man_params["atr_window_size"]
+            atr_level_multiplication = man_params["atr_level_multiplication"]
+            trg_sl_exponent = man_params["trg_sl_exponent"]
             dynamic_sl_scale_type = man_params["dynamic_sl_scale_type"]
             rstd_window_size = man_params["rstd_window_size"]
             confidence_levels = man_params["confidence_levels"]
             use_money_management = man_params["use_money_management"]
             initial_balance = man_params["initial_balance"]
+            accounts_leverage = man_params["accounts_leverage"]
             default_volume = man_params["default_volume"]
             default_spread = man_params["default_spread"]
             n_max_OP = man_params["n_max_OP"]
@@ -56,8 +63,6 @@ def main(
             max_daily_dd = man_params["max_daily_dd"]
             use_floating_risk = man_params["use_floating_risk"]
             close_positions_at_midnight = man_params["close_positions_at_midnight"]
-
-            
             # Output Model:
             save_model_mode = man_params["save_model_mode"]
             use_cudf = man_params["use_cudf"]
@@ -94,17 +99,25 @@ def main(
                 "strg_stop_loss_perc",
                 "use_perc_levels",
                 "use_dynamic_sl",
+                "max_strg_sl_dynamic_perc",
+                "apply_static_sl_trg",
+                "dynamic_sl_type",
+                "atr_window_size",
+                "atr_level_multiplication",
+                "trg_sl_exponent",
                 "dynamic_sl_scale_type",
                 "rstd_window_size",
                 "confidence_levels",
                 "use_money_management",
                 "initial_balance",
+                "accounts_leverage",
                 "default_volume",
                 "default_spread",
                 "n_max_OP",
                 "max_floating_dd",
                 "max_daily_dd",
                 "use_floating_risk",
+                "close_positions_at_midnight",
                 "save_model_mode",
                 "use_cudf",
                 "feature_set",
@@ -140,11 +153,18 @@ def main(
             strg_stop_loss_perc = wandb.config.strg_stop_loss_perc
             use_perc_levels = wandb.config.use_perc_levels
             use_dynamic_sl = wandb.config.use_dynamic_sl
+            max_strg_sl_dynamic_perc = wandb.config.max_strg_sl_dynamic_perc
+            apply_static_sl_trg = wandb.config.apply_static_sl_trg
+            dynamic_sl_type = wandb.config.dynamic_sl_type
+            atr_window_size = wandb.config.atr_window_size
+            atr_level_multiplication = wandb.config.atr_level_multiplication
+            trg_sl_exponent = wandb.config.trg_sl_exponent
             dynamic_sl_scale_type = wandb.config.dynamic_sl_scale_type
             rstd_window_size = wandb.config.rstd_window_size
             confidence_levels = wandb.config.confidence_levels
             use_money_management = wandb.config.use_money_management
             initial_balance = wandb.config.initial_balance
+            accounts_leverage = wandb.config.accounts_leverage
             default_volume = wandb.config.default_volume
             default_spread = wandb.config.default_spread
             n_max_OP = wandb.config.n_max_OP
@@ -191,6 +211,13 @@ def main(
             trg_take_profit_perc=trg_take_profit_perc,
             trg_stop_loss_perc=trg_stop_loss_perc,
             use_perc_levels=use_perc_levels,
+            use_dynamic_sl=use_dynamic_sl,
+            apply_static_sl_trg=apply_static_sl_trg,
+            dynamic_sl_type=dynamic_sl_type,
+            atr_window_size=atr_window_size,
+            atr_level_multiplication=atr_level_multiplication,
+            trg_sl_exponent=trg_sl_exponent,
+            spread=default_spread,
             n_rand_features=n_rand_features,
             target_col=target_col,
             base_time_frame=5,
@@ -225,18 +252,25 @@ def main(
 
         # ______________________________Pre-Backtest: Backtest on all raw data_______________________________
         df_raw_backtest, bt_column_name = cal_backtest_on_raw_cndl(
-            df_raw_path = C5M_data_path,
-            target_symbol = target_symbol,
-            look_ahead= strg_look_ahead,
-            take_profit= strg_take_profit,
-            stop_loss= strg_stop_loss,
-            take_profit_perc= strg_take_profit_perc,
-            stop_loss_perc= strg_stop_loss_perc,
-            use_perc_levels= use_perc_levels,
-            trade_mode= trade_mode,
+            path=dataset_path,
+            df_raw_path=C5M_data_path,
+            target_symbol=target_symbol,
+            look_ahead=strg_look_ahead,
+            take_profit=strg_take_profit,
+            stop_loss=strg_stop_loss,
+            take_profit_perc=strg_take_profit_perc,
+            stop_loss_perc=strg_stop_loss_perc,
+            use_perc_levels=use_perc_levels,
+            dynamic_sl_type=dynamic_sl_type,
+            atr_window_size=atr_window_size,
+            atr_level_multiplication=atr_level_multiplication,
+            spread=default_spread,
+            trade_mode=trade_mode,
             use_dynamic_sl=use_dynamic_sl,
+            max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
             dynamic_sl_scale_type=dynamic_sl_scale_type,
-            rstd_window_size=rstd_window_size
+            rstd_window_size=rstd_window_size,
+            close_positions_at_midnight=close_positions_at_midnight,
         )
 
         # ______________________________RUN Quant Cross-Validation and Backtest on Folds_____________________
@@ -252,6 +286,7 @@ def main(
             use_cudf=use_cudf,
             cnf_levels=confidence_levels,
             initial_balance=initial_balance,
+            accounts_leverage=accounts_leverage,
             default_volume=default_volume,
             default_spread=default_spread,
             early_stopping_rounds=early_stopping_rounds,
@@ -259,15 +294,19 @@ def main(
             bt_column_name=bt_column_name,
             non_feature_columns=non_feature_columns,
             swap_rate=swap_rate,
-            use_money_management = use_money_management,
-            stop_loss= strg_stop_loss,
-            n_max_OP = n_max_OP,
-            max_floating_dd = max_floating_dd,
-            max_daily_dd = max_daily_dd,
-            use_floating_risk = use_floating_risk,
-            use_perc_levels = use_perc_levels,
+            stop_loss=strg_stop_loss,
+            use_money_management=use_money_management,
+            n_max_OP=n_max_OP,
+            max_floating_dd=max_floating_dd,
+            max_daily_dd=max_daily_dd,
+            use_floating_risk=use_floating_risk,
+            use_dynamic_sl=use_dynamic_sl,
+            max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
+            trade_mode=trade_mode,
+            close_positions_at_midnight=close_positions_at_midnight,
+            use_perc_levels=use_perc_levels,
             sampled_times = sampled_times , 
-            sampling = sampling ,           
+            sampling = sampling , 
         )
 
         # ______________________________Retrain Last Model to Save___________________________________________
@@ -355,8 +394,8 @@ def main(
         # ______________________________Manual Mode: Return Experiment Tracker Object_________________________
             artifact_name = "manual" + target_col
             gc.collect()
-            return exp_obj, exp_metadata, artifact_name , general_backtest_df
-        
+            return exp_obj, exp_metadata, artifact_name, general_backtest_df
+
     except Exception as e:
         print(e)
         traceback.print_exc()

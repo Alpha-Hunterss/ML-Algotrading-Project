@@ -8,7 +8,6 @@ from dataset.configs.history_data_crawlers_config import root_path
 from dataset.configs.feature_configs_general import fe_leg_config
 import re
 from dataset.logging_tools import default_logger
-
 from arch.unitroot import ADF
 from numba import njit
 from functools import reduce
@@ -225,7 +224,7 @@ def cal_cndl_shape_n_cntxt_func(
             (pl.col(feature).rolling_max(window_size=w) -
              pl.col(feature).rolling_min(window_size=w))
             .alias(f"{feature}_rolling_range"),
-            (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) - 
+            (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) -
              pl.col(feature).rolling_quantile(quantile=0.25, window_size=w))
             .alias(f"{feature}_rolling_iqr"),
             pl.col(feature)
@@ -234,7 +233,7 @@ def cal_cndl_shape_n_cntxt_func(
         ])
 
     # Calculate rounded price distances for different decimal places
-    for i in range(1, 4):  # For n-1, n-2, n-3
+    for i in range(2, 4):  # For n-2, n-3
         calcs.extend([
             # Calculate decimal places dynamically based on number of digits
             (
@@ -277,7 +276,7 @@ def cal_cndl_shape_n_cntxt_func(
     df = df.with_columns(calcs).lazy()
 
     # Drop unnecessary columns
-    cols_to_drop = features
+    cols_to_drop = features + context_features
     cols_to_drop.extend([
         f"{prefix}_higher_price_M{time_frame}",
         f"{prefix}_lower_price_M{time_frame}",
@@ -734,10 +733,10 @@ def cal_leg_base_func(
     df = df.with_columns([
         # pl.Series(name=f"{prefix}_pvt_indicators_M{time_frame}_th_{th}{suffix}",values=pivot_indicators),
         # pl.Series(name=f"{prefix}_pvt_points_M{time_frame}_th_{th}{suffix}",values=pivot_points),
-        pl.Series(name=f"{prefix}_blsh_high_dist_M{time_frame}_th_{th}{suffix}",values=bullish_high_pivot_distances),
-        pl.Series(name=f"{prefix}_blsh_low_dist_M{time_frame}_th_{th}{suffix}",values=bullish_low_pivot_distances),
-        pl.Series(name=f"{prefix}_brsh_high_dist_M{time_frame}_th_{th}{suffix}",values=bearish_high_pivot_distances),
-        pl.Series(name=f"{prefix}_brsh_low_dist_M{time_frame}_th_{th}{suffix}",values=bearish_low_pivot_distances)
+        pl.Series(name=f"{prefix}_blsh_high_dist_M{time_frame}_th_{th}{suffix}", values=bullish_high_pivot_distances),
+        pl.Series(name=f"{prefix}_blsh_low_dist_M{time_frame}_th_{th}{suffix}", values=bullish_low_pivot_distances),
+        pl.Series(name=f"{prefix}_brsh_high_dist_M{time_frame}_th_{th}{suffix}", values=bearish_high_pivot_distances),
+        pl.Series(name=f"{prefix}_brsh_low_dist_M{time_frame}_th_{th}{suffix}", values=bearish_low_pivot_distances)
     ]).lazy()
 
     # Dropping price column (Comment it if you want to plot legs in Colab)
@@ -982,6 +981,16 @@ def add_candle_base_indicators_polars(
     features = opts["base_feature"]
     time_frames = opts["candle_timeframe"]
     window_sizes = opts["window_size"]
+
+    if prefix == 'fe_GMA':
+        devs = opts['feature_config']['devs']
+    elif prefix == 'fe_FFD':
+        n_splits = opts['feature_config']['n_splits']
+    elif prefix == 'fe_OL':
+        w_sma = opts['feature_config']['window_size_SMA']
+    elif prefix == 'fe_supertrend':
+        multipliers = opts['feature_config']['multipliers']
+
     if prefix == "fe_leg":
         exponents = opts["exponents"]
         percentage = opts["percentage"]
@@ -1014,48 +1023,74 @@ def add_candle_base_indicators_polars(
                     features=list(set(features) - set(other_tf_features)),
                     pip_size=pip_size,
                     prefix=prefix,
-                    devs = devs
-                )
-            elif prefix=='fe_FFD':
-                df = base_func(
-                    df=df,
-                    time_frame=time_frame,
-                    features=list(set(features) - set(other_tf_features)),
-                    prefix=prefix,
-                    n_splits = n_splits
-                )
-            elif prefix=='fe_OL':
-
-                df = base_func(
-                    df=df,
-                    w=w,
-                    w_sma=w_sma,
-                    time_frame=time_frame,
-                    features=list(set(features) - set(other_tf_features)),
-                    pip_size=pip_size,
-                    prefix=prefix,
-                )
-            elif prefix=='fe_leg':
-
-                df = base_func(
-                    df=df,
-                    w=w,
-                    time_frame=time_frame,
-                    features=list(set(features) - set(other_tf_features)),
-                    pip_size=pip_size,
-                    exponents=exponents,
-                    prefix=prefix,
                     percentage=percentage,
                 )
-            else:
-                df = base_func(
-                    df=df,
-                    w=w,
-                    time_frame=time_frame,
-                    features=list(set(features) - set(other_tf_features)),
-                    pip_size=pip_size,
-                    prefix=prefix,
+
+                file_name = (
+                    features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
                 )
+
+                df.write_parquet(file_name)
+    else:
+        for w in window_sizes:
+            for time_frame in time_frames:
+                df = df_base.filter(
+                    pl.col("minutesPassed") % time_frame == (time_frame - 5)
+                )
+
+                # Create a regex pattern to match 'M' followed by the time_frame number
+                pattern = re.compile(rf"M{time_frame}_")
+
+                # Find items where the number after 'M' is not equal to time_frame
+                other_tf_features = [f for f in features if not pattern.match(f)]
+                df = df.drop(other_tf_features + ["minutesPassed"])
+
+                if prefix == 'fe_GMA':
+                    df = base_func(
+                        df=df,
+                        w=w,
+                        time_frame=time_frame,
+                        features=list(set(features) - set(other_tf_features)),
+                        pip_size=pip_size,
+                        prefix=prefix,
+                        devs=devs,
+                    )
+                elif prefix == 'fe_FFD':
+                    df = base_func(
+                        df=df,
+                        time_frame=time_frame,
+                        features=list(set(features) - set(other_tf_features)),
+                        prefix=prefix,
+                        n_splits=n_splits,
+                    )
+                elif prefix == 'fe_OL':
+                    df = base_func(
+                        df=df,
+                        w=w,
+                        w_sma=w_sma,
+                        time_frame=time_frame,
+                        features=list(set(features) - set(other_tf_features)),
+                        pip_size=pip_size,
+                        prefix=prefix,
+                    )
+                elif prefix == 'fe_supertrend':
+                    df = base_func(
+                        df=df,
+                        w=w,
+                        time_frame=time_frame,
+                        features=list(set(features) - set(other_tf_features)),
+                        multipliers=multipliers,
+                        prefix=prefix,
+                    )
+                else:
+                    df = base_func(
+                        df=df,
+                        w=w,
+                        time_frame=time_frame,
+                        features=list(set(features) - set(other_tf_features)),
+                        pip_size=pip_size,
+                        prefix=prefix,
+                    )
 
             file_name = (
                 features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
@@ -1257,6 +1292,114 @@ def cal_ATR_func(
     return df.collect()
 
 
+def cal_supertrend_func(
+    df: pl.DataFrame,
+    w: int,
+    time_frame: int,
+    features: List[str],
+    multipliers: list[float],
+    prefix: str = "fe_supertrend",
+) -> pl.DataFrame:
+    assert (
+        len(features) == 3
+    ), f"Only 3 feature should have been passed but {len(features)} received!"
+    features = sorted(features)
+    input_features = [
+        f'M{time_frame}_CLOSE',
+        f'M{time_frame}_HIGH',
+        f'M{time_frame}_LOW'
+    ]
+    if features != input_features:
+        print('Input features are wrong')
+        return
+    # features[0] == f'M{time_frame}_CLOSE'
+    # features[1] == f'M{time_frame}_HIGH'
+    # features[2] == f'M{time_frame}_LOW'
+
+    df = df.sort("_time")
+
+    df = df.with_columns([
+        pl.max_horizontal(
+            (pl.col(features[1]) - pl.col(features[2])).abs(),
+            (pl.col(features[1]) - pl.col(features[0]).shift(1)).abs(),
+            (pl.col(features[2]) - pl.col(features[0]).shift(1)).abs(),
+        ).alias("true_range")
+    ]).lazy()
+
+    df = df.with_columns([
+        pl.col("true_range").rolling_mean(window_size=w).alias("atr")
+    ]).lazy()
+
+    upper_band_column_names = []
+    lower_band_column_names = []
+
+    for idx, multiplier in enumerate(multipliers):
+        upper_band_column_names.append(f"upper_band_mp{multiplier}")
+        lower_band_column_names.append(f"lower_band_mp{multiplier}")
+        # Calculate basic upper and lower bands
+        df = df.with_columns([
+            (
+                (pl.col(features[1]) + pl.col(features[2])) / 2 + (multiplier * pl.col("atr"))
+            ).alias(upper_band_column_names[idx]),
+            (
+                (pl.col(features[1]) + pl.col(features[2])) / 2 - (multiplier * pl.col("atr"))
+            ).alias(lower_band_column_names[idx]),
+        ]).lazy()
+
+        column_name = f"{prefix}_trend_direction_tf{time_frame}_w{w}_mp{multiplier}"
+
+        # Initialize Supertrend columns
+        df = df.with_columns([
+            pl.lit(0).alias(column_name)
+        ]).lazy()
+
+        # Iterate over rows to calculate Supertrend
+        eager_df = df.collect()
+        closes = eager_df[features[0]].to_numpy()
+        lower_bands = eager_df[lower_band_column_names[idx]].to_numpy()
+        upper_bands = eager_df[upper_band_column_names[idx]].to_numpy()
+        supertrend = np.zeros(len(eager_df))
+        trend_direction = np.zeros(len(eager_df))
+        trend_changed = False
+
+        for i in range(len(eager_df)):
+            if i == 0:
+                # First row initialization
+                supertrend[i] = upper_bands[i]
+                trend_direction[i] = 1
+            else:
+                if closes[i] > supertrend[i-1]:
+                    if trend_direction[i-1] == 0:
+                        trend_changed = True
+                    trend_direction[i] = 1
+                elif closes[i] < supertrend[i-1]:
+                    if trend_direction[i-1] == 1:
+                        trend_changed = True
+                    trend_direction[i] = 0
+                else:
+                    trend_direction[i] = trend_direction[i-1]
+
+                if trend_changed:
+                    if trend_direction[i-1] == 1:
+                        supertrend[i] = lower_bands[i]
+                    else:
+                        supertrend[i] = upper_bands[i]
+                    trend_changed = False
+                else:
+                    if trend_direction[i-1] == 1:
+                        supertrend[i] = max(lower_bands[i], supertrend[i-1])
+                    else:
+                        supertrend[i] = min(upper_bands[i], supertrend[i-1])
+
+        df = df.with_columns([
+            pl.Series(name=column_name, values=trend_direction)
+        ]).lazy()
+
+    df = df.drop(["true_range", "atr"] + input_features + upper_band_column_names + lower_band_column_names)
+
+    return df.collect()
+
+
 def cal_RSTD_func(
     df: pl.DataFrame,
     w: int,
@@ -1316,261 +1459,15 @@ def cal_RSTD_func(
     return df
 
 
-def cal_GMAandGBB_func(
-    df: pl.DataFrame,
-    w: int,
-    time_frame: int,
-    features: List[str],
-    devs:List[int|float] ,
-    pip_size: float,
-    prefix: str = "fe_GMA",
-    
-) -> pl.DataFrame:
-    """
-    this function calculates Gaussian moving average And Weighted Bollinger Band.
-    inputs:
-    df: dataframe containing the raw feature
-    w: Gaussian Parameter 
-    time_frame: time_frame for calculations
-    devs: Parameter for calculations Bollinger Band,
-    pip size: pip size of the pair
-    prefix: prefix of feature name
-    normalize: if True the function returns pipsize difference between GMA and last close-high-low price.
-
-    """
-    # print('=================')
-    # print(features)
-    
-    # Assuming `df` is a polars DataFrame
-    df = df.sort("_time")
-    def gaussian_vectorized(source, bw):
-        return np.exp(-1 * ((source / bw) ** 2)) / np.sqrt(2 * np.pi)
-
-    i_values = np.arange(500)  
-    array_w = gaussian_vectorized(i_values, w)
-    array_w = array_w[array_w * 1e10 > 1]
-    Sum_w = np.sum(array_w)
-
-    base_features = features
-    array_price = df.select(base_features).to_numpy()
-    window_size = len(array_w)
-    devs = np.array(devs)
-
-    # Rolling calculations using convolution for weighted values
-    rolled_close = np.convolve(array_price[:, base_features.index(f"M{time_frame}_CLOSE")]**1, array_w, 'valid') / Sum_w
-    rolled_close_sq = np.convolve(array_price[:, base_features.index(f"M{time_frame}_CLOSE")]**2, array_w, 'valid') / Sum_w
-    rolled_high = np.convolve(array_price[:, base_features.index(f"M{time_frame}_HIGH")]**1, array_w, 'valid') / Sum_w
-    rolled_high_sq = np.convolve(array_price[:, base_features.index(f"M{time_frame}_HIGH")]**2, array_w, 'valid') / Sum_w
-    rolled_low = np.convolve(array_price[:, base_features.index(f"M{time_frame}_LOW")]**1, array_w, 'valid') / Sum_w
-    rolled_low_sq = np.convolve(array_price[:, base_features.index(f"M{time_frame}_LOW")]**2, array_w, 'valid') / Sum_w
-
-    # Calculate standard deviations
-    std_close = np.sqrt(np.maximum(0,rolled_close_sq - rolled_close**2))
-    std_high = np.sqrt(np.maximum(0,rolled_high_sq - rolled_high**2))
-    std_low = np.sqrt(np.maximum(0,rolled_low_sq - rolled_low**2))
-
-    df = df.slice(window_size - 1)
-    df = df.with_columns(
-        [
-            pl.lit(rolled_close).alias("close_GMA"),
-            pl.lit(rolled_high).alias("high_GMA"),
-            pl.lit(rolled_low).alias("low_GMA"),
-        ]
-    )
-
-
-
-
-
-    # Add Bollinger Bands for each deviation level
-    for dev in devs:
-            
-        df = df.with_columns([
-            (pl.col('close_GMA') + std_close * dev).alias(f'Close-GMA_UBB{dev}'),
-            (pl.col('close_GMA') - std_close * dev).alias(f'Close-GMA_LBB{dev}'),
-            (pl.col('high_GMA') + std_high * dev).alias(f'High-GMA_UBB{dev}'),
-            (pl.col('high_GMA') - std_high * dev).alias(f'High-GMA_LBB{dev}'),
-            (pl.col('low_GMA') + std_low * dev).alias(f'Low-GMA_UBB{dev}'),
-            (pl.col('low_GMA') - std_low * dev).alias(f'Low-GMA_LBB{dev}')
-        ]).lazy()
-
-    col_drop = list(set(df.collect_schema().names()) - set(['_time']))
-
-
-    df = df.with_columns((pl.col('close_GMA').diff()).alias(f"{prefix}_GMAClose_W{w}_diff_cndl_M{time_frame}")).lazy()
-    df = df.with_columns((pl.col('high_GMA').diff()).alias(f"{prefix}_GMAHigh_W{w}_diff_cndl_M{time_frame}")).lazy()
-    df = df.with_columns((pl.col('low_GMA').diff()).alias(f"{prefix}_GMALow_W{w}_diff_cndl_M{time_frame}")).lazy()
-
-    
-
-    for base_feature in base_features:
-        
-        df = df.with_columns(
-            (
-                (
-                    pl.col(base_feature) - pl.col('close_GMA')
-                )
-                / pip_size
-            ).alias(f"{prefix}_{base_feature}-GMAClose_W{w}_cndl_M{time_frame}_norm")
-        ).lazy()  
-
-                    
-        df = df.with_columns(
-            (
-                (
-                    pl.col(base_feature) - pl.col('high_GMA')
-                )
-                / pip_size
-            ).alias(f"{prefix}_{base_feature}-GMAHigh_W{w}_cndl_M{time_frame}_norm")
-        ).lazy()  
-
-                                
-        df = df.with_columns(
-            (
-                (
-                    pl.col(base_feature) - pl.col('low_GMA')
-                )
-                / pip_size
-            ).alias(f"{prefix}_{base_feature}-GMALow_W{w}_cndl_M{time_frame}_norm")
-        ).lazy() 
-
-        for dev in devs:
-            if base_feature == base_features[0]:
-
-                df = df.with_columns(
-                    (
-                        (
-                            pl.col(f'Close-GMA_UBB{dev}')- pl.col(f'Close-GMA_LBB{dev}')
-                        )/ pip_size
-                        
-                    ).alias(f"{prefix}_UGBBClose{dev}-LGBBClose{dev}_W{w}_cndl_M{time_frame}")
-                ).lazy() 
-
-                # df = df.with_columns(
-                #     (
-                #         (
-                #             pl.col(f'Close-GMA_UBB{dev}')/ pl.col(f'Close-GMA_LBB{dev}')
-                #         )
-                        
-                #     ).alias(f"{prefix}_UGBBClose{dev}/LGBBClose{dev}_W{w}_cndl_M{time_frame}")
-                # ).lazy() 
-
-                                
-                df = df.with_columns(
-                    (
-                        (
-                            pl.col(f'High-GMA_UBB{dev}')- pl.col(f'High-GMA_LBB{dev}')
-                        )/ pip_size
-                        
-                    ).alias(f"{prefix}_UGBBHigh{dev}-LGBBHigh{dev}_W{w}_cndl_M{time_frame}")
-                ).lazy() 
-
-                # df = df.with_columns(
-                #     (
-                #         (
-                #             pl.col(f'High-GMA_UBB{dev}')/ pl.col(f'High-GMA_LBB{dev}')
-                #         )
-                        
-                #     ).alias(f"{prefix}_UGBBHigh{dev}/LGBBHigh{dev}_W{w}_cndl_M{time_frame}")
-                # ).lazy() 
-
-
-                
-                                
-                df = df.with_columns(
-                    (
-                        (
-                            pl.col(f'Low-GMA_UBB{dev}')- pl.col(f'Low-GMA_LBB{dev}')
-                        )/ pip_size
-                        
-                    ).alias(f"{prefix}_UGBBLow{dev}-LGBBLow{dev}_W{w}_cndl_M{time_frame}")
-                ).lazy() 
-
-                # df = df.with_columns(
-                #     (
-                #         (
-                #             pl.col(f'Low-GMA_UBB{dev}')/ pl.col(f'Low-GMA_LBB{dev}')
-                #         )
-                        
-                #     ).alias(f"{prefix}_UGBBLow{dev}/LGBBLow{dev}_W{w}_cndl_M{time_frame}")
-                # ).lazy() 
-
-
-            df = df.with_columns(
-                (
-                    (
-                        pl.col(base_feature) - pl.col(f'Close-GMA_UBB{dev}') 
-                    )
-                    / pip_size
-                ).alias(f"{prefix}_{base_feature}-UGBBClose{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy()  
-
-            
-            df = df.with_columns(
-                (
-                    (
-                        pl.col(base_feature) - pl.col(f'Close-GMA_LBB{dev}') 
-                    )
-                    / pip_size
-                ).alias(f"{prefix}_{base_feature}-LGBBClose{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy() 
-
-            
-            df = df.with_columns(
-                (
-                    (
-                        pl.col(base_feature) - pl.col(f'High-GMA_UBB{dev}')
-                    )
-                    / pip_size
-                ).alias(f"{prefix}_{base_feature}-UGBBHigh{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy()  
-
-            
-            df = df.with_columns(
-                (
-                    (
-                        pl.col(base_feature) - pl.col(f'High-GMA_LBB{dev}')
-                    )
-                    / pip_size
-                ).alias(f"{prefix}_{base_feature}-LGBBHigh{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy() 
-
-
-                            
-            df = df.with_columns(
-                (
-                    (
-                        pl.col(base_feature) - pl.col(f'Low-GMA_UBB{dev}')
-                    )
-                    / pip_size
-                ).alias(f"{prefix}_{base_feature}-UGBBLow{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy()  
-
-            
-            df = df.with_columns(
-                (
-                    (
-                        pl.col(base_feature) - pl.col(f'Low-GMA_LBB{dev}')
-                    )
-                    / pip_size
-                ).alias(f"{prefix}_{base_feature}-LGBBLow{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy()
-    
-    
-    df =df.drop(col_drop)
-
-    return df.collect()
-
-
 def cal_FFD_func(
     df: pl.DataFrame,
     features: List[str],
     time_frame: int,
     n_splits: List[int],
-    Auto_optimaze_d : bool|List[float] = True,  
+    Auto_optimaze_d : bool|List[int] = True,  
     prefix: str = "fe_FFD",
 ) -> pl.DataFrame:
-    
+
     df = df.sort("_time")
     col_drop = list(set(list(df.columns)) - set(['_time']))
 
@@ -1593,7 +1490,7 @@ def cal_FFD_func(
         return pl.Series(final_result)
 
     def adf_test(series):
-        
+
         result = ADF(series.drop_nulls().drop_nans().to_numpy()).pvalue
 
         return result
@@ -1601,6 +1498,7 @@ def cal_FFD_func(
     def split_dataframe(df, n_splits):
         indices = np.linspace(0, df.height, n_splits + 1, dtype=int)
         splits = [df[indices[i]:indices[i + 1]] for i in range(n_splits)]
+
         return splits + [df]
 
     def Optimaze_d(list_df, base_feature, min_d=0, max_d=1, step=0.01):
@@ -1612,6 +1510,7 @@ def cal_FFD_func(
                 if pval_adf < 0.05:
                     list_d.append(d)
                     break
+
         return max(list_d)
 
     @njit
@@ -1619,8 +1518,10 @@ def cal_FFD_func(
         x_mean, y_mean = np.mean(x), np.mean(y)
         cov = np.mean((x - x_mean) * (y - y_mean))
         corr = cov / (np.std(x) * np.std(y))
+
         return corr
-    if type(Auto_optimaze_d) == bool and Auto_optimaze_d :
+
+    if type(Auto_optimaze_d) == bool and Auto_optimaze_d:
         for ns in n_splits:
             list_df = split_dataframe(df, ns)
             fea = features[features.index(f"M{time_frame}_CLOSE")]
@@ -1636,103 +1537,32 @@ def cal_FFD_func(
                 df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[f"{prefix}-{fea}_{best_d}"].to_numpy(),
             )
             print(f"{fea}_{ns} : best_d = {best_d} | corr : {corr}")
+
     else:
         fea = features[features.index(f"M{time_frame}_CLOSE")]
-        for d in Auto_optimaze_d :
+        for d in Auto_optimaze_d:
             ser = base_FFD(df[fea], d)
             df = df.with_columns(ser.alias(f"{prefix}-{fea}_{d}"))
             corr = correlation(
-                    df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[fea].to_numpy(),
-                    df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[f"{prefix}-{fea}_{d}"].to_numpy(),
-                )
+                df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[fea].to_numpy(),
+                df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[f"{prefix}-{fea}_{d}"].to_numpy(),
+            )
             print(f"{fea} : d-value = {d} | corr : {corr}")
-            
+
             # for feature in list(set(features) - set([fea])):
             #     ser = base_FFD(df[feature], best_d)
             #     df = df.with_columns(ser.alias(f"{prefix}-{feature}_{best_d}"))
+
     df =df.drop(col_drop)
     df = df.filter(
         reduce(
             lambda acc, col: acc & pl.col(col).is_not_nan() if col != '_time' else acc,
-                df.columns,
-                pl.lit(True)
+            df.columns,
+            pl.lit(True)
         )
-    )  
-    return df
-
-def cal_OverLap_func(
-    df: pl.DataFrame,
-    features: List[str],
-    w: int,
-    w_sma : List[int],
-    time_frame: int,
-    pip_size: float,  # only for compatibility
-    prefix: str = "fe_OL",
-    
-) -> pl.DataFrame:
-    
-    df = df.sort("_time")
-    
-    low = features[features.index(f'M{time_frame}_LOW')]
-    high = features[features.index(f'M{time_frame}_HIGH')]
-    df = df.with_columns(
-        [
-            pl.col(low).rolling_min(window_size=w).alias("Low_window"),
-            pl.col(high).rolling_max(window_size=w).alias("High_window"),
-        ]
-    ).lazy()
-
-    df = df.with_columns(
-        [
-            pl.col("Low_window").shift(w).alias("Low_shifted_window"),
-            pl.col("High_window").shift(w).alias("High_shifted_window"),
-        ]
-    ).lazy()
-
-    df = df.with_columns(
-        [
-            (pl.when(
-                pl.min_horizontal([pl.col("High_window"), pl.col("High_shifted_window")])
-                - pl.max_horizontal([pl.col("Low_window"), pl.col("Low_shifted_window")])
-                >= 0
-            ).then(
-                pl.min_horizontal([pl.col("High_window"), pl.col("High_shifted_window")])
-                - pl.max_horizontal([pl.col("Low_window"), pl.col("Low_shifted_window")])
-            ).otherwise(0)).alias("Overlap"),
-            (pl.col("High_window") - pl.col("Low_window")).alias("BarAmount"),
-        ]
-    ).lazy()
-
-    df = df.with_columns(
-        pl.when(pl.col("BarAmount") == 0).then(0.001).otherwise(pl.col("BarAmount")).alias("BarAmount")
-    ).lazy()
-
-
-    df = df.with_columns(
-        ((pl.col("Overlap") / pl.col("BarAmount")) * 100)
-        .alias(f"{prefix}_W{w}_cndl_M{time_frame}")
-    ).lazy()
-    
-
-
-    col_drop = list(set(df.collect_schema().names()) - set(['_time', f"{prefix}_W{w}_cndl_M{time_frame}"]))
-    for window in w_sma:
-
-        df = df.with_columns(
-            (pl.col(f"{prefix}_W{w}_cndl_M{time_frame}").rolling_mean(window_size=window)).alias(
-                f"{prefix}_W{w}_SMA{window}_cndl_M{time_frame}"
-            )
-        ).lazy()
-
-    
-    df = df.collect()
-      
-    df =df.drop(col_drop)
+    )
 
     return df
-
-
-
 
 
 def history_indicator_calculator(feature_config, logger=default_logger):
@@ -1762,6 +1592,8 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
             
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
+            "fe_supertrend": {"func": cal_supertrend_func},
+            "fe_FFD": {"func": cal_FFD_func},
         }
 
         for symbol in list(feature_config.keys()):
@@ -1793,7 +1625,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                         "candle_timeframe": feature_config[symbol][fe_prefix]["timeframe"],
                         "window_size": feature_config[symbol][fe_prefix]["window_size"],
                         "features_folder_path": features_folder_path,
-                        "feature_confing": feature_config[symbol][fe_prefix],
+                        "feature_config": feature_config[symbol][fe_prefix],
                     }
 
                 base_features = [
@@ -1825,16 +1657,15 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 # Uncomment the for loop in order to plot legs (fe_leg feature) in Colab
                 for df_path in pathes:
                     df_loaded = pl.read_parquet(df_path)
-                    # for tf in [5, 15, 60]:
-                    #     if f"M{tf}_CLOSE_right" in df.columns:
-                    #         df = df.drop(f"M{tf}_CLOSE_right")
                     df = df.join(df_loaded, on="_time", how="left", coalesce=True)
 
                 max_candle_timeframe = max(opts["candle_timeframe"])
                 max_window_size = max(opts["window_size"])
+
                 if fe_prefix == 'fe_GMA':
                     def gaussian_vectorized(source, bw):
                         return np.exp(-1 * ((source / bw) ** 2)) / np.sqrt(2 * np.pi)
+
                     i_values = np.arange(500)  
                     array_w = gaussian_vectorized(i_values, max_window_size)
                     max_window_size = len(array_w[array_w * 1e10 > 1])
@@ -1921,6 +1752,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
 if __name__ == "__main__":
     from configs.feature_configs_general import generate_general_config
+
     config_general = generate_general_config()
     history_indicator_calculator(config_general)
     print("--> history_indicator_calculator DONE.")

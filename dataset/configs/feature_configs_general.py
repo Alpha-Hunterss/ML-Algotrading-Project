@@ -130,28 +130,38 @@ fe_leg_config = {
 }
 
 general_config = {
-    'base_candle_timeframe': [15, 30, 60, 240, 720, 1440],
+    'base_candle_timeframe': [15, 30, 60, 120, 180, 240, 360, 720, 1380],
+
 
     'fe_GMA': {
-        'timeframe': [5 , 240],
+        'timeframe': [5, 240],
         'window_size': [5, 7, 9],
-        'base_columns': ['CLOSE' , 'HIGH' , 'LOW'],
-        'devs': [1 ,1.3 , 1.5 , 1.7 , 1.9 , 2]
+        'base_columns': ['CLOSE', 'HIGH', 'LOW'],
+        'devs': [1, 1.3, 1.5, 1.7, 1.9, 2]
     },
 
-    
+
     'fe_FFD': {
-        'timeframe': [5],  #always 5
-        'window_size': [0], #In order not to bug the framework
+        'timeframe': [5],  # always 5
+        'window_size': [0],  # to prevent causing bugs in the framework
         'base_columns': ['CLOSE'],
-        'n_splits': [5,10,20]
+        'n_splits': [5, 10, 20]
     },
+
 
     'fe_OL': {
-        'timeframe': [5,60,240,1440],
-        'window_size': [1 , 7 , 21 , 33],
-        'window_size_SMA': [5,15,21,55],
-        'base_columns': ['HIGH' , 'LOW']
+        'timeframe': [5, 60, 240, 1380],
+        'window_size': [1, 7, 21, 33],
+        'window_size_SMA': [5, 15, 21, 55],
+        'base_columns': ['HIGH', 'LOW']
+    },
+
+
+    'fe_supertrend': {
+        'timeframe': [5, 15],
+        'window_size': [14],
+        'multipliers': [1.0, 3.0],
+        'base_columns': ['HIGH', 'CLOSE', 'LOW']
     },
 
 
@@ -168,46 +178,54 @@ general_config = {
 
 
     'fe_ATR': {
-        'timeframe': [240, 60],
-        'window_size': [30, 14, 7],
+        'timeframe': [5, 60, 240],
+        'window_size': [7, 14, 30],
         'base_columns': ['HIGH', 'CLOSE', 'LOW']
     },
 
 
     'fe_RSTD': {
         'timeframe': [240],
-        'window_size': [30, 14, 7],
+        'window_size': [7, 14, 30],
         'base_columns': ['CLOSE']
     },
 
 
+    # Support & Resistance Levels
     'fe_WIN': {
         'timeframe': [5],
-        'window_size': [5, 10, 48, 288, 480],
+        'window_size': [6, 12, 48, 276, 480],
         'base_columns': ['CLOSE']
     },
 
 
-    'fe_cndl': [5, 15, 30, 60, 240, 1440],
+    'fe_WIN_FREQ': {
+        'timeframe': [5],
+        'window_size': [240, 480, 1380],
+        'base_columns': ['CLOSE']
+    },
+
+
+    'fe_cndl': [5, 15, 30, 60, 240, 1380],
 
 
     'fe_EMA': {
-        'timeframe': [5 , 15 , 30],
-        'window_size': [7, 60, 200, 288],
+        'timeframe': [5],
+        'window_size': [7, 60, 336, 1380],
         'base_columns': ['CLOSE']
     },
 
 
     'fe_SMA': {
-        'base_columns': ['CLOSE'],
         'timeframe': [5],
-        'window_size': [240, 360, 720]
+        'window_size': [20, 60, 240, 360, 720],
+        'base_columns': ['CLOSE']
     },
 
 
     'fe_RSI': {
         'timeframe': [5, 60, 240],
-        'window_size': [30, 14, 7],
+        'window_size': [7, 14, 30],
         'base_columns': ['CLOSE']
     },
 
@@ -220,7 +238,7 @@ general_config = {
             {'timeframe': 30, 'shift_sizes': [1]},
             {'timeframe': 60, 'shift_sizes': [1]},
             {'timeframe': 240, 'shift_sizes': [1]},
-            {'timeframe': 1440, 'shift_sizes': [1]}
+            {'timeframe': 1380, 'shift_sizes': [1]}
         ]
     },
 
@@ -239,7 +257,7 @@ general_config = {
             'window_size': [
                 (7, 60),
                 (60, 336),
-                (60, 1440),
+                (60, 1380),
             ]
         },
 

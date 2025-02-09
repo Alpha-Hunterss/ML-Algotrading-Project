@@ -25,7 +25,7 @@ def split_time_series(
         gap=train_test_gap,
         max_train_size=max_train_size,
         n_splits=n_splits,
-        test_size=test_size*3,
+        test_size=test_size*2,
     )
     folds = {}
     for i, (train_index, test_valid_index) in enumerate(tscv.split(all_dates[0])):
@@ -38,8 +38,8 @@ def split_time_series(
             "train_dates": train_dates,
             "pre_eval_dates": train_dates[:split_idx],
             "eval_dates": train_dates[split_idx+(10*276):],
-            "valid_dates": all_dates[0][test_valid_index[:2*test_size]],
-            "test_dates": all_dates[0][test_valid_index[2*test_size:]],
+            "valid_dates": all_dates[0][test_valid_index[:test_size]],
+            "test_dates": all_dates[0][test_valid_index[test_size:]],
         }
 
     return folds
@@ -54,6 +54,7 @@ def quant_CV(
     use_cudf,
     cnf_levels,
     initial_balance: int,
+    accounts_leverage: int,
     default_volume: float,
     default_spread: int,
     early_stopping_rounds: int | None,
@@ -67,9 +68,13 @@ def quant_CV(
     max_floating_dd: float,
     max_daily_dd: float,
     use_floating_risk: bool,
+    use_dynamic_sl: bool,
+    max_strg_sl_dynamic_perc: int,
+    trade_mode: str,
+    close_positions_at_midnight: bool,
+    use_perc_levels: bool,
     sampled_times : list , 
     sampling : dict , 
-    use_perc_levels: bool = False,
 ):
     """
     This function runs Time Series CV with available embargo/purge 
@@ -91,15 +96,17 @@ def quant_CV(
             "train_duration",
             "profit_percent",
             "max_dd",
+            "sortino",
+            "win_rate(%)",
             "max_exp_daily_dd",
             "max_overall_dd",
             "n_unique_days",
             "n_max_daily_sig",
-            "meta_model_pos_label_perc",
+            # "meta_model_pos_label_perc",
             "max_n_open_position",
             "max_vol_open_positions",
+            "no_iters_exceeding_dd",
             'max_consecutive_loss',
-            "WinRate(%)",
             "Tp(%)" ,
             "Sl(%)" ,
             'q1_cons_loss',
@@ -107,6 +114,7 @@ def quant_CV(
             'q3_cons_loss',
             'mean_cons_loss',
             'n_trades',
+            
         ]
     )
     df["pred_as_val"] = -1
@@ -569,6 +577,7 @@ def quant_CV(
                         spread=default_spread,
                         volume=default_volume,
                         initial_balance=initial_balance,
+                        accounts_leverage=accounts_leverage,
                         df_raw_backtest=df_raw_backtest,
                         bt_column_name=bt_column_name,
                         swap_rate=swap_rate,
@@ -578,13 +587,17 @@ def quant_CV(
                         max_floating_dd=max_floating_dd,
                         max_daily_dd=max_daily_dd,
                         use_floating_risk=use_floating_risk,
-                        use_perc_levels=use_perc_levels,
+                        use_dynamic_sl=use_dynamic_sl,
+                        max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
                         confidence_levels=confidence_levels,
                         model=model,
                         is_final_bt=False,
                         is_cf_model=True,
                         sampled_times = sampled_times , 
                         sampling = sampling , 
+                        trade_mode=trade_mode,
+                        close_positions_at_midnight=close_positions_at_midnight,
+                        use_perc_levels=use_perc_levels,
                     )
                 else:
                     #? Backtest
@@ -598,6 +611,7 @@ def quant_CV(
                         spread=default_spread,
                         volume=default_volume,
                         initial_balance=initial_balance,
+                        accounts_leverage=accounts_leverage,
                         df_raw_backtest=df_raw_backtest,
                         bt_column_name=bt_column_name,
                         swap_rate=swap_rate,
@@ -607,38 +621,46 @@ def quant_CV(
                         max_floating_dd=max_floating_dd,
                         max_daily_dd=max_daily_dd,
                         use_floating_risk=use_floating_risk,
-                        use_perc_levels=use_perc_levels,
-                        confidence_levels=cnf_levels,
+                        use_dynamic_sl=use_dynamic_sl,
+                        max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
+                        confidence_levels=confidence_levels,
                         model=model,
                         is_final_bt=False,
                         is_cf_model=False,
+                        trade_mode=trade_mode,
+                        close_positions_at_midnight=close_positions_at_midnight,
+                        use_perc_levels=use_perc_levels,
                         sampled_times = sampled_times , 
                         sampling = sampling , 
                     )
 
                 fold_profit_percent = bt_report['profit_percent']
                 fold_max_dd = bt_report['max_draw_down']
+                fold_sortino = bt_report["sortino"]
+                fold_win_rate = bt_report["win_rate(%)"]
                 fold_max_exp_daily_dd = bt_report["max_exp_daily_dd"]
                 fold_max_overall_dd = bt_report["max_overall_dd"]
                 fold_max_n_open_position = bt_report["max_n_open_position"]
                 fold_max_vol_open_positions = bt_report["max_vol_open_positions"]
                 fold_tp = bt_report["Tp(%)"]
                 fold_sl = bt_report["Sl(%)"]
-                fold_WR = bt_report["WinRate(%)"]
                 fold_max_consecutive_loss = bt_report["max_consecutive_loss"]
                 fold_q1_cons_loss = bt_report["q1_cons_loss"]
                 fold_q2_cons_loss = bt_report["q2_cons_loss"]
                 fold_q3_cons_loss = bt_report["q3_cons_loss"]
                 fold_mean_cons_loss = bt_report["mean_cons_loss"]
                 fold_n_trades = bt_report["n_trades"]
+                fold_no_iters_exceeding_dd = bt_report["no_iters_exceeding_dd"]
 
-                
-                general_backtest_df.update({f"bt_df_fold{i}_{set_name}" : bt_df})
+                general_backtest_df.update({f"bt_df_fold{i}_{set_name}": bt_df})
+
                 del bt_df, bt_report
                 gc.collect()
             else:
                 fold_profit_percent = None
                 fold_max_dd = None
+                fold_sortino = None
+                fold_win_rate = None
                 fold_max_exp_daily_dd = None
                 fold_max_overall_dd = None
                 fold_unique_days = None
@@ -647,43 +669,48 @@ def quant_CV(
                 fold_max_vol_open_positions = None
                 fold_tp = None
                 fold_sl = None
-                fold_WR = None
                 fold_max_consecutive_loss = None
                 fold_q1_cons_loss = None
                 fold_q2_cons_loss = None
                 fold_q3_cons_loss = None
                 fold_mean_cons_loss = None
                 fold_n_trades = None
+                fold_no_iters_exceeding_dd = None
 
             pong = time.time()
 
             if set_name == "train_dates":
                 time_taken = f"{round(toc - tic, 1)} + {round(pong - ping, 1)}"
-                meta_model_pos_label_perc = None
+                # meta_model_pos_label_perc = None
             else:
                 time_taken = str(round(pong - ping, 1))
-                if is_cf_model:
-                    if model.prob_estimator == "meta":
-                        meta_model_pos_label_perc = model.meta_pos_label_perc
+                # if is_cf_model:
+                #     if model.prob_estimator == "meta":
+                #         meta_model_pos_label_perc = model.meta_pos_label_perc
 
             eval_list = (
                 [set_name_dict[set_name], i]
                 + cal_eval(y_real=y_real, y_pred=y_pred)
                 + min_max_dates[set_name]
                 + [time_taken]
-                + [fold_profit_percent, fold_max_dd, fold_max_exp_daily_dd]
+                + [fold_profit_percent, fold_max_dd]
+                + [fold_sortino, fold_win_rate, fold_max_exp_daily_dd]
                 + [fold_max_overall_dd, fold_unique_days, fold_max_daily_sig]
-                + [meta_model_pos_label_perc, fold_max_n_open_position]
-                + [fold_max_vol_open_positions]
-                + [fold_max_consecutive_loss , fold_WR , fold_sl , fold_tp]
+                + [fold_max_n_open_position]
+                + [fold_max_vol_open_positions, fold_no_iters_exceeding_dd]
+                + [fold_max_consecutive_loss, fold_tp , fold_sl ]
                 + [fold_q1_cons_loss , fold_q2_cons_loss , fold_q3_cons_loss , fold_mean_cons_loss]
                 + [fold_n_trades]
 
             )
 
+
+
             evals.loc[len(evals)] = eval_list
+
         with pd.option_context('display.max_columns', None):
             print(evals.iloc[-3:])
+
         input_cols_and_type = dict(df[input_cols].dtypes)
 
     # Backtest on the whole test & valid set
@@ -696,6 +723,7 @@ def quant_CV(
             spread=default_spread,
             volume=default_volume,
             initial_balance=initial_balance,
+            accounts_leverage=accounts_leverage,
             df_raw_backtest=df_raw_backtest,
             bt_column_name=bt_column_name,
             swap_rate=swap_rate,
@@ -705,11 +733,15 @@ def quant_CV(
             max_floating_dd=max_floating_dd,
             max_daily_dd=max_daily_dd,
             use_floating_risk=use_floating_risk,
-            use_perc_levels=use_perc_levels,
-            confidence_levels=cnf_levels,
+            use_dynamic_sl=use_dynamic_sl,
+            max_strg_sl_dynamic_perc=max_strg_sl_dynamic_perc,
+            confidence_levels=confidence_levels,
             model=model,
             is_final_bt=True,
             is_cf_model=is_cf_model,
+            trade_mode=trade_mode,
+            close_positions_at_midnight=close_positions_at_midnight,
+            use_perc_levels=use_perc_levels,
             sampled_times = sampled_times , 
             sampling = sampling , 
         )

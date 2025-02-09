@@ -966,31 +966,34 @@ def _accumulate_prediction_stacked(predict, X, out, idx, lock):
         out[idx] = prediction
 
 
-def MetaFeaEng(df , n_components):
+def MetaFeaEng(df, n_components):
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
-    import re
-    model_columns = df.columns.tolist()
-    pattern = re.compile(rf'th')
-    col_prob = [col for col in model_columns if pattern.match(col)]
 
+    model_columns = df.columns.tolist()
+    col_prob = [col for col in model_columns if "th_est_pos_label_proba" in col]
+
+    # Calculate statistics on probability columns
     df['mean'] = df[col_prob].mean(axis=1)
     df['std'] = df[col_prob].std(axis=1)
     df['variance'] = df[col_prob].var(axis=1)
     df['row_count_above_0.5'] = (df[col_prob] > 0.5).sum(axis=1)
     df['max_prob'] = df[col_prob].max(axis=1)
-    df['min_prob'] = df[col_prob].max(axis=1)
+    df['min_prob'] = df[col_prob].min(axis=1)
     df['median_prob'] = df[col_prob].median(axis=1)
 
+    # Standardize and perform PCA on probability columns
     scaled_data = StandardScaler().fit_transform(df[col_prob].to_numpy())
     principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
+
     for i in range(n_components):
         df[f"prob_PCA{i}"] = principal_components[:, i]
-    
+
     df = df.drop(columns=col_prob)
 
-    return df                 
-    
+    return df
+
+
 class StackedXGBForestClassifier(XGBForestClassifier):
     """
     A stacking variant of XGBForestClassifier that uses a meta-model to combine
@@ -1020,6 +1023,8 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         stacked_model=None,
         stacked_models_params=None,
         stacked_model_n_top_features=50,
+        use_pca_stacked_model=False,
+        pca_n_components=3,
         n_estimators=100,
         *,
         bootstrap=False,
@@ -1119,6 +1124,8 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         self.stacked_model = stacked_model
         self.stacked_models_params = stacked_models_params
         self.stacked_model_n_top_features = stacked_model_n_top_features
+        self.use_pca_stacked_model = use_pca_stacked_model
+        self.pca_n_components = pca_n_components
 
     def predict_proba(self, X, y=None, stacked_model_trained=True):
         """
@@ -1167,9 +1174,6 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         X = X[top_features]
 
         if not stacked_model_trained:
-            # Logging message (remove after doing tests)
-            print("`XGBF+` model's `predict_proba` is being used in the first phase ...")
-
             if y is None:
                 raise ValueError(
                     "When the stacked model is not trained yet,"
@@ -1237,14 +1241,14 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 if param in valid_params
             }
             self.stacked_model = model_class(**parameters)
-            X = MetaFeaEng(df=X , n_components=3)
+
+            if self.use_pca_stacked_model:
+                X = MetaFeaEng(df=X, n_components=self.pca_n_components)
+
             self.stacked_model.fit(X, y)
 
             return
         else:
-            # Logging message (remove after doing tests)
-            print("`XGBF+` model's `predict_proba` is being used in the second phase ...")
-
             if self.use_cudf:
                 import cudf
 
@@ -1255,8 +1259,11 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                     )
             else:
                 for idx, est_proba in enumerate(all_proba):
-                    X[f"th{idx}_est_pos_label_proba"] = est_proba[:, 1]
-            X = MetaFeaEng(df=X , n_components=3)
+                    X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
+
+            if self.use_pca_stacked_model:
+                X = MetaFeaEng(df=X, n_components=self.pca_n_components)
+
             return self.stacked_model.predict_proba(X)
 
 

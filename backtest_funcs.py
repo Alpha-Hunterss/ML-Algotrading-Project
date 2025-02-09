@@ -422,6 +422,8 @@ def cal_backtest_on_raw_cndl(
     dynamic_sl_scale_type: str,
     rstd_window_size: int,
     close_positions_at_midnight: bool,
+    added_noise : bool,
+    symbol_decimal_multiply: float = 0.0001,
 )-> pd.DataFrame:
     """
     This function is basicaly a pre-backtest fucntion that calculates Backtest on all raw data (all times) based on strategy. 
@@ -444,6 +446,12 @@ def cal_backtest_on_raw_cndl(
         "low": f"{target_symbol}_M5_LOW",
         "close": f"{target_symbol}_M5_CLOSE",  
     })
+
+    if added_noise :
+        if trade_mode == 'long':
+            df_raw_backtest[f"{target_symbol}_M5_LOW"] -= (2 * symbol_decimal_multiply)
+        elif trade_mode == 'short':
+            df_raw_backtest[f"{target_symbol}_M5_HIGH"] += (2 * symbol_decimal_multiply)
 
     df_raw_backtest.sort_values("_time", inplace=True)
     df_raw_backtest['days_diff'] = (

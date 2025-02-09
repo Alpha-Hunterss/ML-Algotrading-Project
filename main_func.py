@@ -63,6 +63,7 @@ def main(
             max_daily_dd = man_params["max_daily_dd"]
             use_floating_risk = man_params["use_floating_risk"]
             close_positions_at_midnight = man_params["close_positions_at_midnight"]
+            added_noise = man_params["added_noise"]
             # Output Model:
             save_model_mode = man_params["save_model_mode"]
             use_cudf = man_params["use_cudf"]
@@ -271,6 +272,8 @@ def main(
             dynamic_sl_scale_type=dynamic_sl_scale_type,
             rstd_window_size=rstd_window_size,
             close_positions_at_midnight=close_positions_at_midnight,
+            added_noise = added_noise , 
+            symbol_decimal_multiply=symbols_dict[target_symbol]["pip_size"],
         )
 
         # ______________________________RUN Quant Cross-Validation and Backtest on Folds_____________________

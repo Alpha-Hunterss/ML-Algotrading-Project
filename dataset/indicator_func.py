@@ -209,28 +209,47 @@ def cal_cndl_shape_n_cntxt_func(
     calcs = []
 
     # Create rolling statistics for each context feature
-    for feature in context_features:
+    for idx, feature in enumerate(context_features):
         # Calculate rolling stats
-        calcs.extend([
-            pl.col(feature)
-            .rolling_mean(window_size=w)
-            .alias(f"{feature}_rolling_mean"),
-            pl.col(feature)
-            .rolling_median(window_size=w)
-            .alias(f"{feature}_rolling_median"),
-            pl.col(feature)
-            .rolling_std(window_size=w)
-            .alias(f"{feature}_rolling_std"),
-            (pl.col(feature).rolling_max(window_size=w) -
-             pl.col(feature).rolling_min(window_size=w))
-            .alias(f"{feature}_rolling_range"),
-            (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) -
-             pl.col(feature).rolling_quantile(quantile=0.25, window_size=w))
-            .alias(f"{feature}_rolling_iqr"),
-            pl.col(feature)
-            .ewm_mean(alpha=alpha)
-            .alias(f"{feature}_ema")
-        ])
+        if idx == 0:
+            calcs.extend([
+                pl.col(feature)
+                .rolling_mean(window_size=w)
+                .alias(f"{feature}_rolling_mean"),
+                pl.col(feature)
+                .rolling_median(window_size=w)
+                .alias(f"{feature}_rolling_median"),
+                (pl.col(feature).rolling_max(window_size=w) -
+                pl.col(feature).rolling_min(window_size=w))
+                .alias(f"{feature}_rolling_range"),
+                (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) -
+                pl.col(feature).rolling_quantile(quantile=0.25, window_size=w))
+                .alias(f"{feature}_rolling_iqr"),
+                pl.col(feature)
+                .ewm_mean(alpha=alpha)
+                .alias(f"{feature}_ema")
+            ])
+        else:
+            calcs.extend([
+                pl.col(feature)
+                .rolling_mean(window_size=w)
+                .alias(f"{feature}_rolling_mean"),
+                pl.col(feature)
+                .rolling_median(window_size=w)
+                .alias(f"{feature}_rolling_median"),
+                pl.col(feature)
+                .rolling_std(window_size=w)
+                .alias(f"{feature}_rolling_std"),
+                (pl.col(feature).rolling_max(window_size=w) -
+                pl.col(feature).rolling_min(window_size=w))
+                .alias(f"{feature}_rolling_range"),
+                (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) -
+                pl.col(feature).rolling_quantile(quantile=0.25, window_size=w))
+                .alias(f"{feature}_rolling_iqr"),
+                pl.col(feature)
+                .ewm_mean(alpha=alpha)
+                .alias(f"{feature}_ema")
+            ])
 
     # Calculate rounded price distances for different decimal places
     for i in range(2, 4):  # For n-2, n-3
@@ -845,6 +864,7 @@ def cal_RSI_base_func(
             f"{feature}_RS_{w}"
         ],
     )
+
     return df.collect()
 
 
@@ -867,7 +887,6 @@ def cal_EMA_base_func(
     pip size: pip size of the pair
     prefix: prefix of feature name
     normalize: if True the function returns pipsize difference between EMA and last close price.
-
     """
     assert (
         len(features) == 1
@@ -958,7 +977,8 @@ def add_candle_base_indicators_polars(
     df_base: base dataframe containing the raw features
     prefix: prefix of feature name
     base_func: the indicator function
-    opts: a dictionary of "symbol","base_feature","candle_timeframe","window_size" and "features_folder_path"
+    opts: a dictionary of "symbol", "base_feature", "candle_timeframe",
+        "window_size" and "features_folder_path"
     """
 
     df_base = df_base.sort("_time")
@@ -1154,7 +1174,8 @@ def add_all_ratio_by_config(
 ) -> pl.DataFrame:
     """
     this function takes the ratio config and applies add_ratio
-    ratio_config: a dictionary of dictionaries containing list of time frames and list of pairs of window sizes needed for ratio
+    ratio_config: a dictionary of dictionaries containing list of time frames
+        and list of pairs of window sizes needed for ratio
     """
 
     base_cols = set(df.columns) - set(["_time"])
@@ -1438,6 +1459,7 @@ def cal_RSTD_func(
                 / pip_size
             ).alias(f"{prefix}_{feature}_W{w}_cndl_M{time_frame}")
         ).lazy()
+
     df = df.collect()
     df = df.drop([f"{feature}"])
 
@@ -1449,7 +1471,7 @@ def cal_FFD_func(
     features: List[str],
     time_frame: int,
     n_splits: List[int],
-    Auto_optimaze_d : bool|List[int] = True,  
+    Auto_optimaze_d : bool|List[int] = True,
     prefix: str = "fe_FFD",
 ) -> pl.DataFrame:
 

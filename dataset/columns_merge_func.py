@@ -12,6 +12,9 @@ from dataset.configs.history_data_crawlers_config import root_path
 from dataset.configs.feature_configs_general import CRYPTO
 from pathlib import Path
 from dataset.utils.reduce_memory import reduce_mem_usage
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import re
 
 
 # Define the prefixes - !!! order matters.
@@ -37,6 +40,8 @@ prefixes = [
     "fe_ATR",
     "fe_leg",
     "fe_supertrend",
+    "fe_GMA",
+    "fe_OL",
     "fe_cndl_shape_n_cntxt",
     "fe_market_close",
 ]
@@ -59,12 +64,15 @@ def categorize_keys(data, prefixes=prefixes):
 
     return categorized, uncategorized
 
+
 def add_symbol(col_name, symbol, prefixes):
     for prefix in prefixes:
         if col_name.startswith(prefix):
             new_col_name = col_name.replace(prefix, f"{prefix}_{symbol}")
             return new_col_name
+
     return col_name
+
 
 def add_symbol_to_prefixes(df_cols, symbol, prefixes=prefixes):
     """
@@ -82,6 +90,7 @@ def add_symbol_to_prefixes(df_cols, symbol, prefixes=prefixes):
     new_column_names = {col: add_symbol(col, symbol, prefixes) for col in df_cols}
 
     return new_column_names
+
 
 def group_by_symbol_and_rename(df, symbol_col="symbol"):
     """
@@ -121,7 +130,10 @@ def group_by_symbol_and_rename(df, symbol_col="symbol"):
 
     return result_df
 
-def history_columns_merge(feature_config, fe_removal_list, logger=default_logger, general_mode=False):
+
+def history_columns_merge(
+    feature_config, fe_removal_list, logger=default_logger, general_mode=False, pca=True
+):
     logger.info("- " * 25)
     logger.info("--> start history_columns_merge func:")
 
@@ -129,11 +141,16 @@ def history_columns_merge(feature_config, fe_removal_list, logger=default_logger
         feature_map_path = "data/models/jamesv01/tradeset_usdjpy_feature_map.json"
         f_cols = set(get_all_selected_features(feature_map_path)["feature_names"])
 
+    fe_pca_list = [
+        "fe_GMA"
+    ]
     fe_refrece_list = [
         "fe_cndl",
         'fe_cndl_shape_n_cntxt',
         'fe_leg',
         'fe_supertrend',
+        "fe_GMA",
+        "fe_OL",
         "fe_RSI",
         "fe_RSTD",
         "fe_ATR",
@@ -191,6 +208,13 @@ def history_columns_merge(feature_config, fe_removal_list, logger=default_logger
 
                 df = df.sort("_time").drop("symbol")
                 df = df.rename(add_symbol_to_prefixes(df.columns, symbol))
+
+                # Calculate PCA
+                if feture in fe_pca_list and pca:
+                    for fe_pca in fe_pca_list:
+                        logger.info(f"PCA--> {symbol} | {feture}")
+                        df = PCA_calc(df , symbol , fe_pca , feature_config[symbol])
+
             except Exception as e:
                 logger.error(f"!!! cant load {symbol} | {feture}")
                 logger.error(e)
@@ -251,6 +275,64 @@ def history_columns_merge(feature_config, fe_removal_list, logger=default_logger
 
     logger.info(f"--> df final shape: {df_dataset.shape} | dataset saved.")
     logger.info("--> history_fe_time run successfully.")
+
+
+def PCA_calc(df, symbol, fe_name, symbol_confing):
+
+    Feature_Ncomponent = {
+        'fe_GMA': 3,
+    }
+
+    def apply_pca(df, n_components, prefix, pattern: re.Pattern):
+        all_features = df.columns
+        name_feature_for_pca = [col for col in all_features if pattern.match(col)]
+        scaled_data = StandardScaler().fit_transform(df.select(name_feature_for_pca).to_numpy())
+        principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
+
+        for i in range(n_components):
+            pca_column_name = f"{prefix}_PC{i+1}"
+            df = df.with_columns(pl.Series(pca_column_name, principal_components[:, i]))
+
+        df = df.drop(name_feature_for_pca)
+
+        return df
+
+    def find_Pattern_GMA(symbol, tf, base_col='ignore'):
+        if base_col == 'ignore':
+            patterns = {
+                rf'fe_GMA_{symbol}_M{tf}_diffGMA': re.compile(rf'fe_GMA_{symbol}_GMA.*_M{tf}$'),
+                rf'fe_GMA_{symbol}_M{tf}_U-L_GBB': re.compile(rf'fe_GMA_{symbol}_U.*_M{tf}$'),
+            }
+        else:
+            patterns = {
+                rf'fe_GMA_{symbol}_M{tf}_{base_col}-UGBB': re.compile(rf'fe_GMA_{symbol}_M{tf}_{base_col}-U'),
+                rf'fe_GMA_{symbol}_M{tf}_{base_col}-LGBB': re.compile(rf'fe_GMA_{symbol}_M{tf}_{base_col}-L'),
+                rf'fe_GMA_{symbol}_M{tf}_{base_col}-GMA': re.compile(rf'fe_GMA_{symbol}_M{tf}_{base_col}-G'),
+            }
+
+        return patterns
+
+    for tf in symbol_confing[fe_name]['timeframe']:
+        patterns = find_Pattern_GMA(symbol, tf)
+        for name_pattern, _ in patterns.items():
+            df = apply_pca(
+                df,
+                n_components = Feature_Ncomponent[fe_name],
+                prefix = name_pattern ,
+                pattern= patterns[name_pattern]
+            )
+
+        for base_col in symbol_confing[fe_name]['base_columns']:
+            patterns = find_Pattern_GMA(symbol, tf, base_col)
+            for name_pattern, _ in patterns.items():
+                df = apply_pca(
+                    df,
+                    n_components = Feature_Ncomponent[fe_name],
+                    prefix = name_pattern ,
+                    pattern= patterns[name_pattern]
+                )
+
+    return df
 
 
 if __name__ == "__main__":

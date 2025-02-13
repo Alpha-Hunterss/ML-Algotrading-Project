@@ -48,3 +48,5 @@ wcwidth==0.2.13
 yarl==1.11.1
 betacal==1.1.0
 venn-abers==1.4.6
+arch==7.2.0
+numba==0.60.0

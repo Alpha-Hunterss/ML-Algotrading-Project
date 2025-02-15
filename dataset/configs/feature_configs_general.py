@@ -144,7 +144,7 @@ general_config = {
         'timeframe': [5],  # always 5
         'window_size': [0],  # to prevent causing bugs in the framework
         'base_columns': ['CLOSE'],
-        'n_splits': [5, 10, 20]
+        'n_splits': [5]
     },
 
 

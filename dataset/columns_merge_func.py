@@ -211,9 +211,8 @@ def history_columns_merge(
 
                 # Calculate PCA
                 if feture in fe_pca_list and pca:
-                    for fe_pca in fe_pca_list:
-                        logger.info(f"PCA--> {symbol} | {feture}")
-                        df = PCA_calc(df , symbol , fe_pca , feature_config[symbol])
+                    logger.info(f"PCA--> {symbol} | {feture}")
+                    df = PCA_calc(df, symbol, feture, feature_config[symbol])
 
             except Exception as e:
                 logger.error(f"!!! cant load {symbol} | {feture}")

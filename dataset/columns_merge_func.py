@@ -298,6 +298,20 @@ def PCA_calc(df , symbol , fe_name , symbol_confing):
         df = df.drop(name_feature_for_pca)
         return df
 
+    # For Pandas
+    # def apply_pca(df: pd.DataFrame, n_components: int, prefix: str, pattern: re.Pattern) -> pd.DataFrame:
+
+    #     all_features = df.columns
+    #     name_feature_for_pca = [col for col in all_features if pattern.match(col)]
+    #     scaled_data = StandardScaler().fit_transform(df[name_feature_for_pca])
+    #     principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
+    #     for i in range(n_components):
+    #         df[f"{prefix}_PC{i+1}"] = principal_components[:, i]
+        
+    #     df.drop(columns=name_feature_for_pca, inplace=True)
+        
+    #     return df
+
     def find_Pattern_GMA(symbol, tf, base_col='ignore'):
         if base_col == 'ignore':
             patterns = {

@@ -155,7 +155,7 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
         top_10_phases = positive_phases[top_10_indices]
 
         # Prepare the 3D data (top 10 components)
-        data_3d = np.column_stack((topLink_10_frequencies, top_10_magnitudes, top_10_phases))  # Shape: (10, 3)
+        data_3d = np.column_stack((top_10_frequencies, top_10_magnitudes, top_10_phases))  # Shape: (10, 3)
 
         # Standardize the data
         scaler = StandardScaler()

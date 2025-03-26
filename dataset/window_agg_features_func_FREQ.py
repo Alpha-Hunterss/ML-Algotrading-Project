@@ -40,7 +40,7 @@ def find_optimal_d(series, window=10, d_start=0.0, d_end=1.0, d_step=0.01, targe
             best_d = d
             best_p = p_value
             best_diff = diff
-        if best_diff < 0.01:
+        if best_diff < 0.025:
             print(f"Found optimal d={best_d} with p={best_p} (diff={best_diff})")
             break
     return best_d, best_p, frac_diff(series, best_d, window=window)

@@ -10,9 +10,10 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 # Function for fractional differentiation
-def frac_diff(series, d, window=10):
+window_length = 5
+def frac_diff(series, d, window_length):
     weights = [1.0]
-    for k in range(1, window):
+    for k in range(1, window_length):
         weight = -weights[-1] * (d - k + 1) / k
         weights.append(weight)
     weights = np.array(weights)
@@ -20,7 +21,7 @@ def frac_diff(series, d, window=10):
     return pd.Series(output, index=series.index[len(weights)-1:len(weights)-1+len(output)])
 
 # Function to find optimal d
-def find_optimal_d(series, window=10, d_start=0.0, d_end=1.0, d_step=0.01, target_p=0.05, max_iter=100):
+def find_optimal_d(series, window_length, d_start=0.0, d_end=1.0, d_step=0.01, target_p=0.05, max_iter=100):
     best_d = d_start
     best_p = float('inf')
     best_diff = float('inf')
@@ -28,7 +29,7 @@ def find_optimal_d(series, window=10, d_start=0.0, d_end=1.0, d_step=0.01, targe
         if i >= max_iter:
             print(f"Max iterations reached. Best d={best_d}, p={best_p}, diff={best_diff}")
             break
-        ffd_series = frac_diff(series, d, window=window)
+        ffd_series = frac_diff(series, d, window_length)
         if len(ffd_series) < 2:
             print(f"Skipping d={d}: ffd_series length {len(ffd_series)} too short")
             continue
@@ -43,7 +44,7 @@ def find_optimal_d(series, window=10, d_start=0.0, d_end=1.0, d_step=0.01, targe
         if best_diff < 0.025:
             print(f"Found optimal d={best_d} with p={best_p} (diff={best_diff})")
             break
-    return best_d, best_p, frac_diff(series, best_d, window=window)
+    return best_d, best_p, frac_diff(series, best_d, window_length)
 
 
 # Function to process wavelet decomposition, thresholding, and reconstruction
@@ -120,7 +121,7 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
         
         # 2 FFD Calculation - Use a fixed window for frac_diff, not the full series length
         reconstructed_series = pd.Series(reconstructed_level4, index=range(len(reconstructed_level4)))
-        optimal_d, optimal_p, FFD_slice = find_optimal_d(reconstructed_series, window=10)  # Fixed window=10
+        optimal_d, optimal_p, FFD_slice = find_optimal_d(reconstructed_series, window_length)  # Fixed window_length
         
         # 3 FFD Centered
         FFD_centered = FFD_slice - FFD_slice.mean()

@@ -115,16 +115,21 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
             continue
         reconstructed_level4 = wavelet_denoise(selected_slice, "bior4.4", level=4)
         
-        # 2 FFD Calculation - Convert to Series for frac_diff compatibility
+        # 2 FFD Calculation - Use a fixed window for frac_diff, not the full series length
         reconstructed_series = pd.Series(reconstructed_level4, index=range(len(reconstructed_level4)))
-        optimal_d, optimal_p, FFD_slice = find_optimal_d(reconstructed_series, window=len(selected_slice))
+        optimal_d, optimal_p, FFD_slice = find_optimal_d(reconstructed_series, window=10)  # Fixed window=10
         
         # 3 FFD Centered
         FFD_centered = FFD_slice - FFD_slice.mean()
 
-        # 4 Applying FFT
+        # 4 Applying FFT - Add length check
+        if len(FFD_centered) < 2:
+            logger.debug(f"Skipping FFT at i={i}: FFD_centered length {len(FFD_centered)} too short")
+            res[i, :] = np.nan
+            continue
+
         fft_result = np.fft.fft(FFD_centered.values)  # FFD_slice is a Series, so .values is fine here
-        n = len(FFD_centered)  # e.g., 299
+        n = len(FFD_centered)
         frequencies = np.fft.fftfreq(n, d=5/60)  # 5 minutes = 5/60 hours
 
         # Compute magnitude spectrum and phase
@@ -133,6 +138,11 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
 
         # Only take the positive frequencies (first half of the FFT output)
         half_n = n // 2
+        if half_n == 0:
+            logger.debug(f"Skipping FFT at i={i}: half_n is 0 (n={n})")
+            res[i, :] = np.nan
+            continue
+
         positive_frequencies = frequencies[:half_n]
         positive_magnitudes = magnitude_spectrum[:half_n]
         positive_phases = phase_spectrum[:half_n]
@@ -145,7 +155,7 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
         top_10_phases = positive_phases[top_10_indices]
 
         # Prepare the 3D data (top 10 components)
-        data_3d = np.column_stack((top_10_frequencies, top_10_magnitudes, top_10_phases))  # Shape: (10, 3)
+        data_3d = np.column_stack((topLink_10_frequencies, top_10_magnitudes, top_10_phases))  # Shape: (10, 3)
 
         # Standardize the data
         scaler = StandardScaler()

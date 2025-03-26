@@ -31,7 +31,7 @@ def find_optimal_d(series, window_length, d_start=0.0, d_end=1.0, d_step=0.01, t
             break
         ffd_series = frac_diff(series, d, window_length)
         if len(ffd_series) < 2:
-            print(f"Skipping d={d}: ffd_series length {len(ffd_series)} too short")
+            # print(f"Skipping d={d}: ffd_series length {len(ffd_series)} too short")
             continue
         adf_result = adfuller(ffd_series)
         p_value = adf_result[1]

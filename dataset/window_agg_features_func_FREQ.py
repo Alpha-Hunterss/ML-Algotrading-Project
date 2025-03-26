@@ -26,19 +26,22 @@ def find_optimal_d(series, window=10, d_start=0.0, d_end=1.0, d_step=0.01, targe
     best_diff = float('inf')
     for i, d in enumerate(np.arange(d_start, d_end + d_step, d_step)):
         if i >= max_iter:
-            print("Max iterations reached.")
+            print(f"Max iterations reached. Best d={best_d}, p={best_p}, diff={best_diff}")
             break
         ffd_series = frac_diff(series, d, window=window)
         if len(ffd_series) < 2:
+            print(f"Skipping d={d}: ffd_series length {len(ffd_series)} too short")
             continue
         adf_result = adfuller(ffd_series)
         p_value = adf_result[1]
         diff = abs(p_value - target_p)
+        print(f"d={d:.2f}, p={p_value:.4f}, diff={diff:.4f}")  # Debug output
         if diff < best_diff:
             best_d = d
             best_p = p_value
             best_diff = diff
         if best_diff < 0.01:
+            print(f"Found optimal d={best_d} with p={best_p} (diff={best_diff})")
             break
     return best_d, best_p, frac_diff(series, best_d, window=window)
 

@@ -36,7 +36,7 @@ def find_optimal_d(series, window_length, d_start=0.0, d_end=1.0, d_step=0.01, t
         adf_result = adfuller(ffd_series)
         p_value = adf_result[1]
         diff = abs(p_value - target_p)
-        print(f"d={d:.2f}, p={p_value:.4f}, diff={diff:.4f}")  # Debug output
+        # print(f"d={d:.2f}, p={p_value:.4f}, diff={diff:.4f}")  # Debug output
         if diff < best_diff:
             best_d = d
             best_p = p_value

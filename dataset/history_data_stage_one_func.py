@@ -16,7 +16,8 @@ def history_data_stage_one(feature_config, logger=default_logger):
     """
     logger.info("= " * 25)
     logger.info("--> start history_data_stage_one fumc:")
-    data_sources = ["metatrader", "dukascopy"]
+    data_sources = [#"metatrader", 
+                    "dukascopy"]
 
     for symbol in list(feature_config.keys()):
         logger.info("-" * 25)

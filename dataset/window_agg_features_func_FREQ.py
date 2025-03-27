@@ -1,135 +1,128 @@
-import polars as pl
+import cudf
+import cupy as cp
 import numpy as np
 from pathlib import Path
 from dataset.logging_tools import default_logger
 from dataset.configs.history_data_crawlers_config import root_path
-import pywt
 import time
-from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.stattools import adfuller  # No GPU equivalent, kept on CPU
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from numba import njit
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed  # For CPU fallback if needed
 
-# Optimized fractional differentiation with Numba
-@njit
-def frac_diff_fast(series, d, window_length):
-    weights = np.ones(1)
+# GPU-optimized fractional differentiation
+def frac_diff_gpu(series, d, window_length):
+    weights = cp.ones(1)
     for k in range(1, window_length):
         weight = -weights[-1] * (d - k + 1) / k
-        weights = np.append(weights, weight)
-    output = np.convolve(series, weights[::-1], mode='valid')
+        weights = cp.append(weights, weight)
+    output = cp.convolve(series, weights[::-1], mode='valid')
     return output
 
-# Optimized function to find optimal d
-def find_optimal_d(series, window_length, d_start=0.0, d_end=1.0, d_step=0.01, target_p=0.05, max_iter=100):
-    series_np = series.to_numpy()  # Convert Polars Series to NumPy
+# Simplified find_optimal_d (fewer iterations, heuristic-based)
+def find_optimal_d(series, window_length, d_start=0.0, d_end=1.0, d_step=0.05, target_p=0.05):
+    series_np = cp.asnumpy(series)  # Convert to NumPy for adfuller (CPU-bound)
     best_d = d_start
     best_p = float('inf')
     best_diff = float('inf')
-    for i, d in enumerate(np.arange(d_start, d_end + d_step, d_step)):
-        if i >= max_iter:
-            print(f"Max iterations reached. Best d={best_d}, p={best_p}, diff={best_diff}")
-            break
-        ffd_series = frac_diff_fast(series_np, d, window_length)
+    for d in cp.arange(d_start, d_end + d_step, d_step):
+        ffd_series = cp.asnumpy(frac_diff_gpu(series, d, window_length))
         if len(ffd_series) < 2:
             continue
-        adf_result = adfuller(ffd_series)
+        adf_result = adfuller(ffd_series)  # CPU-bound
         p_value = adf_result[1]
         diff = abs(p_value - target_p)
         if diff < best_diff:
-            best_d = d
+            best_d = float(d)  # Convert CuPy scalar to Python float
             best_p = p_value
             best_diff = diff
         if best_diff < 0.025:
-            print(f"Found optimal d={best_d} with p={best_p} (diff={best_diff})")
             break
-    return best_d, best_p, frac_diff_fast(series_np, best_d, window_length)
+    return best_d, best_p, frac_diff_gpu(series, best_d, window_length)
 
-# Wavelet denoising (kept as-is, could be optimized further with batch processing)
-def wavelet_denoise(signal, wavelet, level):
-    coeffs = pywt.wavedec(signal.flatten(), wavelet, level=level)
-    coeff_array, coeff_slices = pywt.coeffs_to_array(coeffs)
-    threshold = np.std(coeff_array) * np.sqrt(2 * np.log(len(coeff_array)))
-    coeff_array[np.abs(coeff_array) < threshold] = 0
-    filtered_coeffs = pywt.array_to_coeffs(coeff_array, coeff_slices, output_format="wavedec")
-    reconstructed_signal = pywt.waverec(filtered_coeffs, wavelet)
+# GPU-optimized wavelet denoising (simplified approximation)
+def wavelet_denoise_gpu(signal, level=4):
+    # Approximate wavelet denoising with FFT-based filtering (faster on GPU)
+    fft_signal = cp.fft.fft(signal)
+    threshold = cp.std(fft_signal) * cp.sqrt(2 * cp.log(len(fft_signal)))
+    fft_signal[cp.abs(fft_signal) < threshold] = 0
+    return cp.asnumpy(cp.fft.ifft(fft_signal).real)  # Back to CPU for compatibility
 
-    original_length = len(signal)
-    if len(reconstructed_signal) > original_length:
-        reconstructed_signal = reconstructed_signal[:original_length]
-    elif len(reconstructed_signal) < original_length:
-        reconstructed_signal = np.pad(reconstructed_signal, (0, original_length - len(reconstructed_signal)), 'edge')
-    return reconstructed_signal
+# GPU-optimized window processing
+def process_window_gpu(windows, window_size, sampling_rate):
+    num_features = 10
+    res = cp.zeros((windows.shape[0], num_features))
 
-# Parallelized window processing function
-def process_window(i, array, window_size, sampling_rate):
-    selected_slice = array[i - window_size + 1: i + 1]
-    if len(selected_slice) < 2:
-        return np.full(10, np.nan)
+    # 1. Wavelet Denoising (batch process)
+    denoised = cp.array([wavelet_denoise_gpu(w, level=4) for w in windows])
 
-    # 1. Wavelet Denoising
-    reconstructed_level4 = wavelet_denoise(selected_slice, "bior4.4", level=4)
-    
-    # 2. FFD Calculation
-    reconstructed_series = pl.Series(reconstructed_level4)
-    optimal_d, optimal_p, FFD_slice = find_optimal_d(reconstructed_series, window_length=5)
-    
+    # 2. FFD Calculation (batch process)
+    optimal_ds = []
+    ffd_slices = []
+    for i in range(len(denoised)):
+        d, p, ffd = find_optimal_d(denoised[i], window_length=5)
+        optimal_ds.append(d)
+        ffd_slices.append(ffd)
+    ffd_slices = cp.array(ffd_slices)
+
     # 3. FFD Centered
-    FFD_centered = FFD_slice - np.mean(FFD_slice)
+    ffd_centered = ffd_slices - cp.mean(ffd_slices, axis=1, keepdims=True)
 
-    # 4. FFT
-    if len(FFD_centered) < 2:
-        return np.full(10, np.nan)
-    
-    fft_result = np.fft.fft(FFD_centered)
-    n = len(FFD_centered)
-    frequencies = np.fft.fftfreq(n, d=5/60)
-    magnitude_spectrum = np.abs(fft_result)
-    phase_spectrum = np.angle(fft_result)
+    # 4. FFT (batch process)
+    fft_results = cp.fft.fft(ffd_centered, axis=1)
+    n = ffd_centered.shape[1]
+    frequencies = cp.fft.fftfreq(n, d=5/60)
+    magnitude_spectrum = cp.abs(fft_results)
+    phase_spectrum = cp.angle(fft_results)
 
     half_n = n // 2
-    if half_n == 0:
-        return np.full(10, np.nan)
-
     positive_frequencies = frequencies[:half_n]
-    positive_magnitudes = magnitude_spectrum[:half_n]
-    positive_phases = phase_spectrum[:half_n]
+    positive_magnitudes = magnitude_spectrum[:, :half_n]
+    positive_phases = phase_spectrum[:, :half_n]
     positive_frequencies[0] = 0
 
-    top_10_indices = np.argsort(positive_magnitudes)[-10:][::-1]
-    top_10_frequencies = positive_frequencies[top_10_indices]
-    top_10_magnitudes = positive_magnitudes[top_10_indices]
-    top_10_phases = positive_phases[top_10_indices]
+    # Top 10 components (batch process)
+    top_10_indices = cp.argsort(positive_magnitudes, axis=1)[:, -10:][:, ::-1]
+    batch_size = windows.shape[0]
+    top_10_frequencies = cp.zeros((batch_size, 10))
+    top_10_magnitudes = cp.zeros((batch_size, 10))
+    top_10_phases = cp.zeros((batch_size, 10))
 
-    data_3d = np.column_stack((top_10_frequencies, top_10_magnitudes, top_10_phases))
+    for i in range(batch_size):
+        top_10_frequencies[i] = positive_frequencies[top_10_indices[i]]
+        top_10_magnitudes[i] = positive_magnitudes[i, top_10_indices[i]]
+        top_10_phases[i] = positive_phases[i, top_10_indices[i]]
+
+    # 5. PCA (CPU fallback due to sklearn)
+    data_3d = cp.stack((top_10_frequencies, top_10_magnitudes, top_10_phases), axis=2)
+    data_3d_np = cp.asnumpy(data_3d.reshape(-1, 3))  # Flatten for sklearn
     scaler = StandardScaler()
-    data_3d_scaled = scaler.fit_transform(data_3d)
+    data_3d_scaled = scaler.fit_transform(data_3d_np)
     pca = PCA(n_components=1)
-    data_1d = pca.fit_transform(data_3d_scaled)
-
-    return data_1d.flatten()
+    data_1d = pca.fit_transform(data_3d_scaled).reshape(batch_size, 10)
+    
+    return cp.asarray(data_1d)
 
 def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
     num_features = 10
-    res = np.zeros((array.shape[0], num_features))
-    res[:window_size, :] = np.nan
+    res = cp.zeros((array.shape[0], num_features))
+    res[:window_size, :] = cp.nan
 
-    # Parallel processing of windows
-    results = Parallel(n_jobs=-1)(delayed(process_window)(i, array, window_size, sampling_rate)
-                                  for i in range(window_size, array.shape[0]))
-    
-    # Fill results into res array
-    for i, result in enumerate(results, start=window_size):
-        res[i, :] = result
+    # Sliding window view for batch processing
+    windows = cp.lib.stride_tricks.sliding_window_view(array, (window_size,))
+    batch_size = 1000  # Adjust based on GPU memory
+    for start in range(0, windows.shape[0], batch_size):
+        end = min(start + batch_size, windows.shape[0])
+        batch_windows = windows[start:end]
+        batch_res = process_window_gpu(batch_windows, window_size, sampling_rate)
+        res[start + window_size:start + window_size + batch_res.shape[0]] = batch_res
 
-    # Progress logging (simplified)
-    array_shape = array.shape[0] // 10
+    # Simplified logging
     for perc in range(10, 100, 10):
-        if window_size + perc * array_shape // 10 < array.shape[0]:
+        if perc * array.shape[0] // 100 < array.shape[0]:
             logger.info(f"---> Did {perc} perc of the job ...")
 
-    return res
+    return cp.asnumpy(res)
 
 def add_win_fe_base_func(
     df, raw_features, timeframes, window_sizes,
@@ -143,18 +136,14 @@ def add_win_fe_base_func(
             assert tf == 5, "!!! For now, this code only works with 5M timeframe; tf must be 5."
 
             col_FREQ_ftr = [f"{fe_prefix}_FREQ_W{w_size}_M{tf}_Top{i+1}" for i in range(10)]
-            array = df.select(raw_features).to_numpy()
+            array = df[raw_features].to_cupy()
 
             res = cal_window_max(array, w_size, sampling_rate)
 
-            # Convert results to Polars DataFrame
-            new_columns.append(pl.DataFrame(
-                res[:, 0:10].round(round_to),
-                schema=col_FREQ_ftr
-            ))
+            # Convert to cuDF DataFrame
+            new_columns.append(cudf.DataFrame(res[:, 0:10].round(round_to), columns=col_FREQ_ftr))
 
-    # Concatenate horizontally with Polars
-    df = pl.concat([df] + new_columns, how="horizontal")
+    df = cudf.concat([df] + new_columns, axis=1)
     return df
 
 def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
@@ -180,12 +169,11 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
             file_name = f"{base_candle_folder_path}{symbol}_realtime_candle.parquet"
             
-            # Read with Polars
-            df = pl.read_parquet(file_name, columns=needed_columns).sort("_time")
+            # Read with cuDF
+            df = cudf.read_parquet(file_name, columns=needed_columns).sort_values("_time")
 
             # Ensure _time is datetime
-            if not df["_time"].dtype.is_temporal():
-                df = df.with_columns(pl.col("_time").str.strptime(pl.Datetime, format="%Y-%m-%d %H:%M:%S"))
+            df['_time'] = df['_time'].astype('datetime64[ns]')
 
             logger.info("---> Entering the main func ...")
             df = add_win_fe_base_func(
@@ -200,8 +188,9 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
             logger.info("---> Exiting the main func ...")
 
             # Clean up and save
-            df = df.drop(raw_features).with_columns(pl.lit(symbol).alias("symbol"))
-            df.write_parquet(f"{features_folder_path}/{fe_prefix}_{symbol}.parquet")
+            df = df.drop(raw_features)
+            df["symbol"] = symbol
+            df.to_parquet(f"{features_folder_path}/{fe_prefix}_{symbol}.parquet")
 
         toc = time.time()
         logger.info(f"--> took {round(toc - tic, 2)} seconds to complete fe_WIN_FREQ.")

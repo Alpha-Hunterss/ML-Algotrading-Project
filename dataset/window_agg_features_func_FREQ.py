@@ -5,10 +5,9 @@ from pathlib import Path
 from dataset.logging_tools import default_logger
 from dataset.configs.history_data_crawlers_config import root_path
 import time
-from statsmodels.tsa.stattools import adfuller  # No GPU equivalent, kept on CPU
+from statsmodels.tsa.stattools import adfuller  # CPU-bound
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from joblib import Parallel, delayed  # For CPU fallback if needed
 
 # GPU-optimized fractional differentiation
 def frac_diff_gpu(series, d, window_length):
@@ -19,9 +18,9 @@ def frac_diff_gpu(series, d, window_length):
     output = cp.convolve(series, weights[::-1], mode='valid')
     return output
 
-# Simplified find_optimal_d (fewer iterations, heuristic-based)
+# Simplified find_optimal_d (fewer iterations)
 def find_optimal_d(series, window_length, d_start=0.0, d_end=1.0, d_step=0.05, target_p=0.05):
-    series_np = cp.asnumpy(series)  # Convert to NumPy for adfuller (CPU-bound)
+    series_np = cp.asnumpy(series)  # Convert to NumPy for adfuller
     best_d = d_start
     best_p = float('inf')
     best_diff = float('inf')
@@ -33,20 +32,19 @@ def find_optimal_d(series, window_length, d_start=0.0, d_end=1.0, d_step=0.05, t
         p_value = adf_result[1]
         diff = abs(p_value - target_p)
         if diff < best_diff:
-            best_d = float(d)  # Convert CuPy scalar to Python float
+            best_d = float(d)
             best_p = p_value
             best_diff = diff
         if best_diff < 0.025:
             break
     return best_d, best_p, frac_diff_gpu(series, best_d, window_length)
 
-# GPU-optimized wavelet denoising (simplified approximation)
+# GPU-optimized wavelet denoising (FFT approximation)
 def wavelet_denoise_gpu(signal, level=4):
-    # Approximate wavelet denoising with FFT-based filtering (faster on GPU)
     fft_signal = cp.fft.fft(signal)
     threshold = cp.std(fft_signal) * cp.sqrt(2 * cp.log(len(fft_signal)))
     fft_signal[cp.abs(fft_signal) < threshold] = 0
-    return cp.asnumpy(cp.fft.ifft(fft_signal).real)  # Back to CPU for compatibility
+    return cp.fft.ifft(fft_signal).real
 
 # GPU-optimized window processing
 def process_window_gpu(windows, window_size, sampling_rate):
@@ -54,16 +52,15 @@ def process_window_gpu(windows, window_size, sampling_rate):
     res = cp.zeros((windows.shape[0], num_features))
 
     # 1. Wavelet Denoising (batch process)
-    denoised = cp.array([wavelet_denoise_gpu(w, level=4) for w in windows])
+    denoised = cp.zeros_like(windows)
+    for i in range(windows.shape[0]):
+        denoised[i] = wavelet_denoise_gpu(windows[i])
 
     # 2. FFD Calculation (batch process)
-    optimal_ds = []
-    ffd_slices = []
+    ffd_slices = cp.zeros((windows.shape[0], window_size - 4))  # Adjust for valid convolution
     for i in range(len(denoised)):
-        d, p, ffd = find_optimal_d(denoised[i], window_length=5)
-        optimal_ds.append(d)
-        ffd_slices.append(ffd)
-    ffd_slices = cp.array(ffd_slices)
+        d, _, ffd = find_optimal_d(denoised[i], window_length=5)
+        ffd_slices[i] = ffd
 
     # 3. FFD Centered
     ffd_centered = ffd_slices - cp.mean(ffd_slices, axis=1, keepdims=True)
@@ -93,9 +90,9 @@ def process_window_gpu(windows, window_size, sampling_rate):
         top_10_magnitudes[i] = positive_magnitudes[i, top_10_indices[i]]
         top_10_phases[i] = positive_phases[i, top_10_indices[i]]
 
-    # 5. PCA (CPU fallback due to sklearn)
+    # 5. PCA (CPU fallback)
     data_3d = cp.stack((top_10_frequencies, top_10_magnitudes, top_10_phases), axis=2)
-    data_3d_np = cp.asnumpy(data_3d.reshape(-1, 3))  # Flatten for sklearn
+    data_3d_np = cp.asnumpy(data_3d.reshape(-1, 3))
     scaler = StandardScaler()
     data_3d_scaled = scaler.fit_transform(data_3d_np)
     pca = PCA(n_components=1)
@@ -108,14 +105,18 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
     res = cp.zeros((array.shape[0], num_features))
     res[:window_size, :] = cp.nan
 
-    # Sliding window view for batch processing
-    windows = cp.lib.stride_tricks.sliding_window_view(array, (window_size,))
+    # Manually create sliding windows on GPU
+    n_windows = array.shape[0] - window_size + 1
+    windows = cp.zeros((n_windows, window_size))
+    for i in range(n_windows):
+        windows[i] = array[i:i + window_size]
+
     batch_size = 1000  # Adjust based on GPU memory
-    for start in range(0, windows.shape[0], batch_size):
-        end = min(start + batch_size, windows.shape[0])
+    for start in range(0, n_windows, batch_size):
+        end = min(start + batch_size, n_windows)
         batch_windows = windows[start:end]
         batch_res = process_window_gpu(batch_windows, window_size, sampling_rate)
-        res[start + window_size:start + window_size + batch_res.shape[0]] = batch_res
+        res[start + window_size - 1:start + window_size - 1 + batch_res.shape[0]] = batch_res
 
     # Simplified logging
     for perc in range(10, 100, 10):
@@ -148,7 +149,7 @@ def add_win_fe_base_func(
 
 def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
     logger.info("- " * 25)
-    logger.info("--> Start history_fe_WIN_FREQ_features function:")
+    logger.info("--> Start history_fe_WIN_freq_features function:")
     try:
         tic = time.time()
         fe_prefix = "fe_WIN_FREQ"

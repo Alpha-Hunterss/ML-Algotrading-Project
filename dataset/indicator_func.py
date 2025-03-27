@@ -1898,7 +1898,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_leg": {"func": cal_leg_base_func},
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
             "fe_supertrend": {"func": cal_supertrend_func},
-            "fe_FFD": {"func": cal_FFD_func},
+            # "fe_FFD": {"func": cal_FFD_func},
             "fe_GMA": {"func": cal_GMA_n_GBB_func},
             "fe_OL": {"func": cal_OverLap_func},
         }

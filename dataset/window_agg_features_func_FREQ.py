@@ -105,6 +105,10 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
     res = cp.zeros((array.shape[0], num_features))
     res[:window_size, :] = cp.nan
 
+    # Aggregate multiple features into a single series (e.g., mean across columns)
+    if array.ndim > 1:
+        array = cp.mean(array, axis=1)  # Reduce to 1D if multiple features
+
     # Manually create sliding windows on GPU
     n_windows = array.shape[0] - window_size + 1
     windows = cp.zeros((n_windows, window_size))

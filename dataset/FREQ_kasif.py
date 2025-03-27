@@ -10,9 +10,10 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 # Function for fractional differentiation
-def frac_diff(series, d, window=10):
+window_length = 5
+def frac_diff(series, d, window_length):
     weights = [1.0]
-    for k in range(1, window):
+    for k in range(1, window_length):
         weight = -weights[-1] * (d - k + 1) / k
         weights.append(weight)
     weights = np.array(weights)
@@ -20,32 +21,36 @@ def frac_diff(series, d, window=10):
     return pd.Series(output, index=series.index[len(weights)-1:len(weights)-1+len(output)])
 
 # Function to find optimal d
-def find_optimal_d(series, window=10, d_start=0.0, d_end=1.0, d_step=0.01, target_p=0.05, max_iter=100):
+def find_optimal_d(series, window_length, d_start=0.0, d_end=1.0, d_step=0.01, target_p=0.05, max_iter=100):
     best_d = d_start
     best_p = float('inf')
     best_diff = float('inf')
     for i, d in enumerate(np.arange(d_start, d_end + d_step, d_step)):
         if i >= max_iter:
-            print("Max iterations reached.")
+            print(f"Max iterations reached. Best d={best_d}, p={best_p}, diff={best_diff}")
             break
-        ffd_series = frac_diff(series, d, window=window)
+        ffd_series = frac_diff(series, d, window_length)
         if len(ffd_series) < 2:
+            # print(f"Skipping d={d}: ffd_series length {len(ffd_series)} too short")
             continue
         adf_result = adfuller(ffd_series)
         p_value = adf_result[1]
         diff = abs(p_value - target_p)
+        # print(f"d={d:.2f}, p={p_value:.4f}, diff={diff:.4f}")  # Debug output
         if diff < best_diff:
             best_d = d
             best_p = p_value
             best_diff = diff
-        if best_diff < 0.01:
+        if best_diff < 0.025:
+            print(f"Found optimal d={best_d} with p={best_p} (diff={best_diff})")
             break
-    return best_d, best_p, frac_diff(series, best_d, window=window)
+    return best_d, best_p, frac_diff(series, best_d, window_length)
 
 
 # Function to process wavelet decomposition, thresholding, and reconstruction
 def wavelet_denoise(signal, wavelet, level):
-    coeffs = pywt.wavedec(signal.values.flatten(), wavelet, level=level)
+    # Remove .values since signal is already a NumPy array
+    coeffs = pywt.wavedec(signal.flatten(), wavelet, level=level)
     coeff_array, coeff_slices = pywt.coeffs_to_array(coeffs)
     threshold = np.std(coeff_array) * np.sqrt(2 * np.log(len(coeff_array)))
     coeff_array[np.abs(coeff_array) < threshold] = 0
@@ -58,7 +63,8 @@ def wavelet_denoise(signal, wavelet, level):
     elif len(reconstructed_signal) < original_length:
         reconstructed_signal = np.pad(reconstructed_signal, (0, original_length - len(reconstructed_signal)), 'edge')
 
-    return pd.Series(reconstructed_signal, index=signal.index)
+    # Return as a pandas Series with the original index if needed, but here we return NumPy array
+    return reconstructed_signal
 
 
 
@@ -66,48 +72,46 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
     """
     Compute various features (FFT, Wavelet, Envelope, Cepstrum) for different windows.
     """
-    num_features_fft = 10
-
-    total_features = num_features_fft 
-
+    num_features_fft = 10  # Number of features (one per top 10 FFT component)
+    total_features = num_features_fft
     
-    res = np.zeros([array.shape[0], total_features])  # result array
-    res[:window_size, :] = np.nan  # fill initial rows with NaN
+    res = np.zeros([array.shape[0], total_features])  # Result array
+    res[:window_size, :] = np.nan  # Fill initial rows with NaN
 
-    flags = [True for i in range(9)]
-    array_shape = array.shape[0]/10
+    flags = [True for _ in range(9)]
+    array_shape = array.shape[0] // 10  # Use integer division for clarity
 
     for i in range(window_size, array.shape[0]):
+        # Progress logging
         if (i >= array_shape) & flags[0]:
             logger.info("---> Did 10 perc of the job ...")
             flags[0] = False
-        elif (i >= 2*array_shape) & flags[1]:
+        elif (i >= 2 * array_shape) & flags[1]:
             logger.info("---> Did 20 perc of the job ...")
             flags[1] = False
-        elif (i >= 3*array_shape) & flags[2]:
+        elif (i >= 3 * array_shape) & flags[2]:
             logger.info("---> Did 30 perc of the job ...")
             flags[2] = False
-        elif (i >= 4*array_shape) & flags[3]:
+        elif (i >= 4 * array_shape) & flags[3]:
             logger.info("---> Did 40 perc of the job ...")
             flags[3] = False
-        elif (i >= 5*array_shape) & flags[4]:
+        elif (i >= 5 * array_shape) & flags[4]:
             logger.info("---> Did 50 perc of the job ...")
             flags[4] = False
-        elif (i >= 6*array_shape) & flags[5]:
+        elif (i >= 6 * array_shape) & flags[5]:
             logger.info("---> Did 60 perc of the job ...")
             flags[5] = False
-        elif (i >= 7*array_shape) & flags[6]:
+        elif (i >= 7 * array_shape) & flags[6]:
             logger.info("---> Did 70 perc of the job ...")
             flags[6] = False
-        elif (i >= 8*array_shape) & flags[7]:
+        elif (i >= 8 * array_shape) & flags[7]:
             logger.info("---> Did 80 perc of the job ...")
             flags[7] = False
-        elif (i >= 9*array_shape) & flags[8]:
+        elif (i >= 9 * array_shape) & flags[8]:
             logger.info("---> Did 90 perc of the job ...")
             flags[8] = False
 
         selected_slice = array[i - window_size + 1: i + 1]
-
 
         # 1 Wavelet Denoising
         if len(selected_slice) < 2:
@@ -115,15 +119,21 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
             continue
         reconstructed_level4 = wavelet_denoise(selected_slice, "bior4.4", level=4)
         
-        # 2 FFD Calculation
-        optimal_d, optimal_p, FFD_slice = find_optimal_d(reconstructed_level4, window=len(selected_slice))
+        # 2 FFD Calculation - Use a fixed window for frac_diff, not the full series length
+        reconstructed_series = pd.Series(reconstructed_level4, index=range(len(reconstructed_level4)))
+        optimal_d, optimal_p, FFD_slice = find_optimal_d(reconstructed_series, window_length)  # Fixed window_length
         
         # 3 FFD Centered
         FFD_centered = FFD_slice - FFD_slice.mean()
 
-        # 4 Applying FFT
-        fft_result = np.fft.fft(FFD_centered.values)
-        n = len(FFD_centered)  
+        # 4 Applying FFT - Add length check
+        if len(FFD_centered) < 2:
+            logger.debug(f"Skipping FFT at i={i}: FFD_centered length {len(FFD_centered)} too short")
+            res[i, :] = np.nan
+            continue
+
+        fft_result = np.fft.fft(FFD_centered.values)  # FFD_slice is a Series, so .values is fine here
+        n = len(FFD_centered)
         frequencies = np.fft.fftfreq(n, d=5/60)  # 5 minutes = 5/60 hours
 
         # Compute magnitude spectrum and phase
@@ -132,6 +142,11 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
 
         # Only take the positive frequencies (first half of the FFT output)
         half_n = n // 2
+        if half_n == 0:
+            logger.debug(f"Skipping FFT at i={i}: half_n is 0 (n={n})")
+            res[i, :] = np.nan
+            continue
+
         positive_frequencies = frequencies[:half_n]
         positive_magnitudes = magnitude_spectrum[:half_n]
         positive_phases = phase_spectrum[:half_n]
@@ -156,7 +171,7 @@ def cal_window_max(array, window_size, sampling_rate, logger=default_logger):
 
         # Assign the 10 PCA values to the result array
         res[i, :] = data_1d.flatten()  # Flatten (10, 1) to (10,) for assignment
-        
+
     return res
 
 
@@ -185,7 +200,7 @@ def add_win_fe_base_func(
     return df
 
 
-def history_fe_WIN_features_FREQ(feature_config, use_cudf=False, use_wavelet=True, logger=default_logger):
+def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
     logger.info("- " * 25)
     logger.info("--> Start history_fe_WIN_FREQ_features function:")
     try:

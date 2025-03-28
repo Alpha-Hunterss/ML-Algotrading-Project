@@ -163,7 +163,7 @@ def history_basic_features(feature_config, logger=default_logger):
 
 def history_fe_market_close(feature_config, logger=default_logger):
     logger.info("- " * 25)
-    logger.info("--> start history_fe_market_close fumc:")
+    logger.info("--> start history_fe_market_close function:")
     try:
         fe_prefix = "fe_market_close"
         features_folder_path = f"{root_path}/data/features/{fe_prefix}/"
@@ -174,61 +174,77 @@ def history_fe_market_close(feature_config, logger=default_logger):
             logger.info("= " * 40)
 
             columns = ["_time", "close"]
-            df=pd.read_parquet(
+            df = pd.read_parquet(
                 f"{root_path}/data/stage_one_data/{symbol}_stage_one.parquet",
                 columns=columns
             )
-            df["_time"] = df["_time"].dt.tz_localize(None)
+
+            # Ensure _time is timezone-aware and in UTC
+            if df["_time"].dt.tz is None:
+                df["_time"] = df["_time"].dt.tz_localize("UTC")
+            else:
+                df["_time"] = df["_time"].dt.tz_convert("UTC")
+
             df.sort_values("_time", inplace=True)
             df.reset_index(drop=True, inplace=True)
-            df["_time"] = df["_time"] - timedelta(hours=6)
 
+            # Adjust time only if needed (similar to history_fe_time handling)
+            is_crypto = True
             if symbol in FOREX:
                 sessions = time_sessions.get("FOREX")
+                is_crypto = False
             elif symbol in US_INDICES:
                 sessions = time_sessions.get("US Indices")
+                is_crypto = False
             elif symbol == "XAUUSD":
                 sessions = time_sessions.get("XAUUSD")
+                is_crypto = False
             else:
                 continue
 
+            if not is_crypto:
+                df["_time"] = df["_time"] - timedelta(hours=6)
+
             for session, datetime in sessions.items():
-                fiter = (
-                    df["_time"].dt.hour == datetime["hour"]
-                ) & (df["_time"].dt.minute == datetime["minute"])
+                filter_condition = (
+                    (df["_time"].dt.hour == datetime["hour"]) &
+                    (df["_time"].dt.minute == datetime["minute"])
+                )
 
                 df["last_close_price"] = None
-                df.loc[fiter, "last_close_price"] = df.loc[fiter, "close"]
-
+                df.loc[filter_condition, "last_close_price"] = df.loc[filter_condition, "close"]
+                
                 df["last_close_time"] = None
-                df.loc[fiter, "last_close_time"] = df.loc[fiter, "_time"]
+                df.loc[filter_condition, "last_close_time"] = df.loc[filter_condition, "_time"]
+                
                 with pd.option_context("future.no_silent_downcasting", True):
                     df = df.ffill(inplace=False).infer_objects(copy=False)
 
                 df[f"{fe_prefix}_{session}"] = (
                     df["close"] - df["last_close_price"]
                 ) / symbols_dict[symbol]["pip_size"]
+                
                 df[f"{fe_prefix}_{session}_time"] = (
                     df["_time"] - df["last_close_time"]
                 ).dt.seconds // 60
 
-            ##? parquet save:
-            df.drop(
-                columns=["last_close_price", "close", "last_close_time"],
-                inplace=True,
-            )
-            df["_time"] = df["_time"] + timedelta(hours=6)
+            if not is_crypto:
+                df["_time"] = df["_time"] + timedelta(hours=6)
+
+            df.drop(columns=["last_close_price", "close", "last_close_time"], inplace=True)
             df.dropna(inplace=True)
             df.reset_index(drop=True, inplace=True)
             df["symbol"] = symbol
+
             file_name = f"{features_folder_path}/{fe_prefix}_{symbol}.parquet"
-            df.to_parquet(file_name,index=False)
+            df.to_parquet(file_name, index=False)
 
         logger.info("--> history_fe_market_close run successfully.")
     except Exception as e:
         logger.exception("--> history_fe_market_close error.")
         logger.exception(f"--> error: {e}")
         raise ValueError("!!!")
+
 
 
 def history_fe_time(feature_config, logger=default_logger):

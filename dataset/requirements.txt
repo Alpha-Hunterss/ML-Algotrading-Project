@@ -21,7 +21,7 @@ matplotlib-inline==0.1.7
 MetaTrader5==5.0.4424
 multidict==6.1.0
 nest-asyncio==1.6.0
-numpy==1.26.4
+numpy==1.23.0
 packaging==24.1
 pandas==2.2.3
 parso==0.8.4

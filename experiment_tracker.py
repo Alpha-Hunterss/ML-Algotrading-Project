@@ -1,4 +1,5 @@
 import zipfile
+import joblib
 import numpy as np
 import pickle as pkl
 import matplotlib.pyplot as plt
@@ -51,12 +52,18 @@ class QuantExpTracker:
         self.max_CV_train_date = max_CV_train_date
 
         self.store_name = f"{self.name}.pkl"
+        self.store_name_joblib = f"{self.name}.joblib"
 
     def store_obj(self, store_zip: bool = True):
         file = open(self.store_name, "wb")
         pkl.dump(self, file)
         file.close()
         print(f"object stored as pickle: {self.store_name}")
+
+        file = open(self.store_name_joblib, "wb")
+        joblib.dump(self.model, file)
+        file.close()
+        print(f"object stored as joblib: {self.store_name_joblib}")
 
         if store_zip:
             with zipfile.ZipFile(self.store_name + ".zip", "w", compression=zipfile.ZIP_DEFLATED) as zipf:

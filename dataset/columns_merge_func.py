@@ -159,7 +159,7 @@ def history_columns_merge(
         "fe_ratio",
         "fe_cndl_shift",
         "fe_WIN",
-        # "fe_WIN_FREQ",
+        "fe_WIN_FREQ",
         "fe_cndl_ptrn",
         "fe_market_close",
     ]
@@ -178,23 +178,23 @@ def history_columns_merge(
     df_dataset = pl.read_parquet(main_symbol_st_one_path, columns=["_time"])
     df_dataset = df_dataset.sort("_time")
 
-    logger.info("--> add fe_time.")
-
-    file_name = f"{feature_folder}/fe_time/fe_time.parquet"
-    df_dataset = df_dataset.join(
-        pl.read_parquet(file_name).sort("_time").drop("symbol"),
-        left_on="_time", right_on="_time", how="left", coalesce=True
-    )
-    gc.collect()
     # logger.info("--> add fe_time.")
+
     # file_name = f"{feature_folder}/fe_time/fe_time.parquet"
-    # # Make df_dataset's _time column naive to match fe_time.parquet
-    # df_dataset = df_dataset.with_columns(pl.col("_time").dt.replace_time_zone(None))
     # df_dataset = df_dataset.join(
     #     pl.read_parquet(file_name).sort("_time").drop("symbol"),
     #     left_on="_time", right_on="_time", how="left", coalesce=True
     # )
     # gc.collect()
+    logger.info("--> add fe_time.")
+    file_name = f"{feature_folder}/fe_time/fe_time.parquet"
+    # Make df_dataset's _time column naive to match fe_time.parquet
+    df_dataset = df_dataset.with_columns(pl.col("_time").dt.replace_time_zone(None))
+    df_dataset = df_dataset.join(
+        pl.read_parquet(file_name).sort("_time").drop("symbol"),
+        left_on="_time", right_on="_time", how="left", coalesce=True
+    )
+    gc.collect()
 
     for symbol in feature_config:
         logger.info(" ^ - ^ " * 10)

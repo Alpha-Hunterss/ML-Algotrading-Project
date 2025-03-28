@@ -160,7 +160,6 @@ def history_basic_features(feature_config, logger=default_logger):
         logger.exception(f"--> error: {e}")
         raise ValueError("!!!")
 
-
 def history_fe_market_close(feature_config, logger=default_logger):
     logger.info("- " * 25)
     logger.info("--> start history_fe_market_close function:")
@@ -179,19 +178,12 @@ def history_fe_market_close(feature_config, logger=default_logger):
                 columns=columns
             )
 
-            # Ensure _time is timezone-aware and in UTC
-            if df["_time"].dtype == "datetime64[ns]":
-                df["_time"] = df["_time"].dt.tz_localize("UTC", nonexistent="shift_forward", ambiguous="NaT")
-            elif df["_time"].dt.tz is None:
-                df["_time"] = df["_time"].dt.tz_localize("UTC")
-            else:
-                df["_time"] = df["_time"].dt.tz_convert("UTC")
-
+            # Ensure _time is datetime without timezone
+            df["_time"] = pd.to_datetime(df["_time"]).dt.tz_localize(None)
 
             df.sort_values("_time", inplace=True)
             df.reset_index(drop=True, inplace=True)
 
-            # Adjust time only if needed (similar to history_fe_time handling)
             is_crypto = True
             if symbol in FOREX:
                 sessions = time_sessions.get("FOREX")
@@ -249,26 +241,19 @@ def history_fe_market_close(feature_config, logger=default_logger):
         raise ValueError("!!!")
 
 
-
 def history_fe_time(feature_config, logger=default_logger):
     logger.info("- " * 25)
-    logger.info("--> start history_fe_time fumc:")
+    logger.info("--> start history_fe_time function:")
     try:
         prefix = "fe_time"
         symbol = list(feature_config.keys())[0]
         df = pd.read_parquet(
-        f"{root_path}/data/stage_one_data/{symbol}_stage_one.parquet",
-        columns=["_time"]
+            f"{root_path}/data/stage_one_data/{symbol}_stage_one.parquet",
+            columns=["_time"]
         ).sort_values("_time").reset_index(drop=True)
 
-        # Check if _time is already timezone-aware
-        if df["_time"].dtype == "datetime64[ns]":
-            df["_time"] = df["_time"].dt.tz_localize("UTC", nonexistent="shift_forward", ambiguous="NaT")
-        elif df["_time"].dt.tz is None:
-            df["_time"] = df["_time"].dt.tz_localize("UTC")
-        else:
-            df["_time"] = df["_time"].dt.tz_convert("UTC")
-
+        # Ensure _time is datetime without timezone
+        df["_time"] = pd.to_datetime(df["_time"]).dt.tz_localize(None)
 
         df.sort_values("_time", inplace=True)
         df.reset_index(drop=True, inplace=True)
@@ -282,12 +267,6 @@ def history_fe_time(feature_config, logger=default_logger):
                 "day_of_week",
                 "day_of_month",
                 "day_of_year",
-                # "month_start",
-                # "month_end",
-                # "quarter_start",
-                # "quarter_end",
-                # "year_start",
-                # "year_end",
                 "hour",
                 "minute",
             ],
@@ -326,7 +305,6 @@ def history_fe_time(feature_config, logger=default_logger):
                         & (fe_time["_time"].dt.hour < stop_time),
                         col_name,
                     ] = 1
-
                 else:
                     fe_time.loc[
                         (fe_time["_time"].dt.hour >= start_time)
@@ -340,13 +318,14 @@ def history_fe_time(feature_config, logger=default_logger):
         features_folder_path = f"{root_path}/data/features/{prefix}/"
         Path(features_folder_path).mkdir(parents=True, exist_ok=True)
         file_name = features_folder_path + f"/{prefix}.parquet"
-        fe_time.to_parquet(file_name,index=False)
+        fe_time.to_parquet(file_name, index=False)
 
         logger.info("--> history_fe_time run successfully.")
     except Exception as e:
         logger.exception("--> history_fe_time error.")
         logger.exception(f"--> error: {e}")
         raise ValueError("!!!")
+
 
 
 if __name__ == "__main__":

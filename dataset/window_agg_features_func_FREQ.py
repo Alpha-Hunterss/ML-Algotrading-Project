@@ -22,7 +22,7 @@ def frac_diff_fast(series, d, window_length):
     return output
 
 # Optimized function to find optimal d
-def find_optimal_d(series, window_length, d_start=0.3, d_end=0.9, d_step=0.02, target_p=0.05, max_iter=50):
+def find_optimal_d(series, window_length, d_start=0.4, d_end=0.9, d_step=0.025, target_p=0.05, max_iter=50):
     series_np = series.to_numpy()  # Convert Polars Series to NumPy
     best_d = d_start
     best_p = float('inf')
@@ -41,7 +41,7 @@ def find_optimal_d(series, window_length, d_start=0.3, d_end=0.9, d_step=0.02, t
             best_d = d
             best_p = p_value
             best_diff = diff
-        if best_diff < 0.05:
+        if best_diff < 0.15:
             print(f"Found optimal d={best_d} with p={best_p} (diff={best_diff})")
             break
     return best_d, best_p, frac_diff_fast(series_np, best_d, window_length)

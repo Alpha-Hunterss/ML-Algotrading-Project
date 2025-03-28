@@ -180,10 +180,13 @@ def history_fe_market_close(feature_config, logger=default_logger):
             )
 
             # Ensure _time is timezone-aware and in UTC
-            if df["_time"].dt.tz is None:
+            if df["_time"].dtype == "datetime64[ns]":
+                df["_time"] = df["_time"].dt.tz_localize("UTC", nonexistent="shift_forward", ambiguous="NaT")
+            elif df["_time"].dt.tz is None:
                 df["_time"] = df["_time"].dt.tz_localize("UTC")
             else:
                 df["_time"] = df["_time"].dt.tz_convert("UTC")
+
 
             df.sort_values("_time", inplace=True)
             df.reset_index(drop=True, inplace=True)
@@ -259,12 +262,13 @@ def history_fe_time(feature_config, logger=default_logger):
         ).sort_values("_time").reset_index(drop=True)
 
         # Check if _time is already timezone-aware
-        if df["_time"].dt.tz is None:
-            # If timezone-naive, localize to UTC
+        if df["_time"].dtype == "datetime64[ns]":
+            df["_time"] = df["_time"].dt.tz_localize("UTC", nonexistent="shift_forward", ambiguous="NaT")
+        elif df["_time"].dt.tz is None:
             df["_time"] = df["_time"].dt.tz_localize("UTC")
         else:
-            # If timezone-aware, convert to UTC
             df["_time"] = df["_time"].dt.tz_convert("UTC")
+
 
         df.sort_values("_time", inplace=True)
         df.reset_index(drop=True, inplace=True)

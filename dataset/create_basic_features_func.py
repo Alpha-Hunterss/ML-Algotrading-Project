@@ -241,7 +241,7 @@ def history_fe_time(feature_config, logger=default_logger):
             f"{root_path}/data/stage_one_data/{symbol}_stage_one.parquet",
             columns=["_time"]
         ).sort_values("_time").reset_index(drop=True)
-        df["_time"] = df["_time"].dt.tz_localize(None)
+        df["_time"] = df["_time"].dt.tz_localize("UTC")
         df.sort_values("_time", inplace=True)
         df.reset_index(drop=True, inplace=True)
 

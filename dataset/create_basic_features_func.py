@@ -237,11 +237,19 @@ def history_fe_time(feature_config, logger=default_logger):
     try:
         prefix = "fe_time"
         symbol = list(feature_config.keys())[0]
-        df= pd.read_parquet(
-            f"{root_path}/data/stage_one_data/{symbol}_stage_one.parquet",
-            columns=["_time"]
+        df = pd.read_parquet(
+        f"{root_path}/data/stage_one_data/{symbol}_stage_one.parquet",
+        columns=["_time"]
         ).sort_values("_time").reset_index(drop=True)
-        df["_time"] = df["_time"].dt.tz_localize("UTC")
+
+        # Check if _time is already timezone-aware
+        if df["_time"].dt.tz is None:
+            # If timezone-naive, localize to UTC
+            df["_time"] = df["_time"].dt.tz_localize("UTC")
+        else:
+            # If timezone-aware, convert to UTC
+            df["_time"] = df["_time"].dt.tz_convert("UTC")
+
         df.sort_values("_time", inplace=True)
         df.reset_index(drop=True, inplace=True)
 

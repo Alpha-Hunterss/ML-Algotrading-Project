@@ -222,6 +222,16 @@ general_config = {
         'base_columns': ['CLOSE']
     },
 
+    'fe_VWAP': {
+            'timeframe': [5],
+            'window_size': [20, 60, 240, 360, 720],
+            'close': ['CLOSE'],
+            'high': ['HIGH'],
+            'low': ['LOW'],
+            'tick_volume': ['VOLUME']
+
+        },
+
 
     'fe_RSI': {
         'timeframe': [5, 60, 240],

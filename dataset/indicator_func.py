@@ -1688,8 +1688,8 @@ def cal_GMA_n_GBB_func(
     """
     # print('=================')
     # print(features)
-    # Ensure that _time is timezone-naive (if not already)
-    df["_time"] = df["_time"].dt.convert_time_zone(None)
+    # # Ensure that _time is timezone-naive (if not already)
+    # df["_time"] = df["_time"].dt.convert_time_zone(None)
 
     # Assuming `df` is a polars DataFrame
     df = df.sort("_time")

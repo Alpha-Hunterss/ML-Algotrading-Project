@@ -1077,10 +1077,10 @@ def add_candle_base_indicators_polars(
     elif prefix == 'fe_supertrend':
         multipliers = opts['feature_config']['multipliers']
     elif prefix == 'fe_VWAP':
-        high_col = opts['feature_config']['high_col']
-        low_col = opts['feature_config']['low_col']
-        close_col = opts['feature_config']['close_col']
-        volume_col = opts['feature_config']['volume_col']
+        high_col = opts['feature_config']['high']
+        low_col = opts['feature_config']['low']
+        close_col = opts['feature_config']['close']
+        volume_col = opts['feature_config']['tick_volume']
         cumulative = opts['feature_config'].get('cumulative', False)
 
     if prefix == "fe_leg":

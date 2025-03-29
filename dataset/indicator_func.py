@@ -964,146 +964,239 @@ def cal_SMA_base_func(
 
     return df
 
-
-def add_candle_base_indicators_polars(
-    df_base: pl.DataFrame,
-    prefix: str,
-    base_func: Callable[..., pl.DataFrame],
-    opts: Dict[str, Union[str, List[int]]],
-) -> None:
+def cal_VWAP_base_func(
+    df: pl.DataFrame,
+    w: int,
+    time_frame: int,
+    high_col: str,
+    low_col: str,
+    close_col: str,
+    volume_col: str,
+    pip_size: float = 1.0,  # Default to 1 if no pip size normalization needed
+    prefix: str = "fe_VWAP",
+    normalize: bool = True,
+    cumulative: bool = False,  # Option for cumulative VWAP
+) -> pl.DataFrame:
     """
-    this function takes an indicator function, apply it and save the resulting parquet
-    inputs:
-    df_base: base dataframe containing the raw features
-    prefix: prefix of feature name
-    base_func: the indicator function
-    opts: a dictionary of "symbol", "base_feature", "candle_timeframe",
-        "window_size" and "features_folder_path"
+    Calculates the Volume Weighted Average Price (VWAP).
+
+    Inputs:
+    df: DataFrame containing raw market data.
+    w: Window size for rolling calculations (ignored if cumulative=True).
+    time_frame: Time frame for calculations (e.g., candle duration in minutes).
+    high_col, low_col, close_col: Columns for high, low, and close prices.
+    volume_col: Column for trading volume.
+    pip_size: Pip size for normalization (e.g., 0.0001 for forex pairs).
+    prefix: Prefix for output feature names.
+    normalize: If True, returns the difference between VWAP and close price in pips.
+    cumulative: If True, calculates VWAP from the start of the data (ignores w).
+
+    Returns:
+    Updated DataFrame with VWAP column.
     """
+    # Validate input columns
+    required_cols = [high_col, low_col, close_col, volume_col, "_time"]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {missing_cols}")
 
-    df_base = df_base.sort("_time")
-    symbol = opts["symbol"]
-    pip_size = symbols_dict[symbol]["pip_size"]
-    features_folder_path = opts["features_folder_path"] + "/unmerged/"
-    Path(features_folder_path).mkdir(parents=True, exist_ok=True)
+    # Start lazy evaluation
+    df = df.lazy().sort("_time")
 
-    filelist = glob.glob(f"{features_folder_path}/*.parquet", recursive=True)
-    for f in filelist:
-        os.remove(f)
+    # Calculate typical price
+    df = df.with_columns(
+        ((pl.col(high_col) + pl.col(low_col) + pl.col(close_col)) / 3).alias("typical_price")
+    )
 
-    features = opts["base_feature"]
-    time_frames = opts["candle_timeframe"]
-    window_sizes = opts["window_size"]
-
-    if prefix == 'fe_GMA':
-        devs = opts['feature_config']['devs']
-    elif prefix == 'fe_FFD':
-        n_splits = opts['feature_config']['n_splits']
-    elif prefix == 'fe_OL':
-        w_sma = opts['feature_config']['window_size_SMA']
-    elif prefix == 'fe_supertrend':
-        multipliers = opts['feature_config']['multipliers']
-
-    if prefix == "fe_leg":
-        exponents = opts["exponents"]
-        percentage = opts["percentage"]
-
-        for w in window_sizes:
-            for time_frame in time_frames:
-                df = df_base.filter(
-                    pl.col("minutesPassed") % time_frame == (time_frame - 5)
-                )
-
-                # Create a regex pattern to match 'M' followed by the time_frame number
-                pattern = re.compile(rf"M{time_frame}_")
-
-                # Find items where the number after 'M' is not equal to time_frame
-                other_tf_features = [f for f in features if not pattern.match(f)]
-                df = df.drop(other_tf_features + ["minutesPassed"])
-                df = base_func(
-                    df=df,
-                    w=w,
-                    time_frame=time_frame,
-                    features=list(set(features) - set(other_tf_features)),
-                    pip_size=pip_size,
-                    exponents=exponents,
-                    prefix=prefix,
-                    percentage=percentage,
-                )
-
-                file_name = (
-                    features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
-                )
-
-                df.write_parquet(file_name)
+    # Compute VWAP (rolling or cumulative)
+    price_volume = pl.col("typical_price") * pl.col(volume_col)
+    if cumulative:
+        df = df.with_columns(
+            price_volume.cumsum().alias("cum_price_volume"),
+            pl.col(volume_col).cumsum().alias("cum_volume")
+        )
+        vwap_col = f"{prefix}_cndl_M{time_frame}"
     else:
-        for w in window_sizes:
-            for time_frame in time_frames:
-                df = df_base.filter(
-                    pl.col("minutesPassed") % time_frame == (time_frame - 5)
-                )
+        df = df.with_columns(
+            price_volume.rolling_sum(window_size=w).alias("cum_price_volume"),
+            pl.col(volume_col).rolling_sum(window_size=w).alias("cum_volume")
+        )
+        vwap_col = f"{prefix}_W{w}_cndl_M{time_frame}"
 
-                # Create a regex pattern to match 'M' followed by the time_frame number
-                pattern = re.compile(rf"M{time_frame}_")
+    # Calculate VWAP with safeguard against division by zero
+    df = df.with_columns(
+        (pl.col("cum_price_volume") / pl.col("cum_volume").cast(pl.Float64).clip_min(1e-10)).alias(vwap_col)
+    )
 
-                # Find items where the number after 'M' is not equal to time_frame
-                other_tf_features = [f for f in features if not pattern.match(f)]
-                df = df.drop(other_tf_features + ["minutesPassed"])
+    # Normalize (difference between VWAP and close price in pip units)
+    if normalize:
+        df = df.with_columns(
+            ((pl.col(vwap_col) - pl.col(close_col)) / pip_size).alias(f"{vwap_col}_norm")
+        )
 
-                if prefix == 'fe_GMA':
+    # Collect results and drop intermediate columns
+    df = df.drop(["typical_price", "cum_price_volume", "cum_volume"]).collect()
+
+    return df
+    def add_candle_base_indicators_polars(
+        df_base: pl.DataFrame,
+        prefix: str,
+        base_func: Callable[..., pl.DataFrame],
+        opts: Dict[str, Union[str, List[int]]],
+    ) -> None:
+        """
+        this function takes an indicator function, apply it and save the resulting parquet
+        inputs:
+        df_base: base dataframe containing the raw features
+        prefix: prefix of feature name
+        base_func: the indicator function
+        opts: a dictionary of "symbol", "base_feature", "candle_timeframe",
+            "window_size" and "features_folder_path"
+        """
+
+        df_base = df_base.sort("_time")
+        symbol = opts["symbol"]
+        pip_size = symbols_dict[symbol]["pip_size"]
+        features_folder_path = opts["features_folder_path"] + "/unmerged/"
+        Path(features_folder_path).mkdir(parents=True, exist_ok=True)
+
+        filelist = glob.glob(f"{features_folder_path}/*.parquet", recursive=True)
+        for f in filelist:
+            os.remove(f)
+
+        features = opts["base_feature"]
+        time_frames = opts["candle_timeframe"]
+        window_sizes = opts["window_size"]
+
+        if prefix == 'fe_GMA':
+            devs = opts['feature_config']['devs']
+        elif prefix == 'fe_FFD':
+            n_splits = opts['feature_config']['n_splits']
+        elif prefix == 'fe_OL':
+            w_sma = opts['feature_config']['window_size_SMA']
+        elif prefix == 'fe_supertrend':
+            multipliers = opts['feature_config']['multipliers']
+        elif prefix == 'fe_VWAP':
+            high_col = opts['feature_config']['high_col']
+            low_col = opts['feature_config']['low_col']
+            close_col = opts['feature_config']['close_col']
+            volume_col = opts['feature_config']['volume_col']
+            cumulative = opts['feature_config'].get('cumulative', False)
+
+        if prefix == "fe_leg":
+            exponents = opts["exponents"]
+            percentage = opts["percentage"]
+
+            for w in window_sizes:
+                for time_frame in time_frames:
+                    df = df_base.filter(
+                        pl.col("minutesPassed") % time_frame == (time_frame - 5)
+                    )
+
+                    # Create a regex pattern to match 'M' followed by the time_frame number
+                    pattern = re.compile(rf"M{time_frame}_")
+
+                    # Find items where the number after 'M' is not equal to time_frame
+                    other_tf_features = [f for f in features if not pattern.match(f)]
+                    df = df.drop(other_tf_features + ["minutesPassed"])
                     df = base_func(
                         df=df,
                         w=w,
                         time_frame=time_frame,
                         features=list(set(features) - set(other_tf_features)),
                         pip_size=pip_size,
+                        exponents=exponents,
                         prefix=prefix,
-                        devs=devs,
-                    )
-                elif prefix == 'fe_FFD':
-                    df = base_func(
-                        df=df,
-                        time_frame=time_frame,
-                        features=list(set(features) - set(other_tf_features)),
-                        prefix=prefix,
-                        n_splits=n_splits,
-                    )
-                elif prefix == 'fe_OL':
-                    df = base_func(
-                        df=df,
-                        w=w,
-                        w_sma=w_sma,
-                        time_frame=time_frame,
-                        features=list(set(features) - set(other_tf_features)),
-                        pip_size=pip_size,
-                        prefix=prefix,
-                    )
-                elif prefix == 'fe_supertrend':
-                    df = base_func(
-                        df=df,
-                        w=w,
-                        time_frame=time_frame,
-                        features=list(set(features) - set(other_tf_features)),
-                        multipliers=multipliers,
-                        prefix=prefix,
-                    )
-                else:
-                    df = base_func(
-                        df=df,
-                        w=w,
-                        time_frame=time_frame,
-                        features=list(set(features) - set(other_tf_features)),
-                        pip_size=pip_size,
-                        prefix=prefix,
+                        percentage=percentage,
                     )
 
-                file_name = (
-                    features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
-                )
+                    file_name = (
+                        features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
+                    )
 
-                df.write_parquet(file_name)
+                    df.write_parquet(file_name)
+        else:
+            for w in window_sizes:
+                for time_frame in time_frames:
+                    df = df_base.filter(
+                        pl.col("minutesPassed") % time_frame == (time_frame - 5)
+                    )
 
-    return
+                    # Create a regex pattern to match 'M' followed by the time_frame number
+                    pattern = re.compile(rf"M{time_frame}_")
+
+                    # Find items where the number after 'M' is not equal to time_frame
+                    other_tf_features = [f for f in features if not pattern.match(f)]
+                    df = df.drop(other_tf_features + ["minutesPassed"])
+
+                    if prefix == 'fe_GMA':
+                        df = base_func(
+                            df=df,
+                            w=w,
+                            time_frame=time_frame,
+                            features=list(set(features) - set(other_tf_features)),
+                            pip_size=pip_size,
+                            prefix=prefix,
+                            devs=devs,
+                        )
+                    elif prefix == 'fe_FFD':
+                        df = base_func(
+                            df=df,
+                            time_frame=time_frame,
+                            features=list(set(features) - set(other_tf_features)),
+                            prefix=prefix,
+                            n_splits=n_splits,
+                        )
+                    elif prefix == 'fe_OL':
+                        df = base_func(
+                            df=df,
+                            w=w,
+                            w_sma=w_sma,
+                            time_frame=time_frame,
+                            features=list(set(features) - set(other_tf_features)),
+                            pip_size=pip_size,
+                            prefix=prefix,
+                        )
+                    elif prefix == 'fe_supertrend':
+                        df = base_func(
+                            df=df,
+                            w=w,
+                            time_frame=time_frame,
+                            features=list(set(features) - set(other_tf_features)),
+                            multipliers=multipliers,
+                            prefix=prefix,
+                        )
+                    elif prefix == 'fe_VWAP':
+                        df = base_func(
+                            df=df,
+                            w=w,
+                            time_frame=time_frame,
+                            high_col=high_col,
+                            low_col=low_col,
+                            close_col=close_col,
+                            volume_col=volume_col,
+                            pip_size=pip_size,
+                            prefix=prefix,
+                            normalize=True,
+                            cumulative=cumulative,
+                        )
+                    else:
+                        df = base_func(
+                            df=df,
+                            w=w,
+                            time_frame=time_frame,
+                            features=list(set(features) - set(other_tf_features)),
+                            pip_size=pip_size,
+                            prefix=prefix,
+                        )
+
+                    file_name = (
+                        features_folder_path + f"/{prefix}_{w}_{symbol}_M{time_frame}.parquet"
+                    )
+
+                    df.write_parquet(file_name)
+
+        return
 
 
 # ??  ratio  -----------------------------------------------------
@@ -1878,7 +1971,6 @@ def cal_OverLap_func(
 
     return df
 
-
 def history_indicator_calculator(feature_config, logger=default_logger):
     """
     Creating all indicators as features
@@ -1903,6 +1995,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             # "fe_FFD": {"func": cal_FFD_func},
             "fe_GMA": {"func": cal_GMA_n_GBB_func},
             "fe_OL": {"func": cal_OverLap_func},
+            "fe_VWAP": {"func": cal_VWAP_base_func},
         }
 
         for symbol in list(feature_config.keys()):
@@ -1928,6 +2021,19 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                         "exponents": fe_leg_config[symbol]["exponents"],
                         "percentage": fe_leg_config[symbol]["percentage"],
                         "features_folder_path": features_folder_path,
+                    }
+                elif fe_prefix == "fe_VWAP":
+                    opts = {
+                        "symbol": symbol,
+                        "candle_timeframe": feature_config[symbol][fe_prefix]["timeframe"],
+                        "window_size": feature_config[symbol][fe_prefix]["window_size"],
+                        "features_folder_path": features_folder_path,
+                        "feature_config": feature_config[symbol][fe_prefix],
+                        "high_col": feature_config[symbol][fe_prefix]["high_col"],
+                        "low_col": feature_config[symbol][fe_prefix]["low_col"],
+                        "close_col": feature_config[symbol][fe_prefix]["close_col"],
+                        "volume_col": feature_config[symbol][fe_prefix]["volume_col"],
+                        "cumulative": feature_config[symbol][fe_prefix].get("cumulative", False),
                     }
                 else:
                     opts = {

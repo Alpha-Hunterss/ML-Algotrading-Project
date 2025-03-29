@@ -1,4 +1,3 @@
-import polars as pl
 include_target = False
 import gc
 import pandas as pd
@@ -37,6 +36,7 @@ prefixes = [
     "fe_RSI",
     "fe_EMA",
     "fe_SMA",
+    "fe_VWAP",
     "fe_ATR",
     "fe_leg",
     "fe_supertrend",
@@ -156,6 +156,7 @@ def history_columns_merge(
         "fe_ATR",
         "fe_EMA",
         "fe_SMA",
+        "fe_VWAP",
         "fe_ratio",
         "fe_cndl_shift",
         "fe_WIN",

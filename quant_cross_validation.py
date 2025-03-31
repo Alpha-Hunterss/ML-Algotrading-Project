@@ -14,40 +14,35 @@ def split_time_series(
     eval_set_ratio: float = 0.4,
 ):
     """
-    Return a nested dictionary key is k number and value is dicitonary of train, valid and test Dates
-    :max_train_size: maximum size we for train
-    :n_splits: K in cross-folds
-    :test_size: test size
-    train_test_gap: is the gap between train and valid/test sets 
+    Return a nested dictionary with fold number as key and train, valid, test dates as values.
+    :param max_train_size: Maximum size for train
+    :param n_splits: Number of cross-validation folds
+    :param test_size: Size of test set
+    :param train_test_gap: Gap between train and test sets
+    :param eval_set_ratio: Ratio of train set used for validation
     """
-    all_dates = df_all.index.get_level_values("_time").unique().sort_values(["_time"])
+    all_dates = df_all.index.unique()  # Assumes DatetimeIndex from ETL
+    all_dates = all_dates.sort_values()  # Ensure chronological order
     tscv = TimeSeriesSplit(
         gap=train_test_gap,
         max_train_size=max_train_size,
         n_splits=n_splits,
-        test_size=test_size*2,
+        test_size=test_size * 2,  # Test + valid
     )
     folds = {}
-    for i, (train_index, test_valid_index) in enumerate(tscv.split(all_dates[0])):
-        train_dates = all_dates[0][train_index]
-
-        # Calculate split point for pre_eval and eval (60%-40%)
-        split_idx = int(len(train_dates) * (1.0-eval_set_ratio))
-
+    for i, (train_index, test_valid_index) in enumerate(tscv.split(all_dates)):
+        train_dates = all_dates[train_index]
+        split_idx = int(len(train_dates) * (1.0 - eval_set_ratio))  # Train vs. valid split
         folds[i] = {
-            "train_dates": train_dates,
-            "pre_eval_dates": train_dates[:split_idx],
-            # "eval_dates": train_dates[split_idx+(10*276):],
-            "eval_dates": train_dates[split_idx:],
-            "valid_dates": all_dates[0][test_valid_index[:test_size]],
-            "test_dates": all_dates[0][test_valid_index[test_size:]],
+            "pre_eval_dates": train_dates[:split_idx],  # Train
+            "eval_dates": train_dates[split_idx:],      # Valid (no 10*276 skip)
+            "test_dates": all_dates[test_valid_index[test_size:]],  # Test
         }
-
     return folds
 
 def quant_CV(
     df: pd.DataFrame,
-    folds: dict[int,pd.DatetimeIndex],
+    folds: dict[int, pd.DatetimeIndex],
     model,
     model_name,
     target_symbol,
@@ -75,8 +70,8 @@ def quant_CV(
     use_perc_levels: bool,
 ):
     """
-    This function runs Time Series CV with available embargo/purge 
-    It also backtest model signals on each fold and the whole test and valid sets 
+    This function runs Time Series CV with available embargo/purge.
+    It also backtests model signals on each fold and the whole test and valid sets.
     """
     evals = pd.DataFrame(
         columns=[
@@ -100,7 +95,6 @@ def quant_CV(
             "max_overall_dd",
             "n_unique_days",
             "n_max_daily_sig",
-            # "meta_model_pos_label_perc",
             "max_n_open_position",
             "max_vol_open_positions",
             "no_iters_exceeding_dd",
@@ -113,17 +107,25 @@ def quant_CV(
     df["confidence_levels"] = 0.0
     df["K"] = -1
 
-    the_features = df.drop(columns=non_feature_columns).columns
-    feature_importances = {feature: [] for feature in the_features}
+    input_cols = [col for col in df.columns if col not in non_feature_columns]
+    expected_feature_count = len(df.columns) - len(non_feature_columns)
+    print(f"quant_CV input_cols count: {len(input_cols)}")
+    print(f"Expected feature count (total columns - non_feature_columns): {expected_feature_count}")
+    if len(input_cols) != expected_feature_count:
+        raise ValueError(
+            f"Expected {expected_feature_count} input columns, got {len(input_cols)}"
+        )
+
+    feature_importances = {feature: [] for feature in input_cols}
     is_cf_model = model_name.startswith("CF-")
     is_ensemble_xgbf_model = "XGBF+" in model_name
 
     if "XGB" in model_name:
         if is_cf_model:
-            if getattr(model.model, "device") != "cuda" and use_cudf:
+            if getattr(model.model, "device", None) != "cuda" and use_cudf:
                 raise ValueError("CuDF dataframes are useful only if `device='cuda'`.")
         else:
-            if getattr(model, "device") != "cuda" and use_cudf:
+            if getattr(model, "device", None) != "cuda" and use_cudf:
                 raise ValueError("CuDF dataframes are useful only if `device='cuda'`.")
     else:
         if use_cudf:
@@ -131,260 +133,161 @@ def quant_CV(
 
     if use_cudf:
         import cudf
-
         cudf_df = cudf.from_pandas(df)
         for col in cudf_df.columns:
             if cudf_df[col].dtype == "bool":
                 cudf_df[col] = cudf_df[col].astype("int8")
+        print(f"cudf_df index sample: {cudf_df.index[:5].tolist()}")
+    else:
+        cudf_df = df  # Use pandas if not cudf
 
     general_backtest_df = {}
 
     for i in list(folds.keys()):
         print(f"Fold {i}:")
         tic = time.time()
-        # sets,min_max_dates = data_split_loader(df,folds,i)
 
-        train_min_max = [folds[i]["train_dates"].min(), folds[i]["train_dates"].max()]
-        valid_min_max = [folds[i]["valid_dates"].min(), folds[i]["valid_dates"].max()]
+        # Pre-compute datasets with input_cols
+        train_data = cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())][input_cols]
+        eval_data = cudf_df.loc[cudf_df.index.isin(folds[i]["eval_dates"].to_list())][input_cols]
+        test_data = cudf_df.loc[cudf_df.index.isin(folds[i]["test_dates"].to_list())][input_cols]
+
+        print(f"--> fold train size: {train_data.shape}")
+        print(f"--> fold valid size: {eval_data.shape}")
+        print(f"--> fold test size: {test_data.shape}")
+
+        if train_data.shape[0] == 0:
+            raise ValueError(f"Fold {i}: train_data has 0 rows")
+        if eval_data.shape[0] == 0:
+            raise ValueError(f"Fold {i}: eval_data has 0 rows")
+        if test_data.shape[0] == 0:
+            raise ValueError(f"Fold {i}: test_data has 0 rows")
+        if eval_data.shape[1] != expected_feature_count:
+            raise ValueError(
+                f"Fold {i}: eval_data has {eval_data.shape[1]} columns, expected {expected_feature_count}"
+            )
+
+        train_min_max = [folds[i]["pre_eval_dates"].min(), folds[i]["pre_eval_dates"].max()]
+        valid_min_max = [folds[i]["eval_dates"].min(), folds[i]["eval_dates"].max()]
         test_min_max = [folds[i]["test_dates"].min(), folds[i]["test_dates"].max()]
         min_max_dates = {
-            "train_dates": train_min_max,
-            "valid_dates": valid_min_max,
+            "pre_eval_dates": train_min_max,
+            "eval_dates": valid_min_max,
             "test_dates": test_min_max,
         }
-
-        print(f"--> fold train size: {df.loc[folds[i]['train_dates']].shape}")
-        print(f"--> fold valid size: {df.loc[folds[i]['valid_dates']].shape}")
-        print(f"--> fold test size: {df.loc[folds[i]['test_dates']].shape}")
 
         if is_ensemble_xgbf_model:
             if use_cudf:
                 if early_stopping_rounds is not None:
                     print("early_stopping_rounds: ", early_stopping_rounds)
-
-                    eval_set = [
-                        (
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["eval_dates"].to_list())
-                            ].drop(
-                                columns=non_feature_columns
-                            ),
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["eval_dates"].to_list())
-                            ]["target"],
-                        )
-                    ]
-
+                    eval_set = [(eval_data, cudf_df.loc[cudf_df.index.isin(folds[i]["eval_dates"].to_list())]["target"])]
                     if is_cf_model:
                         model.fit(
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
-                            ].drop(
-                                columns=non_feature_columns
-                            ),
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
-                            ]["target"],
-                            addi_X=df.loc[folds[i]["pre_eval_dates"]].drop(
-                                columns=non_feature_columns
-                            ),
+                            train_data,
+                            cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())]["target"],
+                            addi_X=df.loc[folds[i]["pre_eval_dates"]][input_cols],
                             addi_y=df.loc[folds[i]["pre_eval_dates"]]["target"],
                             use_cudf=use_cudf,
                         )
                     else:
                         model.fit(
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
-                            ].drop(
-                                columns=non_feature_columns
-                            ),
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
-                            ]["target"],
+                            train_data,
+                            cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())]["target"],
                             eval_set=eval_set,
-                            verbose = False,
+                            verbose=False,
                         )
                 else:
                     if is_cf_model:
                         model.fit(
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
-                            ].drop(
-                                columns=non_feature_columns
-                            ),
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
-                            ]["target"],
-                            addi_X=df.loc[folds[i]["pre_eval_dates"]].drop(
-                                columns=non_feature_columns
-                            ),
+                            train_data,
+                            cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())]["target"],
+                            addi_X=df.loc[folds[i]["pre_eval_dates"]][input_cols],
                             addi_y=df.loc[folds[i]["pre_eval_dates"]]["target"],
                             use_cudf=use_cudf,
                         )
                     else:
                         model.fit(
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
-                            ].drop(
-                                columns=non_feature_columns
-                            ),
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
-                            ]["target"],
+                            train_data,
+                            cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())]["target"],
                         )
 
+                # Predict validation set
+                print(f"Fold {i} eval_data shape before predict_proba: {eval_data.shape}")
                 model.predict_proba(
-                    cudf_df.loc[
-                        cudf_df.index.isin(folds[i]["eval_dates"].to_list())
-                    ].drop(
-                        columns=non_feature_columns
-                    ),
-                    y=cudf_df.loc[
-                        cudf_df.index.isin(folds[i]["eval_dates"].to_list())
-                    ]["target"],
+                    eval_data,
+                    y=cudf_df.loc[cudf_df.index.isin(folds[i]["eval_dates"].to_list())]["target"],
                     stacked_model_trained=False,
                 )
-
             else:
                 if early_stopping_rounds is not None:
                     print("early_stopping_rounds: ", early_stopping_rounds)
-
-                    eval_set = [
-                        (
-                            df.loc[folds[i]["eval_dates"]].drop(
-                                columns=non_feature_columns
-                            ),
-                            df.loc[folds[i]["eval_dates"]]["target"],
-                        )
-                    ]
-
+                    eval_set = [(df.loc[folds[i]["eval_dates"]][input_cols], df.loc[folds[i]["eval_dates"]]["target"])]
                     model.fit(
-                        df.loc[folds[i]["pre_eval_dates"]].drop(
-                            columns=non_feature_columns
-                        ),
+                        df.loc[folds[i]["pre_eval_dates"]][input_cols],
                         df.loc[folds[i]["pre_eval_dates"]]["target"],
                         eval_set=eval_set,
-                        verbose = False,
+                        verbose=False,
                     )
                 else:
                     model.fit(
-                        df.loc[folds[i]["pre_eval_dates"]].drop(
-                            columns=non_feature_columns
-                        ),
+                        df.loc[folds[i]["pre_eval_dates"]][input_cols],
                         df.loc[folds[i]["pre_eval_dates"]]["target"],
                     )
 
+                print(f"Fold {i} eval_data shape before predict_proba: {df.loc[folds[i]['eval_dates']][input_cols].shape}")
                 model.predict_proba(
-                    df.loc[folds[i]["eval_dates"]].drop(
-                        columns=non_feature_columns
-                    ),
+                    df.loc[folds[i]["eval_dates"]][input_cols],
                     y=df.loc[folds[i]["eval_dates"]]["target"],
                     stacked_model_trained=False,
                 )
-
         else:
             if use_cudf:
                 if early_stopping_rounds is not None:
                     print("early_stopping_rounds: ", early_stopping_rounds)
-
-                    eval_set = [
-                        (
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["valid_dates"].to_list())
-                            ].drop(
-                                columns=non_feature_columns
-                            ),
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["valid_dates"].to_list())
-                            ]["target"],
-                        )
-                    ]
-
+                    eval_set = [(eval_data, cudf_df.loc[cudf_df.index.isin(folds[i]["eval_dates"].to_list())]["target"])]
                     if is_cf_model:
                         model.fit(
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                            ].drop(
-                                columns=non_feature_columns
-                            ),
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                            ]["target"],
-                            addi_X=df.loc[folds[i]["train_dates"]].drop(
-                                columns=non_feature_columns
-                            ),
-                            addi_y=df.loc[folds[i]["train_dates"]]["target"],
+                            train_data,
+                            cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())]["target"],
+                            addi_X=df.loc[folds[i]["pre_eval_dates"]][input_cols],
+                            addi_y=df.loc[folds[i]["pre_eval_dates"]]["target"],
                             use_cudf=use_cudf,
                         )
                     else:
                         model.fit(
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                            ].drop(
-                                columns=non_feature_columns
-                            ),
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                            ]["target"],
+                            train_data,
+                            cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())]["target"],
                             eval_set=eval_set,
-                            verbose = False,
+                            verbose=False,
                         )
                 else:
                     if is_cf_model:
                         model.fit(
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                            ].drop(
-                                columns=non_feature_columns
-                            ),
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                            ]["target"],
-                            addi_X=df.loc[folds[i]["train_dates"]].drop(
-                                columns=non_feature_columns
-                            ),
-                            addi_y=df.loc[folds[i]["train_dates"]]["target"],
+                            train_data,
+                            cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())]["target"],
+                            addi_X=df.loc[folds[i]["pre_eval_dates"]][input_cols],
+                            addi_y=df.loc[folds[i]["pre_eval_dates"]]["target"],
                             use_cudf=use_cudf,
                         )
                     else:
                         model.fit(
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                            ].drop(
-                                columns=non_feature_columns
-                            ),
-                            cudf_df.loc[
-                                cudf_df.index.isin(folds[i]["train_dates"].to_list())
-                            ]["target"],
+                            train_data,
+                            cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())]["target"],
                         )
-
             else:
                 if early_stopping_rounds is not None:
                     print("early_stopping_rounds: ", early_stopping_rounds)
-
-                    eval_set = [
-                        (
-                            df.loc[folds[i]["valid_dates"]].drop(
-                                columns=non_feature_columns
-                            ),
-                            df.loc[folds[i]["valid_dates"]]["target"],
-                        )
-                    ]
-
+                    eval_set = [(df.loc[folds[i]["eval_dates"]][input_cols], df.loc[folds[i]["eval_dates"]]["target"])]
                     model.fit(
-                        df.loc[folds[i]["train_dates"]].drop(
-                            columns=non_feature_columns
-                        ),
-                        df.loc[folds[i]["train_dates"]]["target"],
+                        df.loc[folds[i]["pre_eval_dates"]][input_cols],
+                        df.loc[folds[i]["pre_eval_dates"]]["target"],
                         eval_set=eval_set,
-                        verbose = False,
+                        verbose=False,
                     )
                 else:
                     model.fit(
-                        df.loc[folds[i]["train_dates"]].drop(
-                            columns=non_feature_columns
-                        ),
-                        df.loc[folds[i]["train_dates"]]["target"],
+                        df.loc[folds[i]["pre_eval_dates"]][input_cols],
+                        df.loc[folds[i]["pre_eval_dates"]]["target"],
                     )
 
         try:
@@ -408,162 +311,109 @@ def quant_CV(
 
         toc = time.time()
         gc.collect()
-        # repetetive part I can improve by a function
-        for set_name in ["train_dates", "valid_dates", "test_dates"]:
+
+        # Evaluate on all sets
+        for set_name in ["pre_eval_dates", "eval_dates", "test_dates"]:
             ping = time.time()
             set_name_dict = {
-                "train_dates": "train",
-                "valid_dates": "valid",
+                "pre_eval_dates": "train",
+                "eval_dates": "valid",
                 "test_dates": "test",
             }
             if use_cudf:
+                data = cudf_df.loc[cudf_df.index.isin(folds[i][set_name].to_list())][input_cols]
+                print(f"Fold {i} {set_name} shape before predict: {data.shape}")
                 if is_cf_model:
                     preds, _ = model.predict(
-                        cudf_df.loc[
-                            cudf_df.index.isin(folds[i][set_name].to_list())
-                        ][input_cols],
+                        data,
                         cudf_df.loc[cudf_df.index.isin(folds[i][set_name].to_list())]["target"],
                         set_name_dict[set_name],
                         addi_X=df.loc[folds[i][set_name]][input_cols],
-                        addi_y=df.loc[folds[i][set_name]]["target"]
+                        addi_y=df.loc[folds[i][set_name]]["target"],
                     )
                     y_pred = preds.reshape(-1, 1)
                 else:
-                    y_pred = model.predict(cudf_df.loc[
-                        cudf_df.index.isin(folds[i][set_name].to_list())
-                    ][input_cols]).reshape(
-                        -1, 1
-                    )
+                    y_pred = model.predict(data).reshape(-1, 1)
             else:
+                data = df.loc[folds[i][set_name]][input_cols]
+                print(f"Fold {i} {set_name} shape before predict: {data.shape}")
                 if is_cf_model:
                     preds, _ = model.predict(
-                        df.loc[folds[i][set_name]][input_cols],
+                        data,
                         df.loc[folds[i][set_name]]["target"],
-                        set_name_dict[set_name]
+                        set_name_dict[set_name],
                     )
                     y_pred = preds.reshape(-1, 1)
                 else:
-                    y_pred = model.predict(df.loc[folds[i][set_name]][input_cols]).reshape(
-                        -1, 1
-                    )
+                    y_pred = model.predict(data).reshape(-1, 1)
 
             y_real = df.loc[folds[i][set_name]][["target"]]
 
-            if set_name in ["valid_dates", "test_dates"]:
-                pred_name = {
-                "valid_dates": "val",
-                "test_dates": "test"}
+            if set_name in ["eval_dates", "test_dates"]:
+                pred_name = {"eval_dates": "val", "test_dates": "test"}
                 df.loc[folds[i][set_name], "K"] = i
                 df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] = y_pred
-                # if use_cudf:
-                #     proba_pred = model.predict_proba(
-                #         cudf_df.loc[cudf_df.index.isin(folds[i][set_name].to_list())][input_cols]
-                #     )
-                # else:
-                #     proba_pred = model.predict_proba(df.loc[folds[i][set_name]][input_cols])
 
                 if use_cudf:
                     if is_cf_model:
-                        if model.use_valid_as_calib:
-                            if pred_name[set_name] == "test":
-                                _, confidence_levels = model.categorize_proba(
-                                    cudf_df.loc[
-                                        cudf_df.index.isin(folds[i][set_name].to_list())
-                                    ][input_cols],
-                                    cudf_df.loc[
-                                        cudf_df.index.isin(folds[i][set_name].to_list())
-                                    ]["target"],
-                                    cnf_levels,
-                                    addi_X=df.loc[folds[i][set_name]][input_cols],
-                                    addi_y=df.loc[folds[i][set_name]]["target"]
-                                )
-                            else:
-                                if model.use_meta_labeling:
-                                    confidence_levels = np.ones((len(y_pred[y_pred == 1]),), dtype=np.float16)
-                                else:
-                                    confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
-
-                            if not model.use_meta_labeling:
-                                df.loc[
-                                    folds[i][set_name],
-                                    "confidence_levels"
-                                ] = confidence_levels
-                        else:
+                        if model.use_valid_as_calib and pred_name[set_name] == "test":
                             _, confidence_levels = model.categorize_proba(
-                                cudf_df.loc[
-                                    cudf_df.index.isin(folds[i][set_name].to_list())
-                                ][input_cols],
+                                data,
+                                cudf_df.loc[cudf_df.index.isin(folds[i][set_name].to_list())]["target"],
                                 cnf_levels,
-                                addi_X=df.loc[folds[i][set_name]][input_cols]
+                                addi_X=df.loc[folds[i][set_name]][input_cols],
+                                addi_y=df.loc[folds[i][set_name]]["target"],
                             )
-
-                            if not model.use_meta_labeling:
-                                df.loc[
-                                    folds[i][set_name],
-                                    "confidence_levels"
-                                ] = confidence_levels
+                        else:
+                            confidence_levels = (
+                                np.ones((len(y_pred[y_pred == 1]),), dtype=np.float16)
+                                if model.use_meta_labeling
+                                else np.ones((len(y_pred),), dtype=np.float16)
+                            )
+                        if not model.use_meta_labeling:
+                            df.loc[folds[i][set_name], "confidence_levels"] = confidence_levels
                     else:
                         confidence_levels = np.ones((len(y_pred[y_pred == 1]),), dtype=np.float16)
                 else:
                     if is_cf_model:
-                        if model.use_valid_as_calib:
-                            if pred_name[set_name] == "test":
-                                _, confidence_levels = model.categorize_proba(
-                                    df.loc[folds[i][set_name]][input_cols],
-                                    df.loc[folds[i][set_name]]["target"],
-                                    cnf_levels
-                                )
-                            else:
-                                if model.use_meta_labeling:
-                                    confidence_levels = np.ones((len(y_pred[y_pred == 1]),), dtype=np.float16)
-                                else:
-                                    confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
-
-                            if not model.use_meta_labeling:
-                                df.loc[
-                                    folds[i][set_name],
-                                    "confidence_levels"
-                                ] = confidence_levels
-                        else:
+                        if model.use_valid_as_calib and pred_name[set_name] == "test":
                             _, confidence_levels = model.categorize_proba(
-                                df.loc[folds[i][set_name]][input_cols], cnf_levels
+                                data,
+                                df.loc[folds[i][set_name]]["target"],
+                                cnf_levels,
                             )
-
-                            if not model.use_meta_labeling:
-                                df.loc[
-                                    folds[i][set_name],
-                                    "confidence_levels"
-                                ] = confidence_levels
+                        else:
+                            confidence_levels = (
+                                np.ones((len(y_pred[y_pred == 1]),), dtype=np.float16)
+                                if model.use_meta_labeling
+                                else np.ones((len(y_pred),), dtype=np.float16)
+                            )
+                        if not model.use_meta_labeling:
+                            df.loc[folds[i][set_name], "confidence_levels"] = confidence_levels
                     else:
                         confidence_levels = np.ones((len(y_pred[y_pred == 1]),), dtype=np.float16)
 
-                # if np.shape(proba_pred)[1] > 1:
-                #     df.loc[
-                #         folds[i][set_name], f"pred_{pred_name[set_name]}_proba"
-                #     ] = proba_pred[:, 1]
-                # else:
-                #     print("Proba doesn't have class1")
-                #     df.loc[folds[i][set_name], f"pred_{pred_name[set_name]}_proba"] = 0
+                fold_unique_days = pd.Series(
+                    df.loc[folds[i][set_name]].loc[
+                        df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
+                    ].index.date
+                ).nunique()
 
-                # Calculate n_unique days and max daily n_signals in each fold
-                fold_unique_days = pd.Series(df.loc[folds[i][set_name]].loc[
-                    df.loc[folds[i][set_name],
-                           f"pred_as_{pred_name[set_name]}"] == 1
-                ].index.date).nunique()
-
-                fold_max_daily_sig = df.loc[folds[i][set_name]].loc[
-                    df.loc[folds[i][set_name],
-                            f"pred_as_{pred_name[set_name]}"] == 1
-                ].groupby(pd.Grouper(freq='D')).size().max()
+                fold_max_daily_sig = (
+                    df.loc[folds[i][set_name]]
+                    .loc[df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1]
+                    .groupby(pd.Grouper(freq="D"))
+                    .size()
+                    .max()
+                )
 
                 if is_cf_model:
-                    #? Backtest
                     bt_report, bt_df = do_backtest(
-                        df_model_signal = df.loc[folds[i][set_name]].loc[
-                                df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
-                        ][[f"pred_as_{pred_name[set_name]}", "confidence_levels"]].rename(
-                                columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
-                        ),
+                        df_model_signal=df.loc[folds[i][set_name]]
+                        .loc[df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1][
+                            [f"pred_as_{pred_name[set_name]}", "confidence_levels"]
+                        ]
+                        .rename(columns={f"pred_as_{pred_name[set_name]}": "model_prediction"}),
                         target_symbol=target_symbol,
                         spread=default_spread,
                         volume=default_volume,
@@ -589,13 +439,12 @@ def quant_CV(
                         use_perc_levels=use_perc_levels,
                     )
                 else:
-                    #? Backtest
                     bt_report, bt_df = do_backtest(
-                        df_model_signal = df.loc[folds[i][set_name]].loc[
-                                df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
-                        ][[f"pred_as_{pred_name[set_name]}"]].rename(
-                                columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
-                        ),
+                        df_model_signal=df.loc[folds[i][set_name]]
+                        .loc[df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1][
+                            [f"pred_as_{pred_name[set_name]}"]
+                        ]
+                        .rename(columns={f"pred_as_{pred_name[set_name]}": "model_prediction"}),
                         target_symbol=target_symbol,
                         spread=default_spread,
                         volume=default_volume,
@@ -621,8 +470,8 @@ def quant_CV(
                         use_perc_levels=use_perc_levels,
                     )
 
-                fold_profit_percent = bt_report['profit_percent']
-                fold_max_dd = bt_report['max_draw_down']
+                fold_profit_percent = bt_report["profit_percent"]
+                fold_max_dd = bt_report["max_draw_down"]
                 fold_sortino = bt_report["sortino"]
                 fold_win_rate = bt_report["win_rate(%)"]
                 fold_max_exp_daily_dd = bt_report["max_exp_daily_dd"]
@@ -632,7 +481,6 @@ def quant_CV(
                 fold_no_iters_exceeding_dd = bt_report["no_iters_exceeding_dd"]
 
                 general_backtest_df.update({f"bt_df_fold{i}_{set_name}": bt_df})
-
                 del bt_df, bt_report
                 gc.collect()
             else:
@@ -649,15 +497,11 @@ def quant_CV(
                 fold_no_iters_exceeding_dd = None
 
             pong = time.time()
-
-            if set_name == "train_dates":
-                time_taken = f"{round(toc - tic, 1)} + {round(pong - ping, 1)}"
-                # meta_model_pos_label_perc = None
-            else:
-                time_taken = str(round(pong - ping, 1))
-                # if is_cf_model:
-                #     if model.prob_estimator == "meta":
-                #         meta_model_pos_label_perc = model.meta_pos_label_perc
+            time_taken = (
+                f"{round(toc - tic, 1)} + {round(pong - ping, 1)}"
+                if set_name == "pre_eval_dates"
+                else str(round(pong - ping, 1))
+            )
 
             eval_list = (
                 [set_name_dict[set_name], i]
@@ -667,14 +511,12 @@ def quant_CV(
                 + [fold_profit_percent, fold_max_dd]
                 + [fold_sortino, fold_win_rate, fold_max_exp_daily_dd]
                 + [fold_max_overall_dd, fold_unique_days, fold_max_daily_sig]
-                # + [meta_model_pos_label_perc]
                 + [fold_max_n_open_position]
                 + [fold_max_vol_open_positions, fold_no_iters_exceeding_dd]
             )
-
             evals.loc[len(evals)] = eval_list
 
-        with pd.option_context('display.max_columns', None):
+        with pd.option_context("display.max_columns", None):
             print(evals.iloc[-3:])
 
         input_cols_and_type = dict(df[input_cols].dtypes)
@@ -683,8 +525,9 @@ def quant_CV(
     general_backtest_report = {}
     for pred_name in ["val", "test"]:
         bt_report, bt_df = do_backtest(
-            df_model_signal = df.loc[df[f"pred_as_{pred_name}"] == 1][[f"pred_as_{pred_name}"]].rename(
-                    columns={f"pred_as_{pred_name}":"model_prediction"}),
+            df_model_signal=df.loc[df[f"pred_as_{pred_name}"] == 1][[f"pred_as_{pred_name}"]].rename(
+                columns={f"pred_as_{pred_name}": "model_prediction"}
+            ),
             target_symbol=target_symbol,
             spread=default_spread,
             volume=default_volume,
@@ -709,25 +552,23 @@ def quant_CV(
             close_positions_at_midnight=close_positions_at_midnight,
             use_perc_levels=use_perc_levels,
         )
-        general_backtest_report[f"profit_percent_{pred_name}"] = bt_report['profit_percent']
-        general_backtest_report[f"max_dd_{pred_name}"] = bt_report['max_draw_down']
+        general_backtest_report[f"profit_percent_{pred_name}"] = bt_report["profit_percent"]
+        general_backtest_report[f"max_dd_{pred_name}"] = bt_report["max_draw_down"]
+        general_backtest_df[f"bt_df_{pred_name}"] = bt_df
 
-    print('CV loop ends')
+    print("CV loop ends")
     print(general_backtest_report)
 
     # Create a DataFrame from the feature importances
     importance_df = pd.DataFrame(feature_importances)
     importance_df = importance_df.T.reset_index()
-    importance_df.columns = ['feature_name'] + [f'importance_fold_{i}' for i in range(len(folds))]
-
-    imp_cols = [f for f in importance_df if 'importance_fold' in f]
-    importance_df['mean_importance'] = importance_df[imp_cols].mean(axis=1)
-    importance_df['median_importance'] = importance_df[imp_cols].median(axis=1)
-    importance_df['std_importance'] = importance_df[imp_cols].std(axis=1)
-
-    # Calculate coefficient of variation (CV)
-    importance_df['cv'] = importance_df['std_importance'] / importance_df['mean_importance']
-    importance_df.sort_values('mean_importance', ascending=False, inplace=True)
+    importance_df.columns = ["feature_name"] + [f"importance_fold_{i}" for i in range(len(folds))]
+    imp_cols = [f for f in importance_df if "importance_fold" in f]
+    importance_df["mean_importance"] = importance_df[imp_cols].mean(axis=1)
+    importance_df["median_importance"] = importance_df[imp_cols].median(axis=1)
+    importance_df["std_importance"] = importance_df[imp_cols].std(axis=1)
+    importance_df["cv"] = importance_df["std_importance"] / importance_df["mean_importance"]
+    importance_df.sort_values("mean_importance", ascending=False, inplace=True)
 
     return (
         input_cols_and_type,
@@ -737,5 +578,5 @@ def quant_CV(
         df[df.pred_as_test != -1][["K", "pred_as_test", "pred_test_proba", "target"]],
         general_backtest_report,
         importance_df,
-        general_backtest_df
+        general_backtest_df,
     )

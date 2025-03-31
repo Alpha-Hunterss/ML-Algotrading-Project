@@ -435,6 +435,10 @@ def cal_backtest_on_raw_cndl(
     )
     df = pd.read_parquet(path)
 
+
+    df["_time"] = df["_time"].dt.tz_localize(None)  # Ensure naive
+
+
     df_raw_backtest = pd.read_parquet(
         f"{df_raw_path}/{target_symbol}_stage_one.parquet",
         columns=["_time", "open", "high", "low", "close"]
@@ -444,6 +448,8 @@ def cal_backtest_on_raw_cndl(
         "low": f"{target_symbol}_M5_LOW",
         "close": f"{target_symbol}_M5_CLOSE",  
     })
+
+    df_raw_backtest["_time"] = df_raw_backtest["_time"].dt.tz_localize(None)  # Ensure naive
 
     df_raw_backtest.sort_values("_time", inplace=True)
     df_raw_backtest['days_diff'] = (

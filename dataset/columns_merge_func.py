@@ -191,6 +191,11 @@ def history_columns_merge(
         pl.read_parquet(file_name).sort("_time").drop("symbol"),
         left_on="_time", right_on="_time", how="left", coalesce=True
     )
+    
+    # Log 1: Check nulls after fe_time join
+    nulls_after_fe_time = df_dataset.select(pl.all().is_null().sum()).to_dicts()[0]
+    logger.info(f"--> nulls after fe_time join: {{k: v for k, v in nulls_after_fe_time.items() if v > 0}}")
+    
     gc.collect()
 
     for symbol in feature_config:
@@ -233,6 +238,11 @@ def history_columns_merge(
             df_dataset = df_dataset.join(
                 df, left_on="_time", right_on="_time", how="left", coalesce=True
             )
+            
+            # Log 2: Check nulls after each feature join
+            nulls_after_join = df_dataset.select(pl.all().is_null().sum()).to_dicts()[0]
+            logger.info(f"--> nulls after joining {feture}_{symbol}.parquet: {{k: v for k, v in nulls_after_join.items() if v > 0}}")
+            
             del df
             gc.collect()
 
@@ -257,6 +267,9 @@ def history_columns_merge(
         f"--> number of nulls all in df_dataset: {n_nulls_all} / {df_dataset.shape[0]}"
     )
     # logger.info(f"--> columns with nulls: {log}")
+    
+    # Log 3: Detailed null report before drop_nulls
+    logger.info(f"--> detailed nulls before drop_nulls: {df_dataset.select(pl.all().is_null().sum()).to_dicts()[0]}")
 
     df_dataset = df_dataset.drop_nulls()
 

@@ -232,12 +232,19 @@ def quant_CV(
                             ]["target"],
                         )
 
+                # Debug and predict
+                eval_data = cudf_df.loc[
+                    cudf_df.index.isin(folds[i]["eval_dates"].to_list())
+                ][input_cols]  # Use input_cols directly
+                print(f"Fold {i} eval_data shape: {eval_data.shape}")
+                print(f"Fold {i} eval_data columns: {list(eval_data.columns)}")
+                if eval_data.shape[1] == 0:
+                    raise ValueError(f"Fold {i}: eval_data has 0 columns")
+                if eval_data.shape[1] != 394:
+                    raise ValueError(f"Fold {i}: eval_data has {eval_data.shape[1]} columns, expected 394")
+        
                 model.predict_proba(
-                    cudf_df.loc[
-                        cudf_df.index.isin(folds[i]["eval_dates"].to_list())
-                    ].drop(
-                        columns=non_feature_columns
-                    ),
+                    eval_data,
                     y=cudf_df.loc[
                         cudf_df.index.isin(folds[i]["eval_dates"].to_list())
                     ]["target"],

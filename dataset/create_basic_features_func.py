@@ -163,7 +163,7 @@ def history_basic_features(feature_config, logger=default_logger):
 
 def history_fe_market_close(feature_config, logger=default_logger):
     logger.info("- " * 25)
-    logger.info("--> start history_fe_market_close fumc:")
+    logger.info("--> start history_fe_market_close func:")
     try:
         fe_prefix = "fe_market_close"
         features_folder_path = f"{root_path}/data/features/{fe_prefix}/"
@@ -223,7 +223,7 @@ def history_fe_market_close(feature_config, logger=default_logger):
             df["symbol"] = symbol
             file_name = f"{features_folder_path}/{fe_prefix}_{symbol}.parquet"
             # df.to_parquet(file_name,index=False)
-            
+
             # Modification 1: Convert to Polars and ensure naive _time
             df = pl.from_pandas(df)
             df = df.with_columns(pl.col("_time").dt.replace_time_zone(None))

@@ -1,9 +1,13 @@
-import pandas as pd
 from sklearn.model_selection import TimeSeriesSplit
-import time, gc
-from utils.general_utils import cal_eval
+import time
+import pandas as pd
 import numpy as np
-from backtest_funcs import do_backtest
+import gc
+import threading
+from sklearn.utils import parallel_backend
+from joblib import Parallel, delayed
+from .utils.evaluation_utils import cal_eval
+from .backtest_funcs import do_backtest
 
 def split_time_series(
     df_all: pd.DataFrame,
@@ -39,6 +43,8 @@ def split_time_series(
             "test_dates": all_dates[test_valid_index[test_size:]],  # Test
         }
     return folds
+
+
 
 def quant_CV(
     df: pd.DataFrame,
@@ -137,7 +143,7 @@ def quant_CV(
         for col in cudf_df.columns:
             if cudf_df[col].dtype == "bool":
                 cudf_df[col] = cudf_df[col].astype("int8")
-        print(f"cudf_df index sample: {cudf_df.index[:5].tolist()}")
+        print(f"cudf_df index sample: {cudf_df.index[:5].to_arrow().to_pylist()}")
     else:
         cudf_df = df  # Use pandas if not cudf
 

@@ -22,7 +22,7 @@ def cal_window_stats(series, window_size):
         "std": roll.std(),
         "skew": roll.skew(),
         "kurt": roll.kurt(),
-        "hurst": roll.apply(lambda x: hurst_exponent(x.to_numpy()) if len(x.dropna()) > 10 and window_size >= 48 else 0, raw=False),
+        "hurst": roll.apply(lambda x: hurst_exponent(x.to_numpy()) if len(x.dropna()) > 10 and window_size >= 48 else 0.5, raw=False),
     })
 
 def add_win_fe_base_func(df, symbol, raw_features, timeframes, window_sizes, round_to=3, fe_prefix="fe_WIN"):

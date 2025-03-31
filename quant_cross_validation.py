@@ -693,6 +693,11 @@ def quant_CV(
         input_cols_and_type = dict(df[input_cols].dtypes)
 
     if "confidence_levels" in cudf_df.columns or ("confidence_levels" in df.columns):
+        df = df.drop(columns=["confidence_levels"], errors="ignore")
+        if "confidence_levels" in cudf_df.columns:
+            cudf_df = cudf_df.drop(columns=["confidence_levels"])
+
+    if "confidence_levels" in cudf_df.columns or ("confidence_levels" in df.columns):
         raise ValueError(
             "The model's input dataframe contains the irrelevant column 'confidence_levels'."
         )

@@ -18,7 +18,7 @@ def split_time_series(
     :max_train_size: maximum size we for train
     :n_splits: K in cross-folds
     :test_size: test size
-    train_test_gap is the gap between train and valid/test sets 
+    train_test_gap: is the gap between train and valid/test sets 
     """
     all_dates = df_all.index.get_level_values("_time").unique().sort_values(["_time"])
     tscv = TimeSeriesSplit(
@@ -37,7 +37,8 @@ def split_time_series(
         folds[i] = {
             "train_dates": train_dates,
             "pre_eval_dates": train_dates[:split_idx],
-            "eval_dates": train_dates[split_idx+(10*276):],
+            # "eval_dates": train_dates[split_idx+(10*276):],
+            "eval_dates": train_dates[split_idx:],
             "valid_dates": all_dates[0][test_valid_index[:test_size]],
             "test_dates": all_dates[0][test_valid_index[test_size:]],
         }

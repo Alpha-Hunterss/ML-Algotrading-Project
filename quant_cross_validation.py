@@ -157,6 +157,11 @@ def quant_CV(
         print(f"--> fold test size: {df.loc[folds[i]['test_dates']].shape}")
 
         if "confidence_levels" in cudf_df.columns or ("confidence_levels" in df.columns):
+            df = df.drop(columns=["confidence_levels"], errors="ignore")
+            if "confidence_levels" in cudf_df.columns:
+                cudf_df = cudf_df.drop(columns=["confidence_levels"])
+
+        if "confidence_levels" in cudf_df.columns or ("confidence_levels" in df.columns):
             raise ValueError(
                 "The model's input dataframe contains the irrelevant column 'confidence_levels'."
             )

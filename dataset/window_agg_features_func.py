@@ -1,5 +1,5 @@
+import polars as pl
 import numpy as np
-import pandas as pd
 from pathlib import Path
 from dataset.configs.history_data_crawlers_config import root_path, symbols_dict
 from dataset.logging_tools import default_logger
@@ -11,23 +11,18 @@ def hurst_exponent(ts, max_lag=100):
     return np.polyfit(np.log(lags), np.log(tau), 1)[0]
 
 def cal_window_stats(series, window_size):
-    """Compute rolling statistics using NumPy and Pandas."""
-    roll = series.rolling(window=window_size, min_periods=1)
-
-    return pd.DataFrame({
-        "min": roll.min(),
-        "argmin": (window_size - 1 - roll.apply(np.argmin, raw=True)) / (window_size - 1),
-        "max": roll.max(),
-        "argmax": (window_size - 1 - roll.apply(np.argmax, raw=True)) / (window_size - 1),
-        "mean": roll.mean(),
-        "std": roll.std(),
-        "skew": roll.skew(),
-        "kurt": roll.kurt(),
-        "median": roll.median(),
-        "q25": roll.quantile(0.25),
-        "q75": roll.quantile(0.75),
-        "hurst": roll.apply(lambda x: hurst_exponent(x.to_numpy()) if len(x.dropna()) > 10 else np.nan, raw=False),
-    })
+    """Compute rolling statistics using Polars."""
+    return (
+        series.rolling_min(window_size).alias("min"),
+        (window_size - 1 - series.rolling_apply(lambda x: x.arg_min(), window_size)) / (window_size - 1),
+        series.rolling_max(window_size).alias("max"),
+        (window_size - 1 - series.rolling_apply(lambda x: x.arg_max(), window_size)) / (window_size - 1),
+        series.rolling_mean(window_size).alias("mean"),
+        series.rolling_std(window_size).alias("std"),
+        series.rolling_skew(window_size).alias("skew"),
+        series.rolling_kurtosis(window_size).alias("kurt"),
+        series.rolling_apply(lambda x: hurst_exponent(x.to_numpy()) if len(x.drop_nulls()) > 10 else None, window_size),
+    )
 
 def add_win_fe_base_func(df, symbol, raw_features, timeframes, window_sizes, round_to=3, fe_prefix="fe_WIN"):
     for tf in timeframes:
@@ -43,17 +38,12 @@ def add_win_fe_base_func(df, symbol, raw_features, timeframes, window_sizes, rou
                 f"{fe_prefix}_std_W{w_size}_M{tf}",
                 f"{fe_prefix}_skew_W{w_size}_M{tf}",
                 f"{fe_prefix}_kurt_W{w_size}_M{tf}",
-                f"{fe_prefix}_median_W{w_size}_M{tf}",
-                f"{fe_prefix}_q25_W{w_size}_M{tf}",
-                f"{fe_prefix}_q75_W{w_size}_M{tf}",
                 f"{fe_prefix}_hurst_W{w_size}_M{tf}",
             ]
 
-            # Compute rolling statistics
             for col in raw_features:
-                stats = cal_window_stats(df[col], w_size).round(round_to)
-                stats.columns = feature_names
-                df = pd.concat([df, stats], axis=1)
+                stats = cal_window_stats(df[col], w_size)
+                df = df.with_columns([stats[i].alias(feature_names[i]).round(round_to) for i in range(len(feature_names))])
     
     return df
 
@@ -75,10 +65,9 @@ def history_fe_WIN_features(feature_config, logger=default_logger):
             raw_features = [f"M5_{base_col}" for base_col in base_cols]
             needed_columns = ["_time", "minutesPassed", "symbol"] + raw_features
             file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
-            df = pd.read_parquet(file_name, columns=needed_columns).sort_values("_time")
+            df = pl.read_parquet(file_name).sort("_time")[needed_columns]
             
-            df["_time"] = pd.to_datetime(df["_time"])
-            df["symbol"] = symbol  # Assign symbol column after processing
+            df = df.with_columns(pl.col("_time").str.to_datetime(), pl.lit(symbol).alias("symbol"))
 
             df = add_win_fe_base_func(
                 df,
@@ -90,8 +79,8 @@ def history_fe_WIN_features(feature_config, logger=default_logger):
                 fe_prefix="fe_WIN",
             )
             
-            df.drop(columns=raw_features + ["minutesPassed"], inplace=True)
-            df.to_parquet(f"{features_folder_path}/{fe_prefix}_{symbol}.parquet")
+            df = df.drop(raw_features + ["minutesPassed"])
+            df.write_parquet(f"{features_folder_path}/{fe_prefix}_{symbol}.parquet")
         
         logger.info("--> history_fe_WIN_features run successfully.")
     except Exception as e:

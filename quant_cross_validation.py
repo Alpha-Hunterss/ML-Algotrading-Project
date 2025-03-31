@@ -140,7 +140,7 @@ def quant_CV(
         for col in cudf_df.columns:
             if cudf_df[col].dtype == "bool":
                 cudf_df[col] = cudf_df[col].astype("int8")
-
+        print(f"cudf_df index: {cudf_df.index[:5].tolist()}")  # Debug index
     general_backtest_df = {}
 
     for i in list(folds.keys()):
@@ -148,18 +148,32 @@ def quant_CV(
         tic = time.time()
         # sets,min_max_dates = data_split_loader(df,folds,i)
 
-        train_min_max = [folds[i]["train_dates"].min(), folds[i]["train_dates"].max()]
-        valid_min_max = [folds[i]["valid_dates"].min(), folds[i]["valid_dates"].max()]
-        test_min_max = [folds[i]["test_dates"].min(), folds[i]["test_dates"].max()]
-        min_max_dates = {
-            "train_dates": train_min_max,
-            "valid_dates": valid_min_max,
-            "test_dates": test_min_max,
-        }
+        # train_min_max = [folds[i]["train_dates"].min(), folds[i]["train_dates"].max()]
+        # valid_min_max = [folds[i]["valid_dates"].min(), folds[i]["valid_dates"].max()]
+        # test_min_max = [folds[i]["test_dates"].min(), folds[i]["test_dates"].max()]
+        # min_max_dates = {
+        #     "train_dates": train_min_max,
+        #     "valid_dates": valid_min_max,
+        #     "test_dates": test_min_max,
+        # }
 
-        print(f"--> fold train size: {df.loc[folds[i]['train_dates']].shape}")
-        print(f"--> fold valid size: {df.loc[folds[i]['valid_dates']].shape}")
-        print(f"--> fold test size: {df.loc[folds[i]['test_dates']].shape}")
+        # print(f"--> fold train size: {df.loc[folds[i]['train_dates']].shape}")
+        # print(f"--> fold valid size: {df.loc[folds[i]['valid_dates']].shape}")
+        # print(f"--> fold test size: {df.loc[folds[i]['test_dates']].shape}")
+
+
+        # Debug fold sizes
+        train_data = cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())][input_cols]
+        eval_data = cudf_df.loc[cudf_df.index.isin(folds[i]["eval_dates"].to_list())][input_cols]
+        test_data = cudf_df.loc[cudf_df.index.isin(folds[i]["test_dates"].to_list())][input_cols]
+        print(f"--> fold train size: {train_data.shape}")
+        print(f"--> fold valid size: {eval_data.shape}")
+        print(f"--> fold test size: {test_data.shape}")
+
+        if eval_data.shape[0] == 0:
+            print(f"Warning: Fold {i} eval_data is empty. Check index alignment.")
+            print(f"eval_dates sample: {folds[i]['eval_dates'][:5].tolist()}")
+            raise ValueError(f"Fold {i}: eval_data has 0 rows")
 
         if is_ensemble_xgbf_model:
             if use_cudf:

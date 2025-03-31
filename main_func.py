@@ -237,7 +237,11 @@ def main(
             train_test_gap=train_test_gap,
             eval_set_ratio=eval_set_ratio,
         )
-
+        # Debug folds
+        print(f"df_all index: {df_all.index[:5].tolist()}")  # First 5 index values
+        print(f"Fold 0 pre_eval_dates: {folds[0]['pre_eval_dates'][:5].tolist()}")
+        print(f"Fold 0 eval_dates: {folds[0]['eval_dates'][:5].tolist()}")
+        print(f"Fold 0 test_dates: {folds[0]['test_dates'][:5].tolist()}")
         # ______________________________Pre-Backtest: Backtest on all raw data_______________________________
         df_raw_backtest, bt_column_name = cal_backtest_on_raw_cndl(
             path=dataset_path,
@@ -260,7 +264,11 @@ def main(
             rstd_window_size=rstd_window_size,
             close_positions_at_midnight=close_positions_at_midnight,
         )
-
+        # Final check before quant_CV
+        print(f"Passing df_all to quant_CV with shape: {df_all.shape}")
+        feature_cols = [col for col in df_all.columns if col not in non_feature_columns]
+        if len(feature_cols) != 394:
+            raise ValueError(f"Before quant_CV: Expected 394 features, but found {len(feature_cols)} in df_all")
         # ______________________________RUN Quant Cross-Validation and Backtest on Folds_____________________
         non_feature_columns = ["target", "pred_as_val", "pred_val_proba", "pred_as_test", "pred_test_proba", "K"]
         swap_rate = symbols_dict[target_symbol]["swap_rate"][trade_mode]

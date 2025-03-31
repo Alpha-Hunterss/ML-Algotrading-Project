@@ -67,7 +67,8 @@ def history_fe_WIN_features(feature_config, logger=default_logger):
             file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
             df = pl.read_parquet(file_name).sort("_time")[needed_columns]
             
-            df = df.with_columns(pl.col("_time").str.to_datetime(), pl.lit(symbol).alias("symbol"))
+            df = df.with_columns(pl.lit(symbol).alias("symbol"))
+
 
             df = add_win_fe_base_func(
                 df,

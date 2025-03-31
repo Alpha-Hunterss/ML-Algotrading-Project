@@ -55,10 +55,8 @@ def ETL(
 ):
     raw_columns = [f.name for f in ParquetFile(path).schema]
     print(f'Len all columns in dataframe is {len(raw_columns)}')
-    # df = pd.read_parquet(path)
-
-
-    # Modification 1: Ensure df["_time"] is naive
+    df = pd.read_parquet(path)
+    # Modification 1: Ensure df["_time"] is naive (moved after df assignment)
     df["_time"] = df["_time"].dt.tz_localize(None)
     print(f'Len read columns is {df.shape[1]}')
     print("Calculating target --->")

@@ -112,6 +112,7 @@ def quant_CV(
     df["confidence_levels"] = 0.0
     df["K"] = -1
 
+    df = df.drop(columns=["confidence_levels"], errors="ignore")
     the_features = df.drop(columns=non_feature_columns).columns
     feature_importances = {feature: [] for feature in the_features}
     is_cf_model = model_name.startswith("CF-")
@@ -155,6 +156,10 @@ def quant_CV(
         print(f"--> fold train size: {df.loc[folds[i]['train_dates']].shape}")
         print(f"--> fold valid size: {df.loc[folds[i]['valid_dates']].shape}")
         print(f"--> fold test size: {df.loc[folds[i]['test_dates']].shape}")
+
+        df = df.drop(columns=["confidence_levels"], errors="ignore")
+        if "confidence_levels" in cudf_df.columns:
+            cudf_df = cudf_df.drop(columns=["confidence_levels"])
 
         if is_ensemble_xgbf_model:
             if use_cudf:
@@ -415,6 +420,9 @@ def quant_CV(
                 "valid_dates": "valid",
                 "test_dates": "test",
             }
+            df = df.drop(columns=["confidence_levels"], errors="ignore")
+            if "confidence_levels" in cudf_df.columns:
+                cudf_df = cudf_df.drop(columns=["confidence_levels"])
             if use_cudf:
                 if is_cf_model:
                     preds, _ = model.predict(

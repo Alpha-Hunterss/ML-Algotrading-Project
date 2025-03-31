@@ -112,13 +112,8 @@ def quant_CV(
     df["confidence_levels"] = 0.0
     df["K"] = -1
 
-    # the_features = df.drop(columns=non_feature_columns).columns
-    # Define input_cols early from df_all
-    input_cols = [col for col in df.columns if col not in non_feature_columns]
-    print(f"quant_CV input_cols count: {len(input_cols)}")
-    print(f"quant_CV input_cols: {input_cols}")
-    
-    feature_importances = {feature: [] for feature in input_cols}
+    the_features = df.drop(columns=non_feature_columns).columns
+    feature_importances = {feature: [] for feature in the_features}
     is_cf_model = model_name.startswith("CF-")
     is_ensemble_xgbf_model = "XGBF+" in model_name
 
@@ -140,7 +135,7 @@ def quant_CV(
         for col in cudf_df.columns:
             if cudf_df[col].dtype == "bool":
                 cudf_df[col] = cudf_df[col].astype("int8")
-        print(f"cudf_df index: {cudf_df.index[:5].tolist()}")  # Debug index
+
     general_backtest_df = {}
 
     for i in list(folds.keys()):
@@ -148,32 +143,18 @@ def quant_CV(
         tic = time.time()
         # sets,min_max_dates = data_split_loader(df,folds,i)
 
-        # train_min_max = [folds[i]["train_dates"].min(), folds[i]["train_dates"].max()]
-        # valid_min_max = [folds[i]["valid_dates"].min(), folds[i]["valid_dates"].max()]
-        # test_min_max = [folds[i]["test_dates"].min(), folds[i]["test_dates"].max()]
-        # min_max_dates = {
-        #     "train_dates": train_min_max,
-        #     "valid_dates": valid_min_max,
-        #     "test_dates": test_min_max,
-        # }
+        train_min_max = [folds[i]["train_dates"].min(), folds[i]["train_dates"].max()]
+        valid_min_max = [folds[i]["valid_dates"].min(), folds[i]["valid_dates"].max()]
+        test_min_max = [folds[i]["test_dates"].min(), folds[i]["test_dates"].max()]
+        min_max_dates = {
+            "train_dates": train_min_max,
+            "valid_dates": valid_min_max,
+            "test_dates": test_min_max,
+        }
 
-        # print(f"--> fold train size: {df.loc[folds[i]['train_dates']].shape}")
-        # print(f"--> fold valid size: {df.loc[folds[i]['valid_dates']].shape}")
-        # print(f"--> fold test size: {df.loc[folds[i]['test_dates']].shape}")
-
-
-        # Debug fold sizes
-        train_data = cudf_df.loc[cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())][input_cols]
-        eval_data = cudf_df.loc[cudf_df.index.isin(folds[i]["eval_dates"].to_list())][input_cols]
-        test_data = cudf_df.loc[cudf_df.index.isin(folds[i]["test_dates"].to_list())][input_cols]
-        print(f"--> fold train size: {train_data.shape}")
-        print(f"--> fold valid size: {eval_data.shape}")
-        print(f"--> fold test size: {test_data.shape}")
-
-        if eval_data.shape[0] == 0:
-            print(f"Warning: Fold {i} eval_data is empty. Check index alignment.")
-            print(f"eval_dates sample: {folds[i]['eval_dates'][:5].tolist()}")
-            raise ValueError(f"Fold {i}: eval_data has 0 rows")
+        print(f"--> fold train size: {df.loc[folds[i]['train_dates']].shape}")
+        print(f"--> fold valid size: {df.loc[folds[i]['valid_dates']].shape}")
+        print(f"--> fold test size: {df.loc[folds[i]['test_dates']].shape}")
 
         if is_ensemble_xgbf_model:
             if use_cudf:
@@ -184,7 +165,9 @@ def quant_CV(
                         (
                             cudf_df.loc[
                                 cudf_df.index.isin(folds[i]["eval_dates"].to_list())
-                            ][input_cols],  # Use input_cols directly
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
                             cudf_df.loc[
                                 cudf_df.index.isin(folds[i]["eval_dates"].to_list())
                             ]["target"],
@@ -195,11 +178,15 @@ def quant_CV(
                         model.fit(
                             cudf_df.loc[
                                 cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
-                            ][input_cols],  # Use input_cols
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
                             cudf_df.loc[
                                 cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
                             ]["target"],
-                            addi_X=df.loc[folds[i]["pre_eval_dates"]][input_cols],
+                            addi_X=df.loc[folds[i]["pre_eval_dates"]].drop(
+                                columns=non_feature_columns
+                            ),
                             addi_y=df.loc[folds[i]["pre_eval_dates"]]["target"],
                             use_cudf=use_cudf,
                         )
@@ -207,12 +194,14 @@ def quant_CV(
                         model.fit(
                             cudf_df.loc[
                                 cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
-                            ][input_cols],  # Use input_cols
+                            ].drop(
+                                columns=non_feature_columns
+                            ),
                             cudf_df.loc[
                                 cudf_df.index.isin(folds[i]["pre_eval_dates"].to_list())
                             ]["target"],
                             eval_set=eval_set,
-                            verbose=False,
+                            verbose = False,
                         )
                 else:
                     if is_cf_model:
@@ -243,15 +232,12 @@ def quant_CV(
                             ]["target"],
                         )
 
-                # Debug and predict
-                eval_data = cudf_df.loc[
-                    cudf_df.index.isin(folds[i]["eval_dates"].to_list())
-                ][input_cols]  # Use input_cols directly
-                print(f"Fold {i} eval_data shape: {eval_data.shape}")
-                print(f"Fold {i} eval_data columns: {list(eval_data.columns)}")
-                
                 model.predict_proba(
-                    eval_data,
+                    cudf_df.loc[
+                        cudf_df.index.isin(folds[i]["eval_dates"].to_list())
+                    ].drop(
+                        columns=non_feature_columns
+                    ),
                     y=cudf_df.loc[
                         cudf_df.index.isin(folds[i]["eval_dates"].to_list())
                     ]["target"],

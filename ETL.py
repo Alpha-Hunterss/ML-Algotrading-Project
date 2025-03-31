@@ -55,7 +55,11 @@ def ETL(
 ):
     raw_columns = [f.name for f in ParquetFile(path).schema]
     print(f'Len all columns in dataframe is {len(raw_columns)}')
-    df = pd.read_parquet(path)
+    # df = pd.read_parquet(path)
+
+
+    # Modification 1: Ensure df["_time"] is naive
+    df["_time"] = df["_time"].dt.tz_localize(None)
     print(f'Len read columns is {df.shape[1]}')
     print("Calculating target --->")
     window_size = int(trg_look_ahead // base_time_frame)
@@ -72,6 +76,10 @@ def ETL(
         "high": f"{target_symbol}_M5_HIGH",
         "low": f"{target_symbol}_M5_LOW",
     })
+
+    # Modification 2: Ensure df_raw["_time"] is naive
+    df_raw["_time"] = df_raw["_time"].dt.tz_localize(None)
+
 
     if use_dynamic_sl and dynamic_sl_type=="atr":
         col_name = f"fe_ATR_{target_symbol}_W{atr_window_size}_M5"

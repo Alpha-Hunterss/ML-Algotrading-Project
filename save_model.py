@@ -20,7 +20,14 @@ def train_model_to_save(
             None: The function will return none
     # 
     """
-    
+
+    if "confidence_levels" in df.columns:
+        df = df.drop(columns=["confidence_levels"], errors="ignore")
+
+    if "confidence_levels" in df.columns:
+        raise ValueError(
+            "The model's input dataframe contains the irrelevant column 'confidence_levels'."
+        )
 
     if save_model_mode == "last_train_size":
         final_clf.fit(

@@ -112,7 +112,6 @@ def quant_CV(
     df["confidence_levels"] = 0.0
     df["K"] = -1
 
-    df = df.drop(columns=["confidence_levels"], errors="ignore")
     the_features = df.drop(columns=non_feature_columns).columns
     feature_importances = {feature: [] for feature in the_features}
     is_cf_model = model_name.startswith("CF-")
@@ -157,9 +156,10 @@ def quant_CV(
         print(f"--> fold valid size: {df.loc[folds[i]['valid_dates']].shape}")
         print(f"--> fold test size: {df.loc[folds[i]['test_dates']].shape}")
 
-        df = df.drop(columns=["confidence_levels"], errors="ignore")
-        if "confidence_levels" in cudf_df.columns:
-            cudf_df = cudf_df.drop(columns=["confidence_levels"])
+        if "confidence_levels" in cudf_df.columns or ("confidence_levels" in df.columns):
+            raise ValueError(
+                "The model's input dataframe contains the irrelevant column 'confidence_levels'."
+            )
 
         if is_ensemble_xgbf_model:
             if use_cudf:
@@ -420,9 +420,6 @@ def quant_CV(
                 "valid_dates": "valid",
                 "test_dates": "test",
             }
-            df = df.drop(columns=["confidence_levels"], errors="ignore")
-            if "confidence_levels" in cudf_df.columns:
-                cudf_df = cudf_df.drop(columns=["confidence_levels"])
             if use_cudf:
                 if is_cf_model:
                     preds, _ = model.predict(
@@ -628,6 +625,10 @@ def quant_CV(
                         use_perc_levels=use_perc_levels,
                     )
 
+                df = df.drop(columns=["confidence_levels"], errors="ignore")
+                if "confidence_levels" in cudf_df.columns:
+                    cudf_df = cudf_df.drop(columns=["confidence_levels"])
+
                 fold_profit_percent = bt_report['profit_percent']
                 fold_max_dd = bt_report['max_draw_down']
                 fold_sortino = bt_report["sortino"]
@@ -685,6 +686,11 @@ def quant_CV(
             print(evals.iloc[-3:])
 
         input_cols_and_type = dict(df[input_cols].dtypes)
+
+    if "confidence_levels" in cudf_df.columns or ("confidence_levels" in df.columns):
+        raise ValueError(
+            "The model's input dataframe contains the irrelevant column 'confidence_levels'."
+        )
 
     # Backtest on the whole test & valid set
     general_backtest_report = {}

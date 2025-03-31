@@ -1466,110 +1466,110 @@ def cal_RSTD_func(
     return df
 
 
-def cal_FFD_func(
-    df: pl.DataFrame,
-    features: List[str],
-    time_frame: int,
-    n_splits: List[int],
-    Auto_optimaze_d : bool|List[int] = True,
-    prefix: str = "fe_FFD",
-) -> pl.DataFrame:
+# def cal_FFD_func(
+#     df: pl.DataFrame,
+#     features: List[str],
+#     time_frame: int,
+#     n_splits: List[int],
+#     Auto_optimaze_d : bool|List[int] = True,
+#     prefix: str = "fe_FFD",
+# ) -> pl.DataFrame:
 
-    df = df.sort("_time")
-    col_drop = list(set(list(df.columns)) - set(['_time']))
+#     df = df.sort("_time")
+#     col_drop = list(set(list(df.columns)) - set(['_time']))
 
-    def base_FFD(series, d, thres=1e-5):
-        def getWeights(d, size, thres=1e-5):
-            w = [1.0]
-            for k in range(1, size):
-                w_ = -w[-1] / k * (d - k + 1)
-                w.append(w_)
-            return np.array(w)[np.abs(w) > thres]
+#     def base_FFD(series, d, thres=1e-5):
+#         def getWeights(d, size, thres=1e-5):
+#             w = [1.0]
+#             for k in range(1, size):
+#                 w_ = -w[-1] / k * (d - k + 1)
+#                 w.append(w_)
+#             return np.array(w)[np.abs(w) > thres]
 
-        w = getWeights(d, size=10000, thres=thres)
+#         w = getWeights(d, size=10000, thres=thres)
 
-        result = np.convolve(series.to_numpy(), w, mode="valid")
+#         result = np.convolve(series.to_numpy(), w, mode="valid")
 
-        final_result = np.full_like(series.to_numpy(), np.nan, dtype=np.float64)
+#         final_result = np.full_like(series.to_numpy(), np.nan, dtype=np.float64)
 
-        final_result[len(w) - 1:] = result
+#         final_result[len(w) - 1:] = result
 
-        return pl.Series(final_result)
+#         return pl.Series(final_result)
 
-    def adf_test(series):
+#     def adf_test(series):
 
-        result = ADF(series.drop_nulls().drop_nans().to_numpy()).pvalue
+#         result = ADF(series.drop_nulls().drop_nans().to_numpy()).pvalue
 
-        return result
+#         return result
 
-    def split_dataframe(df, n_splits):
-        indices = np.linspace(0, df.height, n_splits + 1, dtype=int)
-        splits = [df[indices[i]:indices[i + 1]] for i in range(n_splits)]
+#     def split_dataframe(df, n_splits):
+#         indices = np.linspace(0, df.height, n_splits + 1, dtype=int)
+#         splits = [df[indices[i]:indices[i + 1]] for i in range(n_splits)]
 
-        return splits + [df]
+#         return splits + [df]
 
-    def Optimaze_d(list_df, base_feature, min_d=0, max_d=1, step=0.01):
-        list_d = [min_d]
-        for df in list_df:
-            for d in np.arange(list_d[-1], max_d + step, step):
-                ser = base_FFD(df[base_feature], d, 1e-5)
-                pval_adf = adf_test(ser)
-                if pval_adf < 0.05:
-                    list_d.append(d)
-                    break
+#     def Optimaze_d(list_df, base_feature, min_d=0, max_d=1, step=0.01):
+#         list_d = [min_d]
+#         for df in list_df:
+#             for d in np.arange(list_d[-1], max_d + step, step):
+#                 ser = base_FFD(df[base_feature], d, 1e-5)
+#                 pval_adf = adf_test(ser)
+#                 if pval_adf < 0.05:
+#                     list_d.append(d)
+#                     break
 
-        return max(list_d)
+#         return max(list_d)
 
-    @njit
-    def correlation(x, y):
-        x_mean, y_mean = np.mean(x), np.mean(y)
-        cov = np.mean((x - x_mean) * (y - y_mean))
-        corr = cov / (np.std(x) * np.std(y))
+#     @njit
+#     def correlation(x, y):
+#         x_mean, y_mean = np.mean(x), np.mean(y)
+#         cov = np.mean((x - x_mean) * (y - y_mean))
+#         corr = cov / (np.std(x) * np.std(y))
 
-        return corr
+#         return corr
 
-    if type(Auto_optimaze_d) == bool and Auto_optimaze_d:
-        for ns in n_splits:
-            list_df = split_dataframe(df, ns)
-            fea = features[features.index(f"M{time_frame}_CLOSE")]
+#     if type(Auto_optimaze_d) == bool and Auto_optimaze_d:
+#         for ns in n_splits:
+#             list_df = split_dataframe(df, ns)
+#             fea = features[features.index(f"M{time_frame}_CLOSE")]
 
-            best_d = Optimaze_d(list_df, fea)
-            ser = base_FFD(df[fea], best_d)
-            best_d = round(best_d, 3)
+#             best_d = Optimaze_d(list_df, fea)
+#             ser = base_FFD(df[fea], best_d)
+#             best_d = round(best_d, 3)
 
-            df = df.with_columns(ser.alias(f"{prefix}-{fea}_{best_d}"))
+#             df = df.with_columns(ser.alias(f"{prefix}-{fea}_{best_d}"))
 
-            corr = correlation(
-                df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[fea].to_numpy(),
-                df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[f"{prefix}-{fea}_{best_d}"].to_numpy(),
-            )
-            print(f"{fea}_{ns} : best_d = {best_d} | corr : {corr}")
+#             corr = correlation(
+#                 df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[fea].to_numpy(),
+#                 df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[f"{prefix}-{fea}_{best_d}"].to_numpy(),
+#             )
+#             print(f"{fea}_{ns} : best_d = {best_d} | corr : {corr}")
 
-    else:
-        fea = features[features.index(f"M{time_frame}_CLOSE")]
-        for d in Auto_optimaze_d:
-            ser = base_FFD(df[fea], d)
-            df = df.with_columns(ser.alias(f"{prefix}-{fea}_{d}"))
-            corr = correlation(
-                df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[fea].to_numpy(),
-                df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[f"{prefix}-{fea}_{d}"].to_numpy(),
-            )
-            print(f"{fea} : d-value = {d} | corr : {corr}")
+#     else:
+#         fea = features[features.index(f"M{time_frame}_CLOSE")]
+#         for d in Auto_optimaze_d:
+#             ser = base_FFD(df[fea], d)
+#             df = df.with_columns(ser.alias(f"{prefix}-{fea}_{d}"))
+#             corr = correlation(
+#                 df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[fea].to_numpy(),
+#                 df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[f"{prefix}-{fea}_{d}"].to_numpy(),
+#             )
+#             print(f"{fea} : d-value = {d} | corr : {corr}")
 
-            # for feature in list(set(features) - set([fea])):
-            #     ser = base_FFD(df[feature], best_d)
-            #     df = df.with_columns(ser.alias(f"{prefix}-{feature}_{best_d}"))
+#             # for feature in list(set(features) - set([fea])):
+#             #     ser = base_FFD(df[feature], best_d)
+#             #     df = df.with_columns(ser.alias(f"{prefix}-{feature}_{best_d}"))
 
-    df =df.drop(col_drop)
-    df = df.filter(
-        reduce(
-            lambda acc, col: acc & pl.col(col).is_not_nan() if col != '_time' else acc,
-            df.columns,
-            pl.lit(True)
-        )
-    )
+#     df =df.drop(col_drop)
+#     df = df.filter(
+#         reduce(
+#             lambda acc, col: acc & pl.col(col).is_not_nan() if col != '_time' else acc,
+#             df.columns,
+#             pl.lit(True)
+#         )
+#     )
 
-    return df
+#     return df
 
 
 def cal_GMA_n_GBB_func(
@@ -1898,7 +1898,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_leg": {"func": cal_leg_base_func},
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
             "fe_supertrend": {"func": cal_supertrend_func},
-            "fe_FFD": {"func": cal_FFD_func},
+            # "fe_FFD": {"func": cal_FFD_func},
             "fe_GMA": {"func": cal_GMA_n_GBB_func},
             "fe_OL": {"func": cal_OverLap_func},
         }

@@ -176,6 +176,12 @@ def history_columns_merge(
     # base dataframe to merge data on it.
     main_symbol_st_one_path = f"{root_path}/data/stage_one_data/{basic_sym}_stage_one.parquet"
     df_dataset = pl.read_parquet(main_symbol_st_one_path, columns=["_time"])
+    
+    # Modification 1: Ensure df_dataset[_time] is naive
+    df_dataset = df_dataset.with_columns(
+        pl.col("_time").dt.replace_time_zone(None)
+    )
+
     df_dataset = df_dataset.sort("_time")
 
     logger.info("--> add fe_time.")
@@ -204,6 +210,11 @@ def history_columns_merge(
                 logger.info(f"--> {symbol} | -->{feture}<-------------------------------")
                 df = pl.read_parquet(
                     f"{feature_folder}/{feture}/{feture}_{symbol}.parquet"
+                )
+
+                # Modification 2: Ensure df[_time] is naive
+                df = df.with_columns(
+                    pl.col("_time").dt.replace_time_zone(None)
                 )
 
                 df = df.sort("_time").drop("symbol")
@@ -273,7 +284,7 @@ def history_columns_merge(
     reduce_mem_usage(df_dataset.to_pandas()).to_parquet(file_name)
 
     logger.info(f"--> df final shape: {df_dataset.shape} | dataset saved.")
-    logger.info("--> history_fe_time run successfully.")
+    logger.info("--> history_columns_merge run successfully.")
 
 
 def PCA_calc(df, symbol, fe_name, symbol_confing):

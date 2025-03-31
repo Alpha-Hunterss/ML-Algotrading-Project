@@ -222,7 +222,12 @@ def history_fe_market_close(feature_config, logger=default_logger):
             df.reset_index(drop=True, inplace=True)
             df["symbol"] = symbol
             file_name = f"{features_folder_path}/{fe_prefix}_{symbol}.parquet"
-            df.to_parquet(file_name,index=False)
+            # df.to_parquet(file_name,index=False)
+            
+            # Modification 1: Convert to Polars and ensure naive _time
+            df = pl.from_pandas(df)
+            df = df.with_columns(pl.col("_time").dt.replace_time_zone(None))
+            df.write_parquet(file_name)
 
         logger.info("--> history_fe_market_close run successfully.")
     except Exception as e:

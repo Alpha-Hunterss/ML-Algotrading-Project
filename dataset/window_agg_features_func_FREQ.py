@@ -176,7 +176,7 @@ def history_fe_WIN_features_FREQ(feature_config, logger=default_logger):
 
             base_cols = feature_config[symbol][fe_prefix]["base_columns"]
             raw_features = [f"M5_{base_col}" for base_col in base_cols]
-            needed_columns = ["_time", "minutesPassed", "symbol"] + raw_features ################
+            needed_columns = ["_time", "minutesPassed", "symbol"] + raw_features 
 
             file_name = f"{base_candle_folder_path}{symbol}_realtime_candle.parquet"
             

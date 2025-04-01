@@ -132,9 +132,7 @@ def group_by_symbol_and_rename(df, symbol_col="symbol"):
     return result_df
 
 
-def history_columns_merge(
-    feature_config, fe_removal_list, logger=default_logger, general_mode=False, pca=True
-):
+def history_columns_merge(feature_config, fe_removal_list=None, logger=default_logger, general_mode=False, pca=True):
     logger.info("- " * 25)
     logger.info("--> start history_columns_merge func:")
 
@@ -142,160 +140,105 @@ def history_columns_merge(
         feature_map_path = "data/models/jamesv01/tradeset_usdjpy_feature_map.json"
         f_cols = set(get_all_selected_features(feature_map_path)["feature_names"])
 
-    fe_pca_list = [
-        "fe_GMA"
-    ]
+    fe_pca_list = ["fe_GMA"]
     fe_refrece_list = [
         "fe_cndl",
-        'fe_cndl_shape_n_cntxt',
-        'fe_leg',
-        'fe_supertrend',
-        "fe_GMA",
+          "fe_cndl_shape_n_cntxt", 
+          "fe_leg",
+            "fe_supertrend",
+              "fe_GMA",
         "fe_OL",
-        "fe_RSI",
-        "fe_RSTD",
-        "fe_ATR",
-        "fe_EMA",
-        "fe_SMA",
-        "fe_VWAP",
+          "fe_RSI",
+            "fe_RSTD",
+              "fe_ATR", 
+              "fe_EMA",
+                "fe_SMA",
+                  "fe_VWAP",
         "fe_ratio",
         "fe_cndl_shift",
-        "fe_WIN",
-        # "fe_WIN_FREQ",
-        "fe_cndl_ptrn",
+        "fe_WIN", 
+        "fe_cndl_ptrn", 
         "fe_market_close",
-    ]
-    fe_list = []
-    for sym in feature_config:
-        fe_list += list(feature_config[sym].keys())
-
+]
+    fe_list = [feture for sym in feature_config for feture in feature_config[sym].keys()]
     fe_list = list(set(fe_refrece_list) & set(fe_list))
 
     basic_sym = list(feature_config.keys())[0]
-
-    # try:
     feature_folder = f"{root_path}/data/features/"
-    # base dataframe to merge data on it.
     main_symbol_st_one_path = f"{root_path}/data/stage_one_data/{basic_sym}_stage_one.parquet"
     df_dataset = pl.read_parquet(main_symbol_st_one_path, columns=["_time"])
-    
-    # Modification 1: Ensure df_dataset[_time] is naive
-    df_dataset = df_dataset.with_columns(
-        pl.col("_time").dt.replace_time_zone(None)
-    )
-
-    df_dataset = df_dataset.sort("_time")
+    df_dataset = df_dataset.with_columns(pl.col("_time").dt.replace_time_zone(None)).sort("_time")
 
     logger.info("--> add fe_time.")
-
     file_name = f"{feature_folder}/fe_time/fe_time.parquet"
     df_dataset = df_dataset.join(
         pl.read_parquet(file_name).sort("_time").drop("symbol"),
         left_on="_time", right_on="_time", how="left", coalesce=True
     )
-    
-    # Log 1: Check nulls after fe_time join
     nulls_after_fe_time = df_dataset.select(pl.all().is_null().sum()).to_dicts()[0]
     logger.info(f"--> nulls after fe_time join: {{k: v for k, v in nulls_after_fe_time.items() if v > 0}}")
-    
     gc.collect()
 
     for symbol in feature_config:
         logger.info(" ^ - ^ " * 10)
-        sy_fe = list(
-            set(list(feature_config[symbol].keys())) & set(fe_refrece_list)
-        )
-
+        sy_fe = list(set(feature_config[symbol].keys()) & set(fe_refrece_list))
         if symbol not in CRYPTO:
             sy_fe.append("fe_market_close")
-
-        sy_fe = list(set(sy_fe) - set(fe_removal_list))
+        sy_fe = list(set(sy_fe) - set(fe_removal_list or []))
 
         for feture in sy_fe:
             try:
                 logger.info(f"--> {symbol} | {feture}")
                 logger.info(f"--> {symbol} | -->{feture}<-------------------------------")
-                df = pl.read_parquet(
-                    f"{feature_folder}/{feture}/{feture}_{symbol}.parquet"
-                )
-
-                # Modification 2: Ensure df[_time] is naive
-                df = df.with_columns(
-                    pl.col("_time").dt.replace_time_zone(None)
-                )
-
-                df = df.sort("_time").drop("symbol")
+                df = pl.read_parquet(f"{feature_folder}/{feture}/{feture}_{symbol}.parquet")
+                df = df.with_columns(pl.col("_time").dt.replace_time_zone(None)).sort("_time").drop("symbol")
                 df = df.rename(add_symbol_to_prefixes(df.columns, symbol))
 
-                # Calculate PCA
                 if feture in fe_pca_list and pca:
                     logger.info(f"PCA--> {symbol} | {feture}")
                     df = PCA_calc(df, symbol, feture, feature_config[symbol])
+
+                # Drop columns from df that already exist in df_dataset (except _time)
+                overlapping_cols = [col for col in df.columns if col in df_dataset.columns and col != "_time"]
+                if overlapping_cols:
+                    logger.info(f"Dropping overlapping columns from {feture}_{symbol}: {overlapping_cols}")
+                    df = df.drop(overlapping_cols)
+
+                df_dataset = df_dataset.join(
+                    df, left_on="_time", right_on="_time", how="left", coalesce=True, suffix=f"_{feture}"
+                )
+                nulls_after_join = df_dataset.select(pl.all().is_null().sum()).to_dicts()[0]
+                logger.info(f"--> nulls after joining {feture}_{symbol}: {{k: v for k, v in nulls_after_join.items() if v > 0}}")
+                del df
+                gc.collect()
 
             except Exception as e:
                 logger.error(f"!!! cant load {symbol} | {feture}")
                 logger.error(e)
                 raise ValueError("!!!!")
 
-            df_dataset = df_dataset.join(
-                df, left_on="_time", right_on="_time", how="left", coalesce=True
-            )
-            
-            # Log 2: Check nulls after each feature join
-            nulls_after_join = df_dataset.select(pl.all().is_null().sum()).to_dicts()[0]
-            logger.info(f"--> nulls after joining {feture}_{symbol}.parquet: {{k: v for k, v in nulls_after_join.items() if v > 0}}")
-            
-            del df
-            gc.collect()
-
     df_colls = list(df_dataset.columns)
-
     if not general_mode:
-        diff_cols = set(f_cols) - set(list(df_colls))
+        diff_cols = set(f_cols) - set(df_colls)
         logger.info(f"--> len final diff cols: {len(diff_cols)}")
-        # logger.info(f"--> diff cols: {diff_cols}")
-        # logger.info(gg)
         df_dataset = df_dataset[list(f_cols)]
 
     logger.info(f"--> {df_dataset.shape}")
     log = df_dataset.select(pl.all().is_null().sum()).to_dicts()[0]
-    log_df = pd.DataFrame(log, index=["nulls"]).T.sort_values(
-        "nulls", ascending=False
-    )
-    log = log_df.loc[log_df.nulls > 0].to_dict()["nulls"]
-
-    n_nulls_all = df_dataset.select(pl.all().is_null().sum()).sum_horizontal()
-    logger.info(
-        f"--> number of nulls all in df_dataset: {n_nulls_all} / {df_dataset.shape[0]}"
-    )
-    # logger.info(f"--> columns with nulls: {log}")
-    
-    # Log 3: Detailed null report before drop_nulls
-    logger.info(f"--> detailed nulls before drop_nulls: {df_dataset.select(pl.all().is_null().sum()).to_dicts()[0]}")
+    logger.info(f"--> detailed nulls before drop_nulls: {log}")
 
     df_dataset = df_dataset.drop_nulls()
-
-    # leakage assert
-    cols_assert = [
-        col
-        for col in df_dataset.columns
-        if ("fe_" not in col) and ("trg_" not in col) and ("_time" != col)
-    ]
-    assert (
-        len(cols_assert) == 0
-    ), f"!!! columns must be either target or features. {cols_assert}"
+    cols_assert = [col for col in df_dataset.columns if ("fe_" not in col) and ("trg_" not in col) and ("_time" != col)]
+    assert len(cols_assert) == 0, f"!!! columns must be either target or features. {cols_assert}"
 
     all_cols = df_dataset.columns
     trg_cols = [col for col in all_cols if "trg_" in col]
     fe_cols = list(set(all_cols) - set(trg_cols + ["_time"]))
     logger.info(f"--> trg_cols:{len(trg_cols)} | fe_cols:{len(fe_cols)}")
 
-    # save dataset
-    # df_dataset = df_dataset.with_columns(pl.lit("dataset").alias("symbol"))
-    fe_prefix = "dataset"
-    dataset_folder_path = f"{root_path}/data/{fe_prefix}/"
+    dataset_folder_path = f"{root_path}/data/dataset/"
     Path(dataset_folder_path).mkdir(parents=True, exist_ok=True)
-    file_name = dataset_folder_path + f"/{fe_prefix}.parquet"
+    file_name = dataset_folder_path + "/dataset.parquet"
     reduce_mem_usage(df_dataset.to_pandas()).to_parquet(file_name)
 
     logger.info(f"--> df final shape: {df_dataset.shape} | dataset saved.")

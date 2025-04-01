@@ -2077,64 +2077,36 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                             volume_col=opts["volume_col"],
                         )
                         vwap_dfs.append(df_vwap)
-                    # Merge all VWAP DataFrames
                     df_vwap_merged = vwap_dfs[0]
                     for vwap_df in vwap_dfs[1:]:
                         df_vwap_merged = df_vwap_merged.join(vwap_df, on="_time", how="left", suffix=f"_W{vwap_df.columns[1].split('_W')[1].split('_cndl')[0]}")
                     df_vwap_merged = df_vwap_merged.select([col for col in df_vwap_merged.columns if not col.startswith("_time_")])
                     df = df.join(df_vwap_merged, on="_time", how="left")
                 else:
-                    add_candle_base_indicators_polars(
-                        df_base=df,
-                        prefix=fe_prefix,
-                        base_func=func["func"],
-                        opts=opts,
-                    )
+                    add_candle_base_indicators_polars(df_base=df, prefix=fe_prefix, base_func=func["func"], opts=opts)
 
-                # Merge with unmerged files only if they exist and are relevant
-                pathes = glob.glob(f"{features_folder_path}/unmerged/{fe_prefix}_**_{symbol}_*.parquet")
-                if pathes:
-                    for df_path in pathes:
-                        df_loaded = pl.read_parquet(df_path)
-                        df = df.join(df_loaded, on="_time", how="left", coalesce=True)
-                # Do not reset df to just _time; keep all columns
-                # df = df[["_time"]]  # Removed this line
+                # Only keep _time and feature columns (those starting with fe_prefix)
+                feature_cols = [col for col in df.columns if col.startswith(fe_prefix) or col == "_time"]
+                df = df.select(feature_cols)
+                logger.info(f"Columns after filtering for {fe_prefix}: {df.columns}")
 
+                # [Existing filtering logic]
                 max_candle_timeframe = max(opts["candle_timeframe"])
                 max_window_size = max(opts["window_size"])
-
-                if fe_prefix == 'fe_GMA':
-                    def gaussian_vectorized(source, bw):
-                        return np.exp(-1 * ((source / bw) ** 2)) / np.sqrt(2 * np.pi)
-                    i_values = np.arange(500)
-                    array_w = gaussian_vectorized(i_values, max_window_size)
-                    max_window_size = len(array_w[array_w * 1e10 > 1])
-
                 drop_rows = (max_window_size + 1) * (max_candle_timeframe / 5) - 1
-
-                logger.info(
-                    f"--> max_candle_timeframe:{max_candle_timeframe} | max_window_size:{max_window_size}| drop_rows:{drop_rows}"
-                )
+                logger.info(f"--> max_candle_timeframe:{max_candle_timeframe} | max_window_size:{max_window_size}| drop_rows:{drop_rows}")
 
                 df = df.with_row_index()
                 if fe_prefix != 'fe_leg':
-                    df = (
-                        df.filter(pl.col("index") >= drop_rows)
-                        .fill_null(strategy="forward")
-                        .drop("index")  # Drop index only, not using * unpacking
-                    )
+                    df = df.filter(pl.col("index") >= drop_rows).fill_null(strategy="forward").drop("index")
                 else:
-                    df = (
-                        df.fill_null(strategy="forward")
-                        .drop("index")
-                    )
+                    df = df.fill_null(strategy="forward").drop("index")
 
                 df = df.drop_nulls()
                 df = df.with_columns(pl.lit(symbol).alias("symbol"))
-
+                logger.info(f"Columns before writing {fe_prefix}_{symbol}.parquet: {df.columns}")
                 file_name = features_folder_path + f"/{fe_prefix}_{symbol}.parquet"
                 df.write_parquet(file_name)
-
                 logger.info(f"--> {fe_prefix}_{symbol} done.")
 
                 # Ratio logic (unchanged)

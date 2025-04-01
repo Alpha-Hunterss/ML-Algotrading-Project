@@ -11,7 +11,7 @@ from dataset.logging_tools import default_logger
 from arch.unitroot import ADF
 from numba import njit
 from functools import reduce
-
+from typing import List
 
 # ?? indicator ---------------------------------------------------
 
@@ -964,6 +964,81 @@ def cal_SMA_base_func(
 
     return df
 
+def cal_VWAP_base_func(
+    df: pl.DataFrame,
+    w: int,
+    time_frame: int,
+    features: List[str],
+    pip_size: float = 1.0,
+    prefix: str = "fe_VWAP",
+    high_col: str = None,
+    low_col: str = None,
+    close_col: str = None,
+    volume_col: str = None,
+) -> pl.DataFrame:
+    """
+    Calculates VWAP for a single rolling window size, compatible with the framework.
+    Always normalizes the output relative to the close price.
+    Inputs:
+    - df: DataFrame containing raw features (including _time)
+    - w: Window size for VWAP calculation
+    - time_frame: Time frame of the candles (e.g., 5 for M5), used in naming only
+    - features: List of base feature columns (e.g., ["M5_CLOSE"])
+    - pip_size: Pip size of the symbol
+    - prefix: Prefix for feature names (default: "fe_VWAP")
+    - high_col, low_col, close_col, volume_col: Specific column names (required via opts or parameters)
+    Returns:
+    - DataFrame with _time and VWAP-related columns (normalized)
+    """
+    required_cols = ["_time"]
+    if not all(col in df.columns for col in required_cols):
+        raise ValueError(f"Missing required columns: {[col for col in required_cols if col not in df.columns]}")
+
+    # Sort by time
+    df = df.lazy().sort("_time")
+
+    # Use features[0] as close_col if not provided, but require explicit high/low/volume
+    if not close_col and features:
+        close_col = features[0]
+    if not all([high_col, low_col, close_col, volume_col]):
+        raise ValueError("Must provide high_col, low_col, close_col, and volume_col via opts or parameters")
+
+    # Validate all required columns are present
+    required_feature_cols = [high_col, low_col, close_col, volume_col]
+    missing_cols = [col for col in required_feature_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Missing feature columns for VWAP: {missing_cols}")
+
+    # Compute typical price
+    df = df.with_columns(
+        ((pl.col(high_col) + pl.col(low_col) + pl.col(close_col)) / 3).alias("typical_price")
+    )
+
+    # Compute VWAP for the given window
+    price_volume = pl.col("typical_price") * pl.col(volume_col)
+    vwap_col = f"{prefix}_{close_col}_W{w}_cndl_M{time_frame}"
+
+    df = df.with_columns(
+        price_volume.rolling_sum(window_size=w).alias(f"cum_price_volume_W{w}"),
+        pl.col(volume_col).rolling_sum(window_size=w).alias(f"cum_volume_W{w}")
+    ).with_columns(
+        (pl.when(pl.col(f"cum_volume_W{w}") > 0)
+         .then(pl.col(f"cum_price_volume_W{w}") / pl.col(f"cum_volume_W{w}"))
+         .otherwise(0)
+        ).alias(vwap_col)
+    )
+
+    # Always normalize
+    norm_col = f"{vwap_col}_norm"
+    df = df.with_columns(
+        ((pl.col(vwap_col) - pl.col(close_col)) / pip_size).alias(norm_col)
+    )
+
+    # Keep only _time and VWAP columns
+    new_columns = ["_time", vwap_col, norm_col]
+    df = df.select(new_columns).collect()
+
+    return df
 
 def add_candle_base_indicators_polars(
     df_base: pl.DataFrame,
@@ -1003,6 +1078,12 @@ def add_candle_base_indicators_polars(
         w_sma = opts['feature_config']['window_size_SMA']
     elif prefix == 'fe_supertrend':
         multipliers = opts['feature_config']['multipliers']
+    elif prefix == 'fe_VWAP':
+        high_col = opts['feature_config']['high']
+        low_col = opts['feature_config']['low']
+        close_col = opts['feature_config']['close']
+        volume_col = opts['feature_config']['tick_volume']
+        cumulative = opts['feature_config'].get('cumulative', False)
 
     if prefix == "fe_leg":
         exponents = opts["exponents"]
@@ -1086,6 +1167,20 @@ def add_candle_base_indicators_polars(
                         features=list(set(features) - set(other_tf_features)),
                         multipliers=multipliers,
                         prefix=prefix,
+                    )
+                elif prefix == 'fe_VWAP':
+                    df = base_func(
+                        df=df,
+                        w=w,
+                        time_frame=time_frame,
+                        high_col=high_col,
+                        low_col=low_col,
+                        close_col=close_col,
+                        volume_col=volume_col,
+                        pip_size=pip_size,
+                        prefix=prefix,
+                        normalize=True,
+                        cumulative=cumulative,
                     )
                 else:
                     df = base_func(
@@ -1466,110 +1561,110 @@ def cal_RSTD_func(
     return df
 
 
-# def cal_FFD_func(
-#     df: pl.DataFrame,
-#     features: List[str],
-#     time_frame: int,
-#     n_splits: List[int],
-#     Auto_optimaze_d : bool|List[int] = True,
-#     prefix: str = "fe_FFD",
-# ) -> pl.DataFrame:
+def cal_FFD_func(
+    df: pl.DataFrame,
+    features: List[str],
+    time_frame: int,
+    n_splits: List[int],
+    Auto_optimaze_d : bool|List[int] = True,
+    prefix: str = "fe_FFD",
+) -> pl.DataFrame:
 
-#     df = df.sort("_time")
-#     col_drop = list(set(list(df.columns)) - set(['_time']))
+    df = df.sort("_time")
+    col_drop = list(set(list(df.columns)) - set(['_time']))
 
-#     def base_FFD(series, d, thres=1e-5):
-#         def getWeights(d, size, thres=1e-5):
-#             w = [1.0]
-#             for k in range(1, size):
-#                 w_ = -w[-1] / k * (d - k + 1)
-#                 w.append(w_)
-#             return np.array(w)[np.abs(w) > thres]
+    def base_FFD(series, d, thres=1e-5):
+        def getWeights(d, size, thres=1e-5):
+            w = [1.0]
+            for k in range(1, size):
+                w_ = -w[-1] / k * (d - k + 1)
+                w.append(w_)
+            return np.array(w)[np.abs(w) > thres]
 
-#         w = getWeights(d, size=10000, thres=thres)
+        w = getWeights(d, size=10000, thres=thres)
 
-#         result = np.convolve(series.to_numpy(), w, mode="valid")
+        result = np.convolve(series.to_numpy(), w, mode="valid")
 
-#         final_result = np.full_like(series.to_numpy(), np.nan, dtype=np.float64)
+        final_result = np.full_like(series.to_numpy(), np.nan, dtype=np.float64)
 
-#         final_result[len(w) - 1:] = result
+        final_result[len(w) - 1:] = result
 
-#         return pl.Series(final_result)
+        return pl.Series(final_result)
 
-#     def adf_test(series):
+    def adf_test(series):
 
-#         result = ADF(series.drop_nulls().drop_nans().to_numpy()).pvalue
+        result = ADF(series.drop_nulls().drop_nans().to_numpy()).pvalue
 
-#         return result
+        return result
 
-#     def split_dataframe(df, n_splits):
-#         indices = np.linspace(0, df.height, n_splits + 1, dtype=int)
-#         splits = [df[indices[i]:indices[i + 1]] for i in range(n_splits)]
+    def split_dataframe(df, n_splits):
+        indices = np.linspace(0, df.height, n_splits + 1, dtype=int)
+        splits = [df[indices[i]:indices[i + 1]] for i in range(n_splits)]
 
-#         return splits + [df]
+        return splits + [df]
 
-#     def Optimaze_d(list_df, base_feature, min_d=0, max_d=1, step=0.01):
-#         list_d = [min_d]
-#         for df in list_df:
-#             for d in np.arange(list_d[-1], max_d + step, step):
-#                 ser = base_FFD(df[base_feature], d, 1e-5)
-#                 pval_adf = adf_test(ser)
-#                 if pval_adf < 0.05:
-#                     list_d.append(d)
-#                     break
+    def Optimaze_d(list_df, base_feature, min_d=0, max_d=1, step=0.01):
+        list_d = [min_d]
+        for df in list_df:
+            for d in np.arange(list_d[-1], max_d + step, step):
+                ser = base_FFD(df[base_feature], d, 1e-5)
+                pval_adf = adf_test(ser)
+                if pval_adf < 0.05:
+                    list_d.append(d)
+                    break
 
-#         return max(list_d)
+        return max(list_d)
 
-#     @njit
-#     def correlation(x, y):
-#         x_mean, y_mean = np.mean(x), np.mean(y)
-#         cov = np.mean((x - x_mean) * (y - y_mean))
-#         corr = cov / (np.std(x) * np.std(y))
+    @njit
+    def correlation(x, y):
+        x_mean, y_mean = np.mean(x), np.mean(y)
+        cov = np.mean((x - x_mean) * (y - y_mean))
+        corr = cov / (np.std(x) * np.std(y))
 
-#         return corr
+        return corr
 
-#     if type(Auto_optimaze_d) == bool and Auto_optimaze_d:
-#         for ns in n_splits:
-#             list_df = split_dataframe(df, ns)
-#             fea = features[features.index(f"M{time_frame}_CLOSE")]
+    if type(Auto_optimaze_d) == bool and Auto_optimaze_d:
+        for ns in n_splits:
+            list_df = split_dataframe(df, ns)
+            fea = features[features.index(f"M{time_frame}_CLOSE")]
 
-#             best_d = Optimaze_d(list_df, fea)
-#             ser = base_FFD(df[fea], best_d)
-#             best_d = round(best_d, 3)
+            best_d = Optimaze_d(list_df, fea)
+            ser = base_FFD(df[fea], best_d)
+            best_d = round(best_d, 3)
 
-#             df = df.with_columns(ser.alias(f"{prefix}-{fea}_{best_d}"))
+            df = df.with_columns(ser.alias(f"{prefix}-{fea}_{best_d}"))
 
-#             corr = correlation(
-#                 df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[fea].to_numpy(),
-#                 df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[f"{prefix}-{fea}_{best_d}"].to_numpy(),
-#             )
-#             print(f"{fea}_{ns} : best_d = {best_d} | corr : {corr}")
+            corr = correlation(
+                df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[fea].to_numpy(),
+                df.filter(pl.col(f"{prefix}-{fea}_{best_d}").is_not_nan())[f"{prefix}-{fea}_{best_d}"].to_numpy(),
+            )
+            print(f"{fea}_{ns} : best_d = {best_d} | corr : {corr}")
 
-#     else:
-#         fea = features[features.index(f"M{time_frame}_CLOSE")]
-#         for d in Auto_optimaze_d:
-#             ser = base_FFD(df[fea], d)
-#             df = df.with_columns(ser.alias(f"{prefix}-{fea}_{d}"))
-#             corr = correlation(
-#                 df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[fea].to_numpy(),
-#                 df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[f"{prefix}-{fea}_{d}"].to_numpy(),
-#             )
-#             print(f"{fea} : d-value = {d} | corr : {corr}")
+    else:
+        fea = features[features.index(f"M{time_frame}_CLOSE")]
+        for d in Auto_optimaze_d:
+            ser = base_FFD(df[fea], d)
+            df = df.with_columns(ser.alias(f"{prefix}-{fea}_{d}"))
+            corr = correlation(
+                df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[fea].to_numpy(),
+                df.filter(pl.col(f"{prefix}-{fea}_{d}").is_not_nan())[f"{prefix}-{fea}_{d}"].to_numpy(),
+            )
+            print(f"{fea} : d-value = {d} | corr : {corr}")
 
-#             # for feature in list(set(features) - set([fea])):
-#             #     ser = base_FFD(df[feature], best_d)
-#             #     df = df.with_columns(ser.alias(f"{prefix}-{feature}_{best_d}"))
+            # for feature in list(set(features) - set([fea])):
+            #     ser = base_FFD(df[feature], best_d)
+            #     df = df.with_columns(ser.alias(f"{prefix}-{feature}_{best_d}"))
 
-#     df =df.drop(col_drop)
-#     df = df.filter(
-#         reduce(
-#             lambda acc, col: acc & pl.col(col).is_not_nan() if col != '_time' else acc,
-#             df.columns,
-#             pl.lit(True)
-#         )
-#     )
+    df =df.drop(col_drop)
+    df = df.filter(
+        reduce(
+            lambda acc, col: acc & pl.col(col).is_not_nan() if col != '_time' else acc,
+            df.columns,
+            pl.lit(True)
+        )
+    )
 
-#     return df
+    return df
 
 
 def cal_GMA_n_GBB_func(
@@ -1595,6 +1690,8 @@ def cal_GMA_n_GBB_func(
     """
     # print('=================')
     # print(features)
+    # # Ensure that _time is timezone-naive (if not already)
+    # df["_time"] = df["_time"].dt.convert_time_zone(None)
 
     # Assuming `df` is a polars DataFrame
     df = df.sort("_time")
@@ -1875,22 +1972,19 @@ def cal_OverLap_func(
     df = df.drop(col_drop)
 
     return df
-
-
 def history_indicator_calculator(feature_config, logger=default_logger):
     """
     Creating all indicators as features
     """
-
     logger.info("- " * 25)
-    logger.info("--> start history_indicator_calculator fumc:")
+    logger.info("--> start history_indicator_calculator func:")
 
     try:
-
         base_candle_folder_path = f"{root_path}/data/realtime_candle/"
 
         modes = {
             "fe_RSI": {"func": cal_RSI_base_func},
+            "fe_VWAP": {"func": cal_VWAP_base_func},  # Uses new function name
             "fe_EMA": {"func": cal_EMA_base_func},
             "fe_SMA": {"func": cal_SMA_base_func},
             "fe_ATR": {"func": cal_ATR_func},
@@ -1898,8 +1992,8 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_leg": {"func": cal_leg_base_func},
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
             "fe_supertrend": {"func": cal_supertrend_func},
-            # "fe_FFD": {"func": cal_FFD_func},
             "fe_GMA": {"func": cal_GMA_n_GBB_func},
+            ## "fe_FFD": {"func": cal_FFD_func}
             "fe_OL": {"func": cal_OverLap_func},
         }
 
@@ -1927,6 +2021,19 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                         "percentage": fe_leg_config[symbol]["percentage"],
                         "features_folder_path": features_folder_path,
                     }
+                elif fe_prefix == "fe_VWAP":
+                    opts = {
+                        "symbol": symbol,
+                        "candle_timeframe": feature_config[symbol][fe_prefix]["timeframe"],
+                        "window_size": feature_config[symbol][fe_prefix]["window_size"],
+                        "features_folder_path": features_folder_path,
+                        "feature_config": feature_config[symbol][fe_prefix],
+                        "high_col": feature_config[symbol][fe_prefix]["high"],  # e.g., "M5_HIGH"
+                        "low_col": feature_config[symbol][fe_prefix]["low"],    # e.g., "M5_LOW"
+                        "close_col": feature_config[symbol][fe_prefix]["close"],  # e.g., "M5_CLOSE"
+                        "volume_col": feature_config[symbol][fe_prefix]["tick_volume"],  # e.g., "M5_VOLUME"
+                        "pip_size": feature_config[symbol][fe_prefix].get("pip_size", 1.0),
+                    }
                 else:
                     opts = {
                         "symbol": symbol,
@@ -1943,26 +2050,48 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 ]
                 opts["base_feature"] = base_features
                 needed_columns = ["_time", "symbol", "minutesPassed"] + base_features
-                file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
+                if fe_prefix == "fe_VWAP":
+                    needed_columns.extend([opts["high_col"], opts["low_col"], opts["close_col"], opts["volume_col"]])
 
+                file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
                 df = pl.read_parquet(file_name, columns=needed_columns)
 
                 df = df.sort("_time").drop("symbol")
 
-                add_candle_base_indicators_polars(
-                    df_base=df,
-                    prefix=fe_prefix,
-                    base_func=func["func"],
-                    opts=opts,
-                )
+                if fe_prefix == "fe_VWAP":
+                    vwap_dfs = []
+                    for w in opts["window_size"]:
+                        df_vwap = cal_VWAP_base_func(
+                            df=df,
+                            w=w,
+                            time_frame=opts["candle_timeframe"][0],  # Assuming single timeframe
+                            features=base_features,
+                            pip_size=opts["pip_size"],
+                            prefix=fe_prefix,
+                            high_col=opts["high_col"],
+                            low_col=opts["low_col"],
+                            close_col=opts["close_col"],
+                            volume_col=opts["volume_col"],
+                        )
+                        vwap_dfs.append(df_vwap)
+                    # Merge all VWAP DataFrames
+                    df_vwap_merged = vwap_dfs[0]
+                    for vwap_df in vwap_dfs[1:]:
+                        df_vwap_merged = df_vwap_merged.join(vwap_df.drop("_time"), on="_time", how="left")
+                    df = df.join(df_vwap_merged, on="_time", how="left")
+                else:
+                    add_candle_base_indicators_polars(
+                        df_base=df,
+                        prefix=fe_prefix,
+                        base_func=func["func"],
+                        opts=opts,
+                    )
 
-                # ? merge
+                # Merge logic (unchanged)
                 df = df[["_time"]]
                 pathes = glob.glob(
                     f"{features_folder_path}/unmerged/{fe_prefix}_**_{symbol}_*.parquet"
                 )
-
-                # Uncomment the for loop in order to plot legs (fe_leg feature) in Colab
                 for df_path in pathes:
                     df_loaded = pl.read_parquet(df_path)
                     df = df.join(df_loaded, on="_time", how="left", coalesce=True)
@@ -1973,8 +2102,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 if fe_prefix == 'fe_GMA':
                     def gaussian_vectorized(source, bw):
                         return np.exp(-1 * ((source / bw) ** 2)) / np.sqrt(2 * np.pi)
-
-                    i_values = np.arange(500)  
+                    i_values = np.arange(500)
                     array_w = gaussian_vectorized(i_values, max_window_size)
                     max_window_size = len(array_w[array_w * 1e10 > 1])
 
@@ -2005,9 +2133,8 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
                 logger.info(f"--> {fe_prefix}_{symbol} done.")
 
-                ## add ratio: ------------------------------------------------------------------
+                # Ratio logic (unchanged)
                 ratio_prefix = "fe_ratio"
-
                 if ratio_prefix not in list(feature_config[symbol].keys()):
                     continue
 
@@ -2015,11 +2142,8 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                 features_folder_path = f"{root_path}/data/features/{ratio_prefix}/"
                 Path(features_folder_path).mkdir(parents=True, exist_ok=True)
 
-                if fe_prefix_replaced in list(
-                    feature_config[symbol][ratio_prefix].keys()
-                ):
+                if fe_prefix_replaced in list(feature_config[symbol][ratio_prefix].keys()):
                     ratio_config = feature_config[symbol][ratio_prefix][fe_prefix_replaced]
-
                     symbol_ratio_dfs.append(
                         add_all_ratio_by_config(
                             df,
@@ -2030,7 +2154,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                         )
                     )
 
-            # ? merge ratio for one symbol:
+            # Merge ratio for one symbol (unchanged)
             if len(symbol_ratio_dfs) == 0:
                 print(f"!!! no ratio feature for {symbol}.")
                 continue
@@ -2052,7 +2176,6 @@ def history_indicator_calculator(feature_config, logger=default_logger):
         logger.exception("--> history_indicator_calculator error.")
         logger.exception(f"--> error: {e}")
         raise ValueError("!!!")
-
 
 if __name__ == "__main__":
     from configs.feature_configs_general import generate_general_config

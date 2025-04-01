@@ -224,6 +224,16 @@ general_config = {
         'base_columns': ['CLOSE']
     },
 
+    "fe_VWAP": {
+            "base_columns": ["CLOSE", "HIGH", "LOW", "VOLUME"],
+            "timeframe": [5],  # M5 candles
+            "window_size": [20, 60, 240, 360, 720],
+            "high": "M5_HIGH",
+            "low": "M5_LOW",
+            "close": "M5_CLOSE",
+            "tick_volume": "M5_VOLUME",
+            # "pip_size": 0.01  # XAUUSD pip size
+    },
 
     'fe_RSI': {
         'timeframe': [5, 60, 240],

@@ -1972,6 +1972,8 @@ def cal_OverLap_func(
     df = df.drop(col_drop)
 
     return df
+
+
 def history_indicator_calculator(feature_config, logger=default_logger):
     """
     Creating all indicators as features
@@ -1984,7 +1986,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
 
         modes = {
             "fe_RSI": {"func": cal_RSI_base_func},
-            "fe_VWAP": {"func": cal_VWAP_base_func},  # Uses new function name
+            "fe_VWAP": {"func": cal_VWAP_base_func},
             "fe_EMA": {"func": cal_EMA_base_func},
             "fe_SMA": {"func": cal_SMA_base_func},
             "fe_ATR": {"func": cal_ATR_func},
@@ -1993,7 +1995,6 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
             "fe_supertrend": {"func": cal_supertrend_func},
             "fe_GMA": {"func": cal_GMA_n_GBB_func},
-            ## "fe_FFD": {"func": cal_FFD_func}
             "fe_OL": {"func": cal_OverLap_func},
         }
 
@@ -2049,9 +2050,13 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                     for tf in opts["candle_timeframe"]
                 ]
                 opts["base_feature"] = base_features
-                needed_columns = ["_time", "symbol", "minutesPassed"] + base_features
+                # Ensure unique columns
+                needed_columns = list(set(["_time", "symbol", "minutesPassed"] + base_features))
                 if fe_prefix == "fe_VWAP":
-                    needed_columns.extend([opts["high_col"], opts["low_col"], opts["close_col"], opts["volume_col"]])
+                    vwap_cols = [opts["high_col"], opts["low_col"], opts["close_col"], opts["volume_col"]]
+                    # Only add VWAP columns if not already in base_features
+                    needed_columns.extend([col for col in vwap_cols if col not in needed_columns])
+                    needed_columns = list(set(needed_columns))  # Remove duplicates again
 
                 file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
                 df = pl.read_parquet(file_name, columns=needed_columns)
@@ -2176,7 +2181,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
         logger.exception("--> history_indicator_calculator error.")
         logger.exception(f"--> error: {e}")
         raise ValueError("!!!")
-
+    
 if __name__ == "__main__":
     from configs.feature_configs_general import generate_general_config
 

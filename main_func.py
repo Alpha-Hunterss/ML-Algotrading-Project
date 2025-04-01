@@ -339,7 +339,7 @@ def main(
             "raw_agg_evals": raw_aggregated_evals,
 
             "input_cols": input_cols_and_type,
-            "feature_importance_df": importance_df.sort_values("mean_importance", ascending=False),
+            # "feature_importance_df": importance_df.sort_values("mean_importance", ascending=False),
 
             "train_duration_mean_fold": evals["train_duration"].apply(process_train_duration).mean(),
 

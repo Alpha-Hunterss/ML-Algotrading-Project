@@ -740,19 +740,21 @@ def quant_CV(
     print('CV loop ends')
     print(general_backtest_report)
 
-    # Create a DataFrame from the feature importances
-    importance_df = pd.DataFrame(feature_importances)
-    importance_df = importance_df.T.reset_index()
-    importance_df.columns = ['feature_name'] + [f'importance_fold_{i}' for i in range(len(folds))]
+    # # Create a DataFrame from the feature importances
+    # importance_df = pd.DataFrame(feature_importances)
+    # importance_df = importance_df.T.reset_index()
+    # importance_df.columns = ['feature_name'] + [f'importance_fold_{i}' for i in range(len(folds))]
 
-    imp_cols = [f for f in importance_df if 'importance_fold' in f]
-    importance_df['mean_importance'] = importance_df[imp_cols].mean(axis=1)
-    importance_df['median_importance'] = importance_df[imp_cols].median(axis=1)
-    importance_df['std_importance'] = importance_df[imp_cols].std(axis=1)
+    # imp_cols = [f for f in importance_df if 'importance_fold' in f]
+    # importance_df['mean_importance'] = importance_df[imp_cols].mean(axis=1)
+    # importance_df['median_importance'] = importance_df[imp_cols].median(axis=1)
+    # importance_df['std_importance'] = importance_df[imp_cols].std(axis=1)
 
-    # Calculate coefficient of variation (CV)
-    importance_df['cv'] = importance_df['std_importance'] / importance_df['mean_importance']
-    importance_df.sort_values('mean_importance', ascending=False, inplace=True)
+    # # Calculate coefficient of variation (CV)
+    # importance_df['cv'] = importance_df['std_importance'] / importance_df['mean_importance']
+    # importance_df.sort_values('mean_importance', ascending=False, inplace=True)
+
+    importance_df = 0
 
     return (
         input_cols_and_type,

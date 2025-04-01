@@ -327,7 +327,6 @@ def main(
         exp_date = str(datetime.today().strftime("%Y-%m-%d_%H:%M"))
         # Experiment Name
         name = f"{model_name}_{target_col.replace('trg_clf_','')}_prof{selected_evals['profit_percent_test']:.2f}_max_dd{selected_evals['max_dd_test']:.2f}_median_sig{selected_evals['signal_count_median_test']:.2f}_date{exp_date}"
-        stacked_name = "XGB_orig"
         
         QuantExpTracker_arguments = {
             "model": final_clf,
@@ -344,9 +343,6 @@ def main(
             "feature_importance_df": importance_df,
             # "feature_importance_df": importance_df.sort_values("mean_importance", ascending=False),
             "train_duration_mean_fold": evals["train_duration"].apply(process_train_duration).mean(),
-
-
-
         }
         exp_metadata = {
             "name": name,
@@ -359,7 +355,7 @@ def main(
         }
         QuantExpTracker_arguments.update(exp_metadata)
         QuantExpTracker_arguments_stacked = QuantExpTracker_arguments.copy()
-        QuantExpTracker_arguments_stacked.update({'model': final_clf.stacked_model,'name': 'XGB_stacked'})
+        QuantExpTracker_arguments_stacked.update({'model': final_clf.stacked_model, 'name': 'XGB_stacked'})
 
         exp_obj = QuantExpTracker(**QuantExpTracker_arguments)
         exp_obj_stacked = QuantExpTracker(**QuantExpTracker_arguments_stacked)

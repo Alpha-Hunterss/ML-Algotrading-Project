@@ -193,14 +193,17 @@ general_config = {
     # Support & Resistance Levels
     'fe_WIN': {
         'timeframe': [5],
-        'window_size': [6, 12, 48, 276, 480],
+        'window_size': [6, 12, 48, 276, 480, 1380],
         'base_columns': ['CLOSE']
     },
 
 
     'fe_WIN_FREQ': {
         'timeframe': [5],
-        'window_size': [240, 480, 1380],
+        'window_size': [ #240,
+                         480
+                         #, 1380
+                         ],
         'base_columns': ['CLOSE']
     },
 

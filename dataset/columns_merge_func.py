@@ -26,7 +26,7 @@ prefixes = [
     "fe_WIN_max",
     "fe_WIN_min",
     "fe_WIN",
-    # "fe_WIN_FREQ",
+    "fe_WIN_FREQ",
     "fe_ratio_RSI",
     "fe_ratio_EMA",
     "fe_ratio_RSTD",
@@ -159,7 +159,7 @@ def history_columns_merge(
         "fe_ratio",
         "fe_cndl_shift",
         "fe_WIN",
-        # "fe_WIN_FREQ",
+        "fe_WIN_FREQ",
         "fe_cndl_ptrn",
         "fe_market_close",
     ]

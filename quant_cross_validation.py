@@ -471,6 +471,8 @@ def quant_CV(
                 # else:
                 #     proba_pred = model.predict_proba(df.loc[folds[i][set_name]][input_cols])
 
+                cf_df = df.copy()
+
                 if use_cudf:
                     if is_cf_model:
                         if model.use_valid_as_calib:
@@ -493,7 +495,7 @@ def quant_CV(
                                     confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
 
                             if not model.use_meta_labeling:
-                                df.loc[
+                                cf_df.loc[
                                     folds[i][set_name],
                                     "confidence_levels"
                                 ] = confidence_levels
@@ -507,7 +509,7 @@ def quant_CV(
                             )
 
                             if not model.use_meta_labeling:
-                                df.loc[
+                                cf_df.loc[
                                     folds[i][set_name],
                                     "confidence_levels"
                                 ] = confidence_levels
@@ -529,7 +531,7 @@ def quant_CV(
                                     confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
 
                             if not model.use_meta_labeling:
-                                df.loc[
+                                cf_df.loc[
                                     folds[i][set_name],
                                     "confidence_levels"
                                 ] = confidence_levels
@@ -539,7 +541,7 @@ def quant_CV(
                             )
 
                             if not model.use_meta_labeling:
-                                df.loc[
+                                cf_df.loc[
                                     folds[i][set_name],
                                     "confidence_levels"
                                 ] = confidence_levels
@@ -568,8 +570,8 @@ def quant_CV(
                 if is_cf_model:
                     #? Backtest
                     bt_report, bt_df = do_backtest(
-                        df_model_signal = df.loc[folds[i][set_name]].loc[
-                                df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
+                        df_model_signal = cf_df.loc[folds[i][set_name]].loc[
+                                cf_df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
                         ][[f"pred_as_{pred_name[set_name]}", "confidence_levels"]].rename(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),
@@ -600,8 +602,8 @@ def quant_CV(
                 else:
                     #? Backtest
                     bt_report, bt_df = do_backtest(
-                        df_model_signal = df.loc[folds[i][set_name]].loc[
-                                df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
+                        df_model_signal = cf_df.loc[folds[i][set_name]].loc[
+                                cf_df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
                         ][[f"pred_as_{pred_name[set_name]}"]].rename(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),

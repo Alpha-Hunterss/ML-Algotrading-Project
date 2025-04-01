@@ -1975,9 +1975,6 @@ def cal_OverLap_func(
 
 
 def history_indicator_calculator(feature_config, logger=default_logger):
-    """
-    Creating all indicators as features
-    """
     logger.info("- " * 25)
     logger.info("--> start history_indicator_calculator func:")
 
@@ -2083,24 +2080,49 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                     df_vwap_merged = df_vwap_merged.select([col for col in df_vwap_merged.columns if not col.startswith("_time_")])
                     df = df.join(df_vwap_merged, on="_time", how="left")
                 else:
-                    add_candle_base_indicators_polars(df_base=df, prefix=fe_prefix, base_func=func["func"], opts=opts)
+                    add_candle_base_indicators_polars(
+                        df_base=df,
+                        prefix=fe_prefix,
+                        base_func=func["func"],
+                        opts=opts,
+                    )
 
-                # Only keep _time and feature columns (those starting with fe_prefix)
+                # Filter to keep only _time and columns starting with the current fe_prefix
                 feature_cols = [col for col in df.columns if col.startswith(fe_prefix) or col == "_time"]
                 df = df.select(feature_cols)
                 logger.info(f"Columns after filtering for {fe_prefix}: {df.columns}")
 
-                # [Existing filtering logic]
+                pathes = glob.glob(f"{features_folder_path}/unmerged/{fe_prefix}_**_{symbol}_*.parquet")
+                if pathes:
+                    for df_path in pathes:
+                        df_loaded = pl.read_parquet(df_path)
+                        df = df.join(df_loaded, on="_time", how="left", coalesce=True)
+
                 max_candle_timeframe = max(opts["candle_timeframe"])
                 max_window_size = max(opts["window_size"])
+
+                if fe_prefix == 'fe_GMA':
+                    def gaussian_vectorized(source, bw):
+                        return np.exp(-1 * ((source / bw) ** 2)) / np.sqrt(2 * np.pi)
+                    i_values = np.arange(500)
+                    array_w = gaussian_vectorized(i_values, max_window_size)
+                    max_window_size = len(array_w[array_w * 1e10 > 1])
+
                 drop_rows = (max_window_size + 1) * (max_candle_timeframe / 5) - 1
                 logger.info(f"--> max_candle_timeframe:{max_candle_timeframe} | max_window_size:{max_window_size}| drop_rows:{drop_rows}")
 
                 df = df.with_row_index()
                 if fe_prefix != 'fe_leg':
-                    df = df.filter(pl.col("index") >= drop_rows).fill_null(strategy="forward").drop("index")
+                    df = (
+                        df.filter(pl.col("index") >= drop_rows)
+                        .fill_null(strategy="forward")
+                        .drop("index")
+                    )
                 else:
-                    df = df.fill_null(strategy="forward").drop("index")
+                    df = (
+                        df.fill_null(strategy="forward")
+                        .drop("index")
+                    )
 
                 df = df.drop_nulls()
                 df = df.with_columns(pl.lit(symbol).alias("symbol"))

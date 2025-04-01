@@ -1,5 +1,4 @@
 import zipfile
-import joblib
 import numpy as np
 import pickle as pkl
 import matplotlib.pyplot as plt
@@ -13,6 +12,7 @@ class QuantExpTracker:
         name,
         model,
         folds,
+        # stacked_name,
 
         val_predictions,
         test_predictions,
@@ -34,6 +34,7 @@ class QuantExpTracker:
         self.name = name
         self.model = model
         self.folds = folds
+        # self.stacked_name = stacked_name
 
         self.val_predictions = val_predictions
         self.test_predictions = test_predictions
@@ -52,18 +53,19 @@ class QuantExpTracker:
         self.max_CV_train_date = max_CV_train_date
 
         self.store_name = f"{self.name}.pkl"
-        self.store_name_joblib = f"{self.name}.joblib"
+        # self.stacked_store_name = f"{self.stacked_name}.pkl"
 
     def store_obj(self, store_zip: bool = True):
+        # if is_stacked:
+        #     file = open(self.stacked_store_name, "wb")
+        #     pkl.dump(self, file)
+        #     file.close()
+
         file = open(self.store_name, "wb")
         pkl.dump(self, file)
         file.close()
-        print(f"object stored as pickle: {self.store_name}")
 
-        file = open(self.store_name_joblib, "wb")
-        joblib.dump(self.model, file)
-        file.close()
-        print(f"object stored as joblib: {self.store_name_joblib}")
+        print(f"object stored as pickle: {self.store_name}")
 
         if store_zip:
             with zipfile.ZipFile(self.store_name + ".zip", "w", compression=zipfile.ZIP_DEFLATED) as zipf:

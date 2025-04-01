@@ -2029,10 +2029,10 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                         "window_size": feature_config[symbol][fe_prefix]["window_size"],
                         "features_folder_path": features_folder_path,
                         "feature_config": feature_config[symbol][fe_prefix],
-                        "high_col": feature_config[symbol][fe_prefix]["high"],  # e.g., "M5_HIGH"
-                        "low_col": feature_config[symbol][fe_prefix]["low"],    # e.g., "M5_LOW"
-                        "close_col": feature_config[symbol][fe_prefix]["close"],  # e.g., "M5_CLOSE"
-                        "volume_col": feature_config[symbol][fe_prefix]["tick_volume"],  # e.g., "M5_VOLUME"
+                        "high_col": feature_config[symbol][fe_prefix]["high"],
+                        "low_col": feature_config[symbol][fe_prefix]["low"],
+                        "close_col": feature_config[symbol][fe_prefix]["close"],
+                        "volume_col": feature_config[symbol][fe_prefix]["tick_volume"],
                         "pip_size": feature_config[symbol][fe_prefix].get("pip_size", 1.0),
                     }
                 else:
@@ -2050,13 +2050,11 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                     for tf in opts["candle_timeframe"]
                 ]
                 opts["base_feature"] = base_features
-                # Ensure unique columns
                 needed_columns = list(set(["_time", "symbol", "minutesPassed"] + base_features))
                 if fe_prefix == "fe_VWAP":
                     vwap_cols = [opts["high_col"], opts["low_col"], opts["close_col"], opts["volume_col"]]
-                    # Only add VWAP columns if not already in base_features
                     needed_columns.extend([col for col in vwap_cols if col not in needed_columns])
-                    needed_columns = list(set(needed_columns))  # Remove duplicates again
+                    needed_columns = list(set(needed_columns))
 
                 file_name = base_candle_folder_path + f"{symbol}_realtime_candle.parquet"
                 df = pl.read_parquet(file_name, columns=needed_columns)
@@ -2069,7 +2067,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                         df_vwap = cal_VWAP_base_func(
                             df=df,
                             w=w,
-                            time_frame=opts["candle_timeframe"][0],  # Assuming single timeframe
+                            time_frame=opts["candle_timeframe"][0],
                             features=base_features,
                             pip_size=opts["pip_size"],
                             prefix=fe_prefix,
@@ -2082,7 +2080,10 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                     # Merge all VWAP DataFrames
                     df_vwap_merged = vwap_dfs[0]
                     for vwap_df in vwap_dfs[1:]:
-                        df_vwap_merged = df_vwap_merged.join(vwap_df.drop("_time"), on="_time", how="left")
+                        # Join without dropping _time prematurely
+                        df_vwap_merged = df_vwap_merged.join(vwap_df, on="_time", how="left", suffix=f"_W{vwap_df.columns[1].split('_W')[1].split('_cndl')[0]}")
+                    # Drop duplicate _time columns if any (not expected with how="left")
+                    df_vwap_merged = df_vwap_merged.select([col for col in df_vwap_merged.columns if not col.startswith("_time_")])
                     df = df.join(df_vwap_merged, on="_time", how="left")
                 else:
                     add_candle_base_indicators_polars(

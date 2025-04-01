@@ -2080,9 +2080,7 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                     # Merge all VWAP DataFrames
                     df_vwap_merged = vwap_dfs[0]
                     for vwap_df in vwap_dfs[1:]:
-                        # Join without dropping _time prematurely
                         df_vwap_merged = df_vwap_merged.join(vwap_df, on="_time", how="left", suffix=f"_W{vwap_df.columns[1].split('_W')[1].split('_cndl')[0]}")
-                    # Drop duplicate _time columns if any (not expected with how="left")
                     df_vwap_merged = df_vwap_merged.select([col for col in df_vwap_merged.columns if not col.startswith("_time_")])
                     df = df.join(df_vwap_merged, on="_time", how="left")
                 else:
@@ -2093,14 +2091,14 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                         opts=opts,
                     )
 
-                # Merge logic (unchanged)
-                df = df[["_time"]]
-                pathes = glob.glob(
-                    f"{features_folder_path}/unmerged/{fe_prefix}_**_{symbol}_*.parquet"
-                )
-                for df_path in pathes:
-                    df_loaded = pl.read_parquet(df_path)
-                    df = df.join(df_loaded, on="_time", how="left", coalesce=True)
+                # Merge with unmerged files only if they exist and are relevant
+                pathes = glob.glob(f"{features_folder_path}/unmerged/{fe_prefix}_**_{symbol}_*.parquet")
+                if pathes:
+                    for df_path in pathes:
+                        df_loaded = pl.read_parquet(df_path)
+                        df = df.join(df_loaded, on="_time", how="left", coalesce=True)
+                # Do not reset df to just _time; keep all columns
+                # df = df[["_time"]]  # Removed this line
 
                 max_candle_timeframe = max(opts["candle_timeframe"])
                 max_window_size = max(opts["window_size"])
@@ -2123,12 +2121,12 @@ def history_indicator_calculator(feature_config, logger=default_logger):
                     df = (
                         df.filter(pl.col("index") >= drop_rows)
                         .fill_null(strategy="forward")
-                        .drop(*["index"])
+                        .drop("index")  # Drop index only, not using * unpacking
                     )
                 else:
                     df = (
                         df.fill_null(strategy="forward")
-                        .drop(*["index"])
+                        .drop("index")
                     )
 
                 df = df.drop_nulls()

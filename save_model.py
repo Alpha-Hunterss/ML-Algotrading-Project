@@ -7,7 +7,9 @@ def train_model_to_save(
     max_train_size: int,
     save_model_mode: str|None,
     non_feature_columns: list[str],
-    ):
+    eval_set_ratio: float,
+    model_name: str,
+):
     """
     This function is used for retrainig the model on specific set of data specifically the most recent historical data
         df: the historical dataset,
@@ -20,6 +22,8 @@ def train_model_to_save(
             None: The function will return none
     # 
     """
+
+    is_ensemble_xgbf_model = "XGBF+" in model_name
 
     if "confidence_levels" in df.columns:
         df = df.drop(columns=["confidence_levels"], errors="ignore")
@@ -47,10 +51,27 @@ def train_model_to_save(
         )
 
     elif save_model_mode == "all_data":
-        final_clf.fit(
-            df.drop(columns=non_feature_columns),
-            df["target"],
-        )
+        if is_ensemble_xgbf_model:
+            df.sort_values(["_time"])
+            split_idx = int(len(df) * (1-eval_set_ratio))
+            pre_eval_df = df.iloc[:split_idx]
+            eval_df = df.iloc[split_idx:]
+
+            final_clf.fit(
+                pre_eval_df.drop(columns=non_feature_columns),
+                pre_eval_df["target"],
+            )
+
+            final_clf.predict_proba(
+                eval_df.drop(columns=non_feature_columns),
+                eval_df["target"],
+                stacked_model_trained=False,
+            )
+        else:
+            final_clf.fit(
+                df.drop(columns=non_feature_columns),
+                df["target"],
+            )
     else:
         final_clf = None
 

@@ -301,7 +301,8 @@ def main(
                 man_params=man_params, manual=manual, model=model_name
             )
             final_clf = train_model_to_save(
-                df_all, final_clf, max_train_size, save_model_mode, non_feature_columns
+                df_all, final_clf, max_train_size, save_model_mode,
+                non_feature_columns, eval_set_ratio, model_name
             )
         else:
             final_clf = None

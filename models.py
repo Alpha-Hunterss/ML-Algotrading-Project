@@ -1151,8 +1151,8 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         """
         check_is_fitted(self)
         # Check data
-        if not self.use_cudf:
-            X = self._validate_X_predict(X)
+        # if not self.use_cudf:
+        #     X = self._validate_X_predict(X)
 
         # Assign chunk of trees to jobs
         n_jobs, _, _ = _partition_estimators(self.n_estimators, self.n_jobs)

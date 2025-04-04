@@ -149,7 +149,7 @@ general_config = {
 
 
     'fe_OL': {
-        'timeframe': [5, 60, 240, 1380],
+        'timeframe': [5, 60, 240],
         'window_size': [1, 7, 21, 33],
         'window_size_SMA': [5, 15, 21, 55],
         'base_columns': ['HIGH', 'LOW']

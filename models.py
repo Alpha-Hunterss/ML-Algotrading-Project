@@ -1173,7 +1173,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         feature_importances = self.feature_importances_
         sorted_idx = np.argsort(feature_importances)[::-1]
         top_features = X.columns[sorted_idx[:self.stacked_model_n_top_features]]
-        X = X[top_features]
+        X = X[top_features].copy()
 
         if not stacked_model_trained:
             if y is None:

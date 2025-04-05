@@ -1105,6 +1105,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         from sklearn.decomposition import PCA
         from sklearn.preprocessing import StandardScaler
 
+        df = df.copy()
         model_columns = df.columns.tolist()
         col_prob = [col for col in model_columns if "th_est_pos_label_proba" in col]
 
@@ -1191,7 +1192,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                     )
             else:
                 for idx, est_proba in enumerate(all_proba):
-                    X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
+                    X.loc[:, f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
 
             if isinstance(self.stacked_models_params, dict):
                 for key in self.stacked_models_params.keys():

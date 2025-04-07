@@ -209,28 +209,47 @@ def cal_cndl_shape_n_cntxt_func(
     calcs = []
 
     # Create rolling statistics for each context feature
-    for feature in context_features:
+    for idx, feature in enumerate(context_features):
         # Calculate rolling stats
-        calcs.extend([
-            pl.col(feature)
-            .rolling_mean(window_size=w)
-            .alias(f"{feature}_rolling_mean"),
-            pl.col(feature)
-            .rolling_median(window_size=w)
-            .alias(f"{feature}_rolling_median"),
-            pl.col(feature)
-            .rolling_std(window_size=w)
-            .alias(f"{feature}_rolling_std"),
-            (pl.col(feature).rolling_max(window_size=w) -
-             pl.col(feature).rolling_min(window_size=w))
-            .alias(f"{feature}_rolling_range"),
-            (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) -
-             pl.col(feature).rolling_quantile(quantile=0.25, window_size=w))
-            .alias(f"{feature}_rolling_iqr"),
-            pl.col(feature)
-            .ewm_mean(alpha=alpha)
-            .alias(f"{feature}_ema")
-        ])
+        if idx == 0:
+            calcs.extend([
+                pl.col(feature)
+                .rolling_mean(window_size=w)
+                .alias(f"{feature}_rolling_mean"),
+                pl.col(feature)
+                .rolling_median(window_size=w)
+                .alias(f"{feature}_rolling_median"),
+                (pl.col(feature).rolling_max(window_size=w) -
+                pl.col(feature).rolling_min(window_size=w))
+                .alias(f"{feature}_rolling_range"),
+                (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) -
+                pl.col(feature).rolling_quantile(quantile=0.25, window_size=w))
+                .alias(f"{feature}_rolling_iqr"),
+                pl.col(feature)
+                .ewm_mean(alpha=alpha)
+                .alias(f"{feature}_ema")
+            ])
+        else:
+            calcs.extend([
+                pl.col(feature)
+                .rolling_mean(window_size=w)
+                .alias(f"{feature}_rolling_mean"),
+                pl.col(feature)
+                .rolling_median(window_size=w)
+                .alias(f"{feature}_rolling_median"),
+                pl.col(feature)
+                .rolling_std(window_size=w)
+                .alias(f"{feature}_rolling_std"),
+                (pl.col(feature).rolling_max(window_size=w) -
+                pl.col(feature).rolling_min(window_size=w))
+                .alias(f"{feature}_rolling_range"),
+                (pl.col(feature).rolling_quantile(quantile=0.75, window_size=w) -
+                pl.col(feature).rolling_quantile(quantile=0.25, window_size=w))
+                .alias(f"{feature}_rolling_iqr"),
+                pl.col(feature)
+                .ewm_mean(alpha=alpha)
+                .alias(f"{feature}_ema")
+            ])
 
     # Calculate rounded price distances for different decimal places
     for i in range(2, 4):  # For n-2, n-3
@@ -845,6 +864,7 @@ def cal_RSI_base_func(
             f"{feature}_RS_{w}"
         ],
     )
+
     return df.collect()
 
 
@@ -867,7 +887,6 @@ def cal_EMA_base_func(
     pip size: pip size of the pair
     prefix: prefix of feature name
     normalize: if True the function returns pipsize difference between EMA and last close price.
-
     """
     assert (
         len(features) == 1
@@ -964,7 +983,8 @@ def add_candle_base_indicators_polars(
     df_base: base dataframe containing the raw features
     prefix: prefix of feature name
     base_func: the indicator function
-    opts: a dictionary of "symbol","base_feature","candle_timeframe","window_size" and "features_folder_path"
+    opts: a dictionary of "symbol", "base_feature", "candle_timeframe",
+        "window_size" and "features_folder_path"
     """
 
     df_base = df_base.sort("_time")
@@ -1160,7 +1180,8 @@ def add_all_ratio_by_config(
 ) -> pl.DataFrame:
     """
     this function takes the ratio config and applies add_ratio
-    ratio_config: a dictionary of dictionaries containing list of time frames and list of pairs of window sizes needed for ratio
+    ratio_config: a dictionary of dictionaries containing list of time frames
+        and list of pairs of window sizes needed for ratio
     """
 
     base_cols = set(df.columns) - set(["_time"])
@@ -1444,6 +1465,7 @@ def cal_RSTD_func(
                 / pip_size
             ).alias(f"{prefix}_{feature}_W{w}_cndl_M{time_frame}")
         ).lazy()
+
     df = df.collect()
     df = df.drop([f"{feature}"])
 
@@ -1455,7 +1477,7 @@ def cal_FFD_func(
     features: List[str],
     time_frame: int,
     n_splits: List[int],
-    Auto_optimaze_d : bool|List[float] = True,  
+    Auto_optimaze_d : bool|List[int] = True,
     prefix: str = "fe_FFD",
 ) -> pl.DataFrame:
 
@@ -1556,34 +1578,36 @@ def cal_FFD_func(
     return df
 
 
-def cal_GMAandGBB_func(
+def cal_GMA_n_GBB_func(
     df: pl.DataFrame,
     w: int,
     time_frame: int,
     features: List[str],
-    devs:List[int|float] ,
+    devs: List[int|float],
     pip_size: float,
     prefix: str = "fe_GMA",
-    
 ) -> pl.DataFrame:
     """
-    this function calculates Gaussian moving average And Weighted Bollinger Band.
+    this function calculates Gaussian Moving Average And Weighted Bollinger Band.
     inputs:
     df: dataframe containing the raw feature
-    w: Gaussian Parameter 
+    w: Gaussian Parameter
     time_frame: time_frame for calculations
     devs: Parameter for calculations Bollinger Band,
     pip size: pip size of the pair
     prefix: prefix of feature name
-    normalize: if True the function returns pipsize difference between GMA and last close-high-low price.
+    normalize: if True the function returns pipsize difference between GMA
+        and last close-high-low price.
     """
     # print('=================')
     # print(features)
-    
+
     # Assuming `df` is a polars DataFrame
     df = df.sort("_time")
+
     def gaussian_vectorized(source, bw):
         return np.exp(-1 * ((source / bw) ** 2)) / np.sqrt(2 * np.pi)
+
     i_values = np.arange(500)  
     array_w = gaussian_vectorized(i_values, w)
     array_w = array_w[array_w * 1e10 > 1]
@@ -1592,17 +1616,32 @@ def cal_GMAandGBB_func(
     array_price = df.select(base_features).to_numpy()
     window_size = len(array_w)
     devs = np.array(devs)
+
     # Rolling calculations using convolution for weighted values
-    rolled_close = np.convolve(array_price[:, base_features.index(f"M{time_frame}_CLOSE")]**1, array_w, 'valid') / Sum_w
-    rolled_close_sq = np.convolve(array_price[:, base_features.index(f"M{time_frame}_CLOSE")]**2, array_w, 'valid') / Sum_w
-    rolled_high = np.convolve(array_price[:, base_features.index(f"M{time_frame}_HIGH")]**1, array_w, 'valid') / Sum_w
-    rolled_high_sq = np.convolve(array_price[:, base_features.index(f"M{time_frame}_HIGH")]**2, array_w, 'valid') / Sum_w
-    rolled_low = np.convolve(array_price[:, base_features.index(f"M{time_frame}_LOW")]**1, array_w, 'valid') / Sum_w
-    rolled_low_sq = np.convolve(array_price[:, base_features.index(f"M{time_frame}_LOW")]**2, array_w, 'valid') / Sum_w
+    rolled_close = np.convolve(
+        array_price[:, base_features.index(f"M{time_frame}_CLOSE")]**1, array_w, 'valid'
+    ) / Sum_w
+    rolled_close_sq = np.convolve(
+        array_price[:, base_features.index(f"M{time_frame}_CLOSE")]**2, array_w, 'valid'
+    ) / Sum_w
+    rolled_high = np.convolve(
+        array_price[:, base_features.index(f"M{time_frame}_HIGH")]**1, array_w, 'valid'
+    ) / Sum_w
+    rolled_high_sq = np.convolve(
+        array_price[:, base_features.index(f"M{time_frame}_HIGH")]**2, array_w, 'valid'
+    ) / Sum_w
+    rolled_low = np.convolve(
+        array_price[:, base_features.index(f"M{time_frame}_LOW")]**1, array_w, 'valid'
+    ) / Sum_w
+    rolled_low_sq = np.convolve(
+        array_price[:, base_features.index(f"M{time_frame}_LOW")]**2, array_w, 'valid'
+    ) / Sum_w
+
     # Calculate standard deviations
-    std_close = np.sqrt(np.maximum(0,rolled_close_sq - rolled_close**2))
-    std_high = np.sqrt(np.maximum(0,rolled_high_sq - rolled_high**2))
-    std_low = np.sqrt(np.maximum(0,rolled_low_sq - rolled_low**2))
+    std_close = np.sqrt(np.maximum(0, rolled_close_sq - rolled_close**2))
+    std_high = np.sqrt(np.maximum(0, rolled_high_sq - rolled_high**2))
+    std_low = np.sqrt(np.maximum(0, rolled_low_sq - rolled_low**2))
+
     df = df.slice(window_size - 1)
     df = df.with_columns(
         [
@@ -1611,9 +1650,10 @@ def cal_GMAandGBB_func(
             pl.lit(rolled_low).alias("low_GMA"),
         ]
     )
+
     # Add Bollinger Bands for each deviation level
     for dev in devs:
-            
+
         df = df.with_columns([
             (pl.col('close_GMA') + std_close * dev).alias(f'Close-GMA_UBB{dev}'),
             (pl.col('close_GMA') - std_close * dev).alias(f'Close-GMA_LBB{dev}'),
@@ -1622,13 +1662,20 @@ def cal_GMAandGBB_func(
             (pl.col('low_GMA') + std_low * dev).alias(f'Low-GMA_UBB{dev}'),
             (pl.col('low_GMA') - std_low * dev).alias(f'Low-GMA_LBB{dev}')
         ]).lazy()
+
     col_drop = list(set(df.collect_schema().names()) - set(['_time']))
-    df = df.with_columns((pl.col('close_GMA').diff()).alias(f"{prefix}_GMAClose_W{w}_diff_cndl_M{time_frame}")).lazy()
-    df = df.with_columns((pl.col('high_GMA').diff()).alias(f"{prefix}_GMAHigh_W{w}_diff_cndl_M{time_frame}")).lazy()
-    df = df.with_columns((pl.col('low_GMA').diff()).alias(f"{prefix}_GMALow_W{w}_diff_cndl_M{time_frame}")).lazy()
-    
+    df = df.with_columns(
+        (pl.col('close_GMA').diff()).alias(f"{prefix}_GMAClose_W{w}_diff_cndl_M{time_frame}")
+    ).lazy()
+    df = df.with_columns(
+        (pl.col('high_GMA').diff()).alias(f"{prefix}_GMAHigh_W{w}_diff_cndl_M{time_frame}")
+    ).lazy()
+    df = df.with_columns(
+        (pl.col('low_GMA').diff()).alias(f"{prefix}_GMALow_W{w}_diff_cndl_M{time_frame}")
+    ).lazy()
+
     for base_feature in base_features:
-        
+
         df = df.with_columns(
             (
                 (
@@ -1636,8 +1683,8 @@ def cal_GMAandGBB_func(
                 )
                 / pip_size
             ).alias(f"{prefix}_{base_feature}-GMAClose_W{w}_cndl_M{time_frame}_norm")
-        ).lazy()  
-                    
+        ).lazy()
+
         df = df.with_columns(
             (
                 (
@@ -1645,8 +1692,8 @@ def cal_GMAandGBB_func(
                 )
                 / pip_size
             ).alias(f"{prefix}_{base_feature}-GMAHigh_W{w}_cndl_M{time_frame}_norm")
-        ).lazy()  
-                                
+        ).lazy()
+
         df = df.with_columns(
             (
                 (
@@ -1654,7 +1701,8 @@ def cal_GMAandGBB_func(
                 )
                 / pip_size
             ).alias(f"{prefix}_{base_feature}-GMALow_W{w}_cndl_M{time_frame}_norm")
-        ).lazy() 
+        ).lazy()
+
         for dev in devs:
             if base_feature == base_features[0]:
                 df = df.with_columns(
@@ -1662,70 +1710,67 @@ def cal_GMAandGBB_func(
                         (
                             pl.col(f'Close-GMA_UBB{dev}')- pl.col(f'Close-GMA_LBB{dev}')
                         )/ pip_size
-                        
                     ).alias(f"{prefix}_UGBBClose{dev}-LGBBClose{dev}_W{w}_cndl_M{time_frame}")
-                ).lazy() 
+                ).lazy()
+
                 # df = df.with_columns(
                 #     (
                 #         (
                 #             pl.col(f'Close-GMA_UBB{dev}')/ pl.col(f'Close-GMA_LBB{dev}')
                 #         )
-                        
                 #     ).alias(f"{prefix}_UGBBClose{dev}/LGBBClose{dev}_W{w}_cndl_M{time_frame}")
-                # ).lazy() 
-                                
+                # ).lazy()
+
                 df = df.with_columns(
                     (
                         (
                             pl.col(f'High-GMA_UBB{dev}')- pl.col(f'High-GMA_LBB{dev}')
                         )/ pip_size
-                        
                     ).alias(f"{prefix}_UGBBHigh{dev}-LGBBHigh{dev}_W{w}_cndl_M{time_frame}")
-                ).lazy() 
+                ).lazy()
+
                 # df = df.with_columns(
                 #     (
                 #         (
                 #             pl.col(f'High-GMA_UBB{dev}')/ pl.col(f'High-GMA_LBB{dev}')
                 #         )
-                        
                 #     ).alias(f"{prefix}_UGBBHigh{dev}/LGBBHigh{dev}_W{w}_cndl_M{time_frame}")
-                # ).lazy() 
-                
-                                
+                # ).lazy()
+
                 df = df.with_columns(
                     (
                         (
                             pl.col(f'Low-GMA_UBB{dev}')- pl.col(f'Low-GMA_LBB{dev}')
                         )/ pip_size
-                        
                     ).alias(f"{prefix}_UGBBLow{dev}-LGBBLow{dev}_W{w}_cndl_M{time_frame}")
-                ).lazy() 
+                ).lazy()
+
                 # df = df.with_columns(
                 #     (
                 #         (
                 #             pl.col(f'Low-GMA_UBB{dev}')/ pl.col(f'Low-GMA_LBB{dev}')
                 #         )
-                        
                 #     ).alias(f"{prefix}_UGBBLow{dev}/LGBBLow{dev}_W{w}_cndl_M{time_frame}")
-                # ).lazy() 
+                # ).lazy()
+
             df = df.with_columns(
                 (
                     (
-                        pl.col(base_feature) - pl.col(f'Close-GMA_UBB{dev}') 
+                        pl.col(base_feature) - pl.col(f'Close-GMA_UBB{dev}')
                     )
                     / pip_size
                 ).alias(f"{prefix}_{base_feature}-UGBBClose{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy()  
-            
+            ).lazy()
+
             df = df.with_columns(
                 (
                     (
-                        pl.col(base_feature) - pl.col(f'Close-GMA_LBB{dev}') 
+                        pl.col(base_feature) - pl.col(f'Close-GMA_LBB{dev}')
                     )
                     / pip_size
                 ).alias(f"{prefix}_{base_feature}-LGBBClose{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy() 
-            
+            ).lazy()
+
             df = df.with_columns(
                 (
                     (
@@ -1733,8 +1778,8 @@ def cal_GMAandGBB_func(
                     )
                     / pip_size
                 ).alias(f"{prefix}_{base_feature}-UGBBHigh{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy()  
-            
+            ).lazy()
+
             df = df.with_columns(
                 (
                     (
@@ -1742,8 +1787,8 @@ def cal_GMAandGBB_func(
                     )
                     / pip_size
                 ).alias(f"{prefix}_{base_feature}-LGBBHigh{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy() 
-                            
+            ).lazy()
+
             df = df.with_columns(
                 (
                     (
@@ -1751,8 +1796,8 @@ def cal_GMAandGBB_func(
                     )
                     / pip_size
                 ).alias(f"{prefix}_{base_feature}-UGBBLow{dev}_W{w}_cndl_M{time_frame}_norm")
-            ).lazy()  
-            
+            ).lazy()
+
             df = df.with_columns(
                 (
                     (
@@ -1761,9 +1806,9 @@ def cal_GMAandGBB_func(
                     / pip_size
                 ).alias(f"{prefix}_{base_feature}-LGBBLow{dev}_W{w}_cndl_M{time_frame}_norm")
             ).lazy()
-    
-    
-    df =df.drop(col_drop)
+
+    df = df.drop(col_drop)
+
     return df.collect()
 
 
@@ -1775,25 +1820,27 @@ def cal_OverLap_func(
     time_frame: int,
     pip_size: float,  # only for compatibility
     prefix: str = "fe_OL",
-    
 ) -> pl.DataFrame:
-    
+    """
+    This function calculates the overlap feature."""
     df = df.sort("_time")
-    
     low = features[features.index(f'M{time_frame}_LOW')]
     high = features[features.index(f'M{time_frame}_HIGH')]
+
     df = df.with_columns(
         [
             pl.col(low).rolling_min(window_size=w).alias("Low_window"),
             pl.col(high).rolling_max(window_size=w).alias("High_window"),
         ]
     ).lazy()
+
     df = df.with_columns(
         [
             pl.col("Low_window").shift(w).alias("Low_shifted_window"),
             pl.col("High_window").shift(w).alias("High_shifted_window"),
         ]
     ).lazy()
+
     df = df.with_columns(
         [
             (pl.when(
@@ -1807,32 +1854,38 @@ def cal_OverLap_func(
             (pl.col("High_window") - pl.col("Low_window")).alias("BarAmount"),
         ]
     ).lazy()
+
     df = df.with_columns(
-        pl.when(pl.col("BarAmount") == 0).then(0.001).otherwise(pl.col("BarAmount")).alias("BarAmount")
+        pl.when(
+            pl.col("BarAmount") == 0
+        ).then(0.001).otherwise(pl.col("BarAmount")).alias("BarAmount")
     ).lazy()
+
     df = df.with_columns(
         ((pl.col("Overlap") / pl.col("BarAmount")) * 100)
         .alias(f"{prefix}_W{w}_cndl_M{time_frame}")
     ).lazy()
-    
-    col_drop = list(set(df.collect_schema().names()) - set(['_time', f"{prefix}_W{w}_cndl_M{time_frame}"]))
+
+    col_drop = list(
+        set(df.collect_schema().names()) - set(['_time', f"{prefix}_W{w}_cndl_M{time_frame}"])
+    )
+
     for window in w_sma:
         df = df.with_columns(
             (pl.col(f"{prefix}_W{w}_cndl_M{time_frame}").rolling_mean(window_size=window)).alias(
                 f"{prefix}_W{w}_SMA{window}_cndl_M{time_frame}"
             )
         ).lazy()
-    
+
     df = df.collect()
-      
-    df =df.drop(col_drop)
-    
+    df = df.drop(col_drop)
 
     return df
 
+
 def history_indicator_calculator(feature_config, logger=default_logger):
     """
-
+    Creating all indicators as features
     """
 
     logger.info("- " * 25)
@@ -1856,6 +1909,9 @@ def history_indicator_calculator(feature_config, logger=default_logger):
             
             "fe_cndl_shape_n_cntxt": {"func": cal_cndl_shape_n_cntxt_func},
             "fe_supertrend": {"func": cal_supertrend_func},
+            "fe_FFD": {"func": cal_FFD_func},
+            "fe_GMA": {"func": cal_GMA_n_GBB_func},
+            "fe_OL": {"func": cal_OverLap_func},
         }
 
         for symbol in list(feature_config.keys()):

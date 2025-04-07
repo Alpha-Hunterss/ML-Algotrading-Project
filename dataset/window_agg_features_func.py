@@ -24,6 +24,7 @@ def cal_window_max(array, window_size):
 
     return res
 
+
 def add_win_fe_base_func(
     df, symbol, raw_features, timeframes, window_sizes, round_to=3, fe_prefix="fe_WIN"
 ):

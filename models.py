@@ -966,34 +966,6 @@ def _accumulate_prediction_stacked(predict, X, out, idx, lock):
         out[idx] = prediction
 
 
-def MetaFeaEng(df, n_components):
-    from sklearn.decomposition import PCA
-    from sklearn.preprocessing import StandardScaler
-
-    model_columns = df.columns.tolist()
-    col_prob = [col for col in model_columns if "est_pos_label_proba" in col]
-
-    # Calculate statistics on probability columns
-    df['mean'] = df[col_prob].mean(axis=1)
-    df['std'] = df[col_prob].std(axis=1)
-    df['variance'] = df[col_prob].var(axis=1)
-    df['row_count_above_0.5'] = (df[col_prob] > 0.5).sum(axis=1)
-    df['max_prob'] = df[col_prob].max(axis=1)
-    df['min_prob'] = df[col_prob].min(axis=1)
-    df['median_prob'] = df[col_prob].median(axis=1)
-
-    # Standardize and perform PCA on probability columns
-    scaled_data = StandardScaler().fit_transform(df[col_prob].to_numpy())
-    principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
-
-    for i in range(n_components):
-        df[f"prob_PCA{i}"] = principal_components[:, i]
-
-    df = df.drop(columns=col_prob)
-
-    return df
-
-
 class StackedXGBForestClassifier(XGBForestClassifier):
     """
     A stacking variant of XGBForestClassifier that uses a meta-model to combine
@@ -1127,6 +1099,38 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         self.use_pca_stacked_model = use_pca_stacked_model
         self.pca_n_components = pca_n_components
 
+    def meta_feature_engineering(self, df, n_components):
+        """
+        This function calculates PCA for all astimators' output probs
+        as an input for the stacked model.
+        """
+        from sklearn.decomposition import PCA
+        from sklearn.preprocessing import StandardScaler
+
+        df = df.copy()
+        model_columns = df.columns.tolist()
+        col_prob = [col for col in model_columns if "th_est_pos_label_proba" in col]
+
+        # Calculate statistics on probability columns
+        df['mean'] = df[col_prob].mean(axis=1)
+        df['std'] = df[col_prob].std(axis=1)
+        df['variance'] = df[col_prob].var(axis=1)
+        df['row_count_above_0.5'] = (df[col_prob] > 0.5).sum(axis=1)
+        df['max_prob'] = df[col_prob].max(axis=1)
+        df['min_prob'] = df[col_prob].min(axis=1)
+        df['median_prob'] = df[col_prob].median(axis=1)
+
+        # Standardize and perform PCA on probability columns
+        scaled_data = StandardScaler().fit_transform(df[col_prob].to_numpy())
+        principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
+
+        for i in range(n_components):
+            df[f"prob_PCA{i}"] = principal_components[:, i]
+
+        df = df.drop(columns=col_prob)
+
+        return df
+
     def predict_proba(self, X, y=None, stacked_model_trained=True):
         """
         Predict class probabilities for X.
@@ -1150,8 +1154,8 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         """
         check_is_fitted(self)
         # Check data
-        if not self.use_cudf:
-            X = self._validate_X_predict(X)
+        # if not self.use_cudf:
+        #     X = self._validate_X_predict(X)
 
         # Assign chunk of trees to jobs
         n_jobs, _, _ = _partition_estimators(self.n_estimators, self.n_jobs)
@@ -1171,7 +1175,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         feature_importances = self.feature_importances_
         sorted_idx = np.argsort(feature_importances)[::-1]
         top_features = X.columns[sorted_idx[:self.stacked_model_n_top_features]]
-        X = X[top_features]
+        X = X[top_features].copy()
 
         if not stacked_model_trained:
             if y is None:
@@ -1190,7 +1194,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                     )
             else:
                 for idx, est_proba in enumerate(all_proba):
-                    X[f"th{idx}_est_pos_label_proba"] = est_proba[:, 1]
+                    X.loc[:, f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
 
             if isinstance(self.stacked_models_params, dict):
                 for key in self.stacked_models_params.keys():
@@ -1242,8 +1246,8 @@ class StackedXGBForestClassifier(XGBForestClassifier):
             }
             self.stacked_model = model_class(**parameters)
 
-            if self.use_pca_stacked_model and X.shape[1]>0:
-                X = MetaFeaEng(df=X, n_components=self.pca_n_components)
+            if self.use_pca_stacked_model:
+                X = self.meta_feature_engineering(df=X, n_components=self.pca_n_components)
 
             self.stacked_model.fit(X, y)
 
@@ -1262,7 +1266,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                     X[f"{idx}th_est_pos_label_proba"] = est_proba[:, 1]
 
             if self.use_pca_stacked_model:
-                X = MetaFeaEng(df=X, n_components=self.pca_n_components)
+                X = self.meta_feature_engineering(df=X, n_components=self.pca_n_components)
 
             return self.stacked_model.predict_proba(X)
 

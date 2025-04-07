@@ -166,6 +166,16 @@ def quant_CV(
         print(f"--> fold valid size: {df.loc[folds[i]['valid_dates']].shape}")
         print(f"--> fold test size: {df.loc[folds[i]['test_dates']].shape}")
 
+        if "confidence_levels" in cudf_df.columns or ("confidence_levels" in df.columns):
+            df = df.drop(columns=["confidence_levels"], errors="ignore")
+            if "confidence_levels" in cudf_df.columns:
+                cudf_df = cudf_df.drop(columns=["confidence_levels"])
+
+        if "confidence_levels" in cudf_df.columns or ("confidence_levels" in df.columns):
+            raise ValueError(
+                "The model's input dataframe contains the irrelevant column 'confidence_levels'."
+            )
+
         if is_ensemble_xgbf_model:
             if use_cudf:
                 if early_stopping_rounds is not None:
@@ -471,6 +481,8 @@ def quant_CV(
                 # else:
                 #     proba_pred = model.predict_proba(df.loc[folds[i][set_name]][input_cols])
 
+                cf_df = df.copy()
+
                 if use_cudf:
                     if is_cf_model:
                         if model.use_valid_as_calib:
@@ -493,7 +505,7 @@ def quant_CV(
                                     confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
 
                             if not model.use_meta_labeling:
-                                df.loc[
+                                cf_df.loc[
                                     folds[i][set_name],
                                     "confidence_levels"
                                 ] = confidence_levels
@@ -507,7 +519,7 @@ def quant_CV(
                             )
 
                             if not model.use_meta_labeling:
-                                df.loc[
+                                cf_df.loc[
                                     folds[i][set_name],
                                     "confidence_levels"
                                 ] = confidence_levels
@@ -529,7 +541,7 @@ def quant_CV(
                                     confidence_levels = np.ones((len(y_pred),), dtype=np.float16)
 
                             if not model.use_meta_labeling:
-                                df.loc[
+                                cf_df.loc[
                                     folds[i][set_name],
                                     "confidence_levels"
                                 ] = confidence_levels
@@ -539,7 +551,7 @@ def quant_CV(
                             )
 
                             if not model.use_meta_labeling:
-                                df.loc[
+                                cf_df.loc[
                                     folds[i][set_name],
                                     "confidence_levels"
                                 ] = confidence_levels
@@ -568,8 +580,8 @@ def quant_CV(
                 if is_cf_model:
                     #? Backtest
                     bt_report, bt_df = do_backtest(
-                        df_model_signal = df.loc[folds[i][set_name]].loc[
-                                df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
+                        df_model_signal = cf_df.loc[folds[i][set_name]].loc[
+                                cf_df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
                         ][[f"pred_as_{pred_name[set_name]}", "confidence_levels"]].rename(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),
@@ -602,8 +614,8 @@ def quant_CV(
                 else:
                     #? Backtest
                     bt_report, bt_df = do_backtest(
-                        df_model_signal = df.loc[folds[i][set_name]].loc[
-                                df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
+                        df_model_signal = cf_df.loc[folds[i][set_name]].loc[
+                                cf_df.loc[folds[i][set_name], f"pred_as_{pred_name[set_name]}"] == 1
                         ][[f"pred_as_{pred_name[set_name]}"]].rename(
                                 columns={f"pred_as_{pred_name[set_name]}":"model_prediction"}
                         ),
@@ -633,6 +645,10 @@ def quant_CV(
                         sampled_times = sampled_times , 
                         sampling = sampling , 
                     )
+
+                df = df.drop(columns=["confidence_levels"], errors="ignore")
+                if "confidence_levels" in cudf_df.columns:
+                    cudf_df = cudf_df.drop(columns=["confidence_levels"])
 
                 fold_profit_percent = bt_report['profit_percent']
                 fold_max_dd = bt_report['max_draw_down']
@@ -713,6 +729,16 @@ def quant_CV(
 
         input_cols_and_type = dict(df[input_cols].dtypes)
 
+    if "confidence_levels" in cudf_df.columns or ("confidence_levels" in df.columns):
+        df = df.drop(columns=["confidence_levels"], errors="ignore")
+        if "confidence_levels" in cudf_df.columns:
+            cudf_df = cudf_df.drop(columns=["confidence_levels"])
+
+    if "confidence_levels" in cudf_df.columns or ("confidence_levels" in df.columns):
+        raise ValueError(
+            "The model's input dataframe contains the irrelevant column 'confidence_levels'."
+        )
+
     # Backtest on the whole test & valid set
     general_backtest_report = {}
     for pred_name in ["val", "test"]:
@@ -751,19 +777,21 @@ def quant_CV(
     print('CV loop ends')
     print(general_backtest_report)
 
-    # Create a DataFrame from the feature importances
-    importance_df = pd.DataFrame(feature_importances)
-    importance_df = importance_df.T.reset_index()
-    importance_df.columns = ['feature_name'] + [f'importance_fold_{i}' for i in range(len(folds))]
+    # # Create a DataFrame from the feature importances
+    # importance_df = pd.DataFrame(feature_importances)
+    # importance_df = importance_df.T.reset_index()
+    # importance_df.columns = ['feature_name'] + [f'importance_fold_{i}' for i in range(len(folds))]
 
-    imp_cols = [f for f in importance_df if 'importance_fold' in f]
-    importance_df['mean_importance'] = importance_df[imp_cols].mean(axis=1)
-    importance_df['median_importance'] = importance_df[imp_cols].median(axis=1)
-    importance_df['std_importance'] = importance_df[imp_cols].std(axis=1)
+    # imp_cols = [f for f in importance_df if 'importance_fold' in f]
+    # importance_df['mean_importance'] = importance_df[imp_cols].mean(axis=1)
+    # importance_df['median_importance'] = importance_df[imp_cols].median(axis=1)
+    # importance_df['std_importance'] = importance_df[imp_cols].std(axis=1)
 
-    # Calculate coefficient of variation (CV)
-    importance_df['cv'] = importance_df['std_importance'] / importance_df['mean_importance']
-    importance_df.sort_values('mean_importance', ascending=False, inplace=True)
+    # # Calculate coefficient of variation (CV)
+    # importance_df['cv'] = importance_df['std_importance'] / importance_df['mean_importance']
+    # importance_df.sort_values('mean_importance', ascending=False, inplace=True)
+
+    importance_df = 0
 
     return (
         input_cols_and_type,

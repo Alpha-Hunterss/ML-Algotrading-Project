@@ -21,18 +21,18 @@ def shift_by_params(periods, time_frame, col_name=None):
 
     validated_idx = pl.when(idx > 0).then(idx).otherwise(0).cast(pl.Int32, strict=False)
 
-    if not (col_name):
+    if not col_name:
         return validated_idx
     target_col = (pl.col(col_name).gather(validated_idx)).alias(
         f"{col_name}_-{periods}"
     )
+
     return target_col
 
 
 def create_shifted_col(
     df, pair_name, periods, time_frame, columns=["OPEN", "HIGH", "LOW", "CLOSE"]
-):  
-    
+):
     # print(f"-----> df.col: {df.columns}")
     return df.with_columns(
         [

@@ -52,6 +52,7 @@ def add_candle_features(
 
     return df
 
+
 def add_shifted_candle_features(
     df, tf, shift_sizes=[1], fe_prefix="fe_cndl_shift"
 ):
@@ -84,6 +85,7 @@ def add_shifted_candle_features(
     df = df.drop(*org_columns)
 
     return df
+
 
 def history_basic_features(feature_config, logger=default_logger):
     logger.info("- " * 25)
@@ -158,6 +160,7 @@ def history_basic_features(feature_config, logger=default_logger):
         logger.exception(f"--> error: {e}")
         raise ValueError("!!!")
 
+
 def history_fe_market_close(feature_config, logger=default_logger):
     logger.info("- " * 25)
     logger.info("--> start history_fe_market_close fumc:")
@@ -226,6 +229,7 @@ def history_fe_market_close(feature_config, logger=default_logger):
         logger.exception("--> history_fe_market_close error.")
         logger.exception(f"--> error: {e}")
         raise ValueError("!!!")
+
 
 def history_fe_time(feature_config, logger=default_logger):
     logger.info("- " * 25)

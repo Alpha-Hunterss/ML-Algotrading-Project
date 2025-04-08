@@ -1188,7 +1188,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 import cudf
 
                 for idx, est_proba in enumerate(all_proba):
-                    X[f"th{idx}_est_pos_label_proba"] = cudf.Series(
+                    X[f"{idx}th_est_pos_label_proba"] = cudf.Series(
                         est_proba[:, 1],
                         index=X.index
                     )
@@ -1257,7 +1257,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 import cudf
 
                 for idx, est_proba in enumerate(all_proba):
-                    X[f"th{idx}_est_pos_label_proba"] = cudf.Series(
+                    X[f"{idx}th_est_pos_label_proba"] = cudf.Series(
                         est_proba[:, 1],
                         index=X.index
                     )
@@ -1269,6 +1269,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 X = self.meta_feature_engineering(df=X, n_components=self.pca_n_components)
 
             return self.stacked_model.predict_proba(X)
+
 
 
 # Temperature Scaling calibration

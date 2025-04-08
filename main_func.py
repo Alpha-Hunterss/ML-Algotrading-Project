@@ -373,7 +373,7 @@ def main(
         }
         QuantExpTracker_arguments.update(exp_metadata)
         QuantExpTracker_arguments_stacked = QuantExpTracker_arguments.copy()
-        QuantExpTracker_arguments_stacked.update({'model': final_clf.stacked_model, 'name': 'XGB_stacked'})
+        # QuantExpTracker_arguments_stacked.update({'model': final_clf.stacked_model, 'name': 'XGB_stacked'})
 
         exp_obj = QuantExpTracker(**QuantExpTracker_arguments)
         exp_obj_stacked = QuantExpTracker(**QuantExpTracker_arguments_stacked)

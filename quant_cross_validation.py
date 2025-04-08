@@ -778,7 +778,6 @@ def quant_CV(
     print(general_backtest_report)
 
     # Create a DataFrame from the feature importances
-    print(feature_importances)
     importance_df = pd.DataFrame(feature_importances)
     importance_df = importance_df.T.reset_index()
     importance_df.columns = ['feature_name'] + [f'importance_fold_{i}' for i in range(len(folds))]

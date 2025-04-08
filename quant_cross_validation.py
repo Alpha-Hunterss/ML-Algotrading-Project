@@ -147,6 +147,9 @@ def quant_CV(
         for col in cudf_df.columns:
             if cudf_df[col].dtype == "bool":
                 cudf_df[col] = cudf_df[col].astype("int8")
+        print(list(cudf_df.columns))
+        if "confidence_levels" in cudf_df.columns :
+            print('confidence_levels aaa')
     general_backtest_df = {}
     for i in list(folds.keys()):
         print(f"Fold {i}:")

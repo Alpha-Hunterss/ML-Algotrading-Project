@@ -25,13 +25,13 @@ def train_model_to_save(
 
     is_ensemble_xgbf_model = "XGBF+" in model_name
 
-    if "confidence_levels" in df.columns:
-        df = df.drop(columns=["confidence_levels"], errors="ignore")
+    # if "confidence_levels" in df.columns:
+    #     df = df.drop(columns=["confidence_levels"], errors="ignore")
 
-    if "confidence_levels" in df.columns:
-        raise ValueError(
-            "The model's input dataframe contains the irrelevant column 'confidence_levels'."
-        )
+    # if "confidence_levels" in df.columns:
+    #     raise ValueError(
+    #         "The model's input dataframe contains the irrelevant column 'confidence_levels'."
+    #     )
 
     if save_model_mode == "last_train_size":
         final_clf.fit(

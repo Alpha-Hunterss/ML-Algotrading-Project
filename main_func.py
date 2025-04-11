@@ -355,14 +355,10 @@ def main(
             "max_CV_train_date": evals[evals.dataset == "train"]["Max_date"].max(),
         }
         QuantExpTracker_arguments.update(exp_metadata)
-        QuantExpTracker_arguments_stacked = QuantExpTracker_arguments.copy()
-        QuantExpTracker_arguments_stacked.update({'model': final_clf.stacked_model, 'name': 'XGB_stacked'})
 
         exp_obj = QuantExpTracker(**QuantExpTracker_arguments)
-        exp_obj_stacked = QuantExpTracker(**QuantExpTracker_arguments_stacked)
         # Store Experiment Object in Pickle & Zip
         exp_obj.store_obj()
-        exp_obj_stacked.store_obj()
 
         if not manual:
         # ______________________________WandB Sweep Mode: Log & Return Artifact______________________________

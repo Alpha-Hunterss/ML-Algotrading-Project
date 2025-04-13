@@ -360,8 +360,6 @@ def main(
         exp_date = str(datetime.today().strftime("%Y-%m-%d_%H:%M"))
         # Experiment Name
         name = f"{model_name}_{target_col.replace('trg_clf_','')}_prof{selected_evals['profit_percent_test']:.2f}_max_dd{selected_evals['max_dd_test']:.2f}_median_sig{selected_evals['signal_count_median_test']:.2f}_date{exp_date}"
-        pca_Model = load_pca_models(C5M_data_path.replace('stage_one_data' , 'PCA_Model'))
-        print(pca_Model)
         QuantExpTracker_arguments = {
             "model": final_clf,
 

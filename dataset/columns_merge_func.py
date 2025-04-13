@@ -280,7 +280,11 @@ def history_columns_merge(
     Path(dataset_folder_path).mkdir(parents=True, exist_ok=True)
     file_name = dataset_folder_path + f"/{fe_prefix}.parquet"
     reduce_mem_usage(df_dataset.to_pandas()).to_parquet(file_name)
+
+    global pca_models
     pca_models = Model
+    print(f'Model : {Model}')
+    print(f'pca_Model : {pca_models}')
 
     logger.info(f"--> df final shape: {df_dataset.shape} | dataset saved.")
     logger.info("--> history_fe_time run successfully.")

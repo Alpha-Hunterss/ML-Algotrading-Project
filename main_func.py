@@ -16,6 +16,20 @@ import gc
 from configss.symbols_info import symbols_dict
 
 
+import pickle
+import os
+
+def load_pca_models(path):
+    pca_model_file_path = f"{path}/pca_models.pkl"
+    
+    if not os.path.exists(pca_model_file_path):
+        raise FileNotFoundError(f"PCA model file not found at: {pca_model_file_path}")
+    
+    with open(pca_model_file_path, "rb") as f:
+        model = pickle.load(f)
+    
+    return model
+
 def main(
     manual=False,
     man_params=None,

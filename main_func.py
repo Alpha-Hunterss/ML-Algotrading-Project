@@ -201,7 +201,8 @@ def main(
             print(f"Dataset file not found at: {dataset_path}")
             dataset_path = "/content/ML-Algotrading-Project/dataset/data/dataset/dataset.parquet"
             C5M_data_path = "/content/ML-Algotrading-Project/dataset/data/stage_one_data/"
-
+        print(pca_models)
+        print('==============')
         df_all = ETL(
             path=dataset_path,
             C5M_data_path=C5M_data_path,

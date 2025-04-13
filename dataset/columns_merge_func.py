@@ -305,22 +305,37 @@ def PCA_calc(df, symbol, fe_name, symbol_confing , Model):
 
     # models = {}
     
-    def apply_pca(df, n_components, prefix, pattern: re.Pattern):
+    def apply_pca(df, n_components, prefix, pattern: re.Pattern , model=None):
         all_features = df.columns
-
         name_feature_for_pca = [col for col in all_features if pattern.match(col)]
+        
         if name_feature_for_pca:
-            # Extract data for PCA
-            data_for_pca = df.select(name_feature_for_pca).to_numpy()
-            
-            # Create and fit the scaler
-            scaler = StandardScaler()
-            scaled_data = scaler.fit_transform(data_for_pca)
-            
-            # Create and fit the PCA model
-            pca = PCA(n_components=n_components)
-            principal_components = pca.fit_transform(scaled_data)
-            
+            if model is None :
+                # Extract data for PCA
+                data_for_pca = df.select(name_feature_for_pca).to_numpy()
+                
+                # Create and fit the scaler
+                scaler = StandardScaler()
+                scaled_data = scaler.fit_transform(data_for_pca)
+                
+                # Create and fit the PCA model
+                pca = PCA(n_components=n_components)
+                principal_components = pca.fit_transform(scaled_data)
+                # Store models for this prefix
+                Model[symbol][prefix] = {
+                    'scaler': scaler,
+                    'pca': pca,
+                    'column' : name_feature_for_pca 
+                }
+            else:
+                col = model[prefix]['column']
+                scaler = model[prefix]['scaler']
+                pca = model[prefix]['pca']
+                data_for_pca = df.select(col).to_numpy()
+                scaled_data = scaler.transform(data_for_pca)
+                principal_components = pca.transform(scaled_data)
+
+
             # Add principal components to dataframe
             for i in range(n_components):
                 pca_column_name = f"{prefix}_PC{i+1}"
@@ -329,12 +344,6 @@ def PCA_calc(df, symbol, fe_name, symbol_confing , Model):
             # Drop original columns
             df = df.drop(name_feature_for_pca)
             
-            # Store models for this prefix
-            Model[symbol][prefix] = {
-                'scaler': scaler,
-                'pca': pca,
-                'column' : name_feature_for_pca , 
-            }
 
         return df
     def find_Pattern_GMA(symbol, tf, base_col='ignore'):

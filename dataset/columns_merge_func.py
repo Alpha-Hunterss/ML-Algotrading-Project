@@ -15,6 +15,8 @@ from dataset.utils.reduce_memory import reduce_mem_usage
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 import re
+import pickle
+import os
 
 
 # Define the prefixes - !!! order matters.
@@ -275,16 +277,21 @@ def history_columns_merge(
 
     # save dataset
     # df_dataset = df_dataset.with_columns(pl.lit("dataset").alias("symbol"))
+    
+    # Create PCA_Model directory in the data path
+    pca_model_folder_path = f"{root_path}/data/PCA_Model/"
+    Path(pca_model_folder_path).mkdir(parents=True, exist_ok=True)
+    
+    # Save the Model dictionary as pickle file
+    model_file_path = os.path.join(pca_model_folder_path, "pca_models.pkl")
+    with open(model_file_path, "wb") as f:
+        pickle.dump(Model, f)
+    
     fe_prefix = "dataset"
     dataset_folder_path = f"{root_path}/data/{fe_prefix}/"
     Path(dataset_folder_path).mkdir(parents=True, exist_ok=True)
     file_name = dataset_folder_path + f"/{fe_prefix}.parquet"
     reduce_mem_usage(df_dataset.to_pandas()).to_parquet(file_name)
-
-    global pca_models
-    pca_models = Model
-    print(f'Model : {Model}')
-    print(f'pca_Model : {pca_models}')
 
     logger.info(f"--> df final shape: {df_dataset.shape} | dataset saved.")
     logger.info("--> history_fe_time run successfully.")

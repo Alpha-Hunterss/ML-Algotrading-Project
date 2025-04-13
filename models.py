@@ -1119,8 +1119,26 @@ class StackedXGBForestClassifier(XGBForestClassifier):
         df['median_prob'] = df[col_prob].median(axis=1)
 
         # Standardize and perform PCA on probability columns
-        scaled_data = StandardScaler().fit_transform(df[col_prob].to_numpy())
-        principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
+        if self.pca_model is not None :
+            col_prob = self.pca_model['column']
+            data_for_pca = df[col_prob].to_numpy()
+            pca = self.pca_model['pca']
+            scaler = self.pca_model['scaler']
+            scaled_data = scaler.transform(data_for_pca)
+            principal_components = pca.transform(scaled_data)
+        else:
+            data_for_pca = df[col_prob].to_numpy()
+            scaler = StandardScaler()
+            scaled_data = scaler.fit_transform(data_for_pca)
+            
+            pca = PCA(n_components=n_components)
+            principal_components = pca.fit_transform(scaled_data)
+
+            self.pca_model = {
+                'pca' : pca,
+                'scaler' : scaler ,
+                'column' : col_prob ,
+            }
 
         for i in range(n_components):
             df[f"prob_PCA{i}"] = principal_components[:, i]
@@ -1243,7 +1261,7 @@ class StackedXGBForestClassifier(XGBForestClassifier):
                 if param in valid_params
             }
             self.stacked_model = model_class(**parameters)
-
+            self.pca_model = None
             if self.use_pca_stacked_model:
                 X = self.meta_feature_engineering(df=X, n_components=self.pca_n_components)
 

@@ -15,6 +15,7 @@ import traceback
 import gc
 from configss.symbols_info import symbols_dict
 from sampling import sampling_func
+from dataset.columns_merge_func import pca_models
 
 
 def main(
@@ -361,6 +362,7 @@ def main(
             "feature_importance_df": importance_df,
             # "feature_importance_df": importance_df.sort_values("mean_importance", ascending=False),
             "train_duration_mean_fold": evals["train_duration"].apply(process_train_duration).mean(),
+            "PCA_Model" : pca_models,
         }
         exp_metadata = {
             "name": name,

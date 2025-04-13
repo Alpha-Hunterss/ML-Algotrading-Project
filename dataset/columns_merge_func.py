@@ -136,7 +136,7 @@ def group_by_symbol_and_rename(df, symbol_col="symbol"):
 
     return result_df
 
-
+pca_models = {}
 def history_columns_merge(
     feature_config, fe_removal_list, logger=default_logger, general_mode=False, pca=True
 ):
@@ -195,13 +195,13 @@ def history_columns_merge(
         left_on="_time", right_on="_time", how="left", coalesce=True
     )
     gc.collect()
-
+    Model = {}
     for symbol in feature_config:
         logger.info(" ^ - ^ " * 10)
         sy_fe = list(
             set(list(feature_config[symbol].keys())) & set(fe_refrece_list)
         )
-
+        Model.update({symbol:{}})
         if symbol not in CRYPTO:
             sy_fe.append("fe_market_close")
 
@@ -221,7 +221,7 @@ def history_columns_merge(
                 # Calculate PCA
                 if feture in fe_pca_list and pca:
                     logger.info(f"PCA--> {symbol} | {feture}")
-                    df = PCA_calc(df, symbol, feture, feature_config[symbol])
+                    df , Model = PCA_calc(df, symbol, feture, feature_config[symbol] , Model)
 
             except Exception as e:
                 logger.error(f"!!! cant load {symbol} | {feture}")
@@ -280,31 +280,52 @@ def history_columns_merge(
     Path(dataset_folder_path).mkdir(parents=True, exist_ok=True)
     file_name = dataset_folder_path + f"/{fe_prefix}.parquet"
     reduce_mem_usage(df_dataset.to_pandas()).to_parquet(file_name)
+    pca_models = Model
 
     logger.info(f"--> df final shape: {df_dataset.shape} | dataset saved.")
     logger.info("--> history_fe_time run successfully.")
 
 
-def PCA_calc(df, symbol, fe_name, symbol_confing):
+def PCA_calc(df, symbol, fe_name, symbol_confing , Model):
 
     Feature_Ncomponent = {
         'fe_GMA': 3,
     }
 
+    # models = {}
+    
     def apply_pca(df, n_components, prefix, pattern: re.Pattern):
         all_features = df.columns
+
         name_feature_for_pca = [col for col in all_features if pattern.match(col)]
-        scaled_data = StandardScaler().fit_transform(df.select(name_feature_for_pca).to_numpy())
-        principal_components = PCA(n_components=n_components).fit_transform(scaled_data)
-
-        for i in range(n_components):
-            pca_column_name = f"{prefix}_PC{i+1}"
-            df = df.with_columns(pl.Series(pca_column_name, principal_components[:, i]))
-
-        df = df.drop(name_feature_for_pca)
+        if name_feature_for_pca:
+            # Extract data for PCA
+            data_for_pca = df.select(name_feature_for_pca).to_numpy()
+            
+            # Create and fit the scaler
+            scaler = StandardScaler()
+            scaled_data = scaler.fit_transform(data_for_pca)
+            
+            # Create and fit the PCA model
+            pca = PCA(n_components=n_components)
+            principal_components = pca.fit_transform(scaled_data)
+            
+            # Add principal components to dataframe
+            for i in range(n_components):
+                pca_column_name = f"{prefix}_PC{i+1}"
+                df = df.with_columns(pl.Series(pca_column_name, principal_components[:, i]))
+            
+            # Drop original columns
+            df = df.drop(name_feature_for_pca)
+            
+            # Store models for this prefix
+            Model[symbol][prefix] = {
+                'scaler': scaler,
+                'pca': pca,
+                'column' : name_feature_for_pca , 
+            }
 
         return df
-
     def find_Pattern_GMA(symbol, tf, base_col='ignore'):
         if base_col == 'ignore':
             patterns = {
@@ -340,7 +361,7 @@ def PCA_calc(df, symbol, fe_name, symbol_confing):
                     pattern= patterns[name_pattern]
                 )
 
-    return df
+    return df , Model
 
 
 if __name__ == "__main__":

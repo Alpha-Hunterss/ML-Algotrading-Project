@@ -22,6 +22,7 @@ class QuantExpTracker:
         input_cols,
         feature_importance_df,
         train_duration_mean_fold,
+        PCA_Model,
         features_count,
 
         config,
@@ -45,6 +46,8 @@ class QuantExpTracker:
         self.feature_importance = feature_importance_df
         self.train_duration_mean_fold = train_duration_mean_fold
         self.features_count = features_count
+
+        self.PCA_Model = PCA_Model
 
         self.config = config
         self.save_model_mode = save_model_mode

@@ -358,6 +358,7 @@ def main(
             "feature_importance_df": importance_df,
             # "feature_importance_df": importance_df.sort_values("mean_importance", ascending=False),
             "train_duration_mean_fold": evals["train_duration"].apply(process_train_duration).mean(),
+            "PCA_Model" : load_pca_models(C5M_data_path.replace('stage_one_data' , 'PCA_Model')),
         }
         exp_metadata = {
             "name": name,

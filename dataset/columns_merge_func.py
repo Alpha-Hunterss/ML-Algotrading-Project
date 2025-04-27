@@ -135,7 +135,7 @@ def group_by_symbol_and_rename(df, symbol_col="symbol"):
 
 
 def history_columns_merge(
-    feature_config, fe_removal_list, logger=default_logger, general_mode=False, pca=True
+    feature_config, fe_removal_list, fe_removal_cols, logger=default_logger, general_mode=False, pca=True
 ):
     logger.info("- " * 25)
     logger.info("--> start history_columns_merge func:")
@@ -270,21 +270,25 @@ def history_columns_merge(
 
     # save dataset
     # df_dataset = df_dataset.with_columns(pl.lit("dataset").alias("symbol"))
-    
+
     # Create PCA_Model directory in the data path
     pca_model_folder_path = f"{root_path}/data/PCA_Model/"
     Path(pca_model_folder_path).mkdir(parents=True, exist_ok=True)
-    
+
     # Save the Model dictionary as pickle file
     model_file_path = os.path.join(pca_model_folder_path, "pca_models.pkl")
     with open(model_file_path, "wb") as f:
         pickle.dump(Model, f)
-    
+
     fe_prefix = "dataset"
     dataset_folder_path = f"{root_path}/data/{fe_prefix}/"
     Path(dataset_folder_path).mkdir(parents=True, exist_ok=True)
     file_name = dataset_folder_path + f"/{fe_prefix}.parquet"
-    reduce_mem_usage(df_dataset.to_pandas()).to_parquet(file_name)
+    reduce_mem_usage(df_dataset.to_pandas()).drop(
+        columns=fe_removal_cols,
+        inplace=True,
+        errors="ignore",
+    ).to_parquet(file_name)
 
     logger.info(f"--> df final shape: {df_dataset.shape} | dataset saved.")
     logger.info("--> history_fe_time run successfully.")

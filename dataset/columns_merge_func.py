@@ -284,11 +284,7 @@ def history_columns_merge(
     dataset_folder_path = f"{root_path}/data/{fe_prefix}/"
     Path(dataset_folder_path).mkdir(parents=True, exist_ok=True)
     file_name = dataset_folder_path + f"/{fe_prefix}.parquet"
-    reduce_mem_usage(df_dataset.to_pandas()).drop(
-        columns=fe_removal_cols,
-        inplace=True,
-        errors="ignore",
-    ).to_parquet(file_name)
+    reduce_mem_usage(df_dataset.to_pandas()).drop(columns=fe_removal_cols).to_parquet(file_name)
 
     logger.info(f"--> df final shape: {df_dataset.shape} | dataset saved.")
     logger.info("--> history_fe_time run successfully.")
